@@ -1,0 +1,50 @@
+<?php
+
+namespace Platform\AssetManager\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class AssetLicenseSku extends Model
+{
+    protected $table = 'asset_license_skus';
+
+    protected $fillable = [
+        'team_id',
+        'sku_id',
+        'sku_part_number',
+        'display_name',
+        'purchased_units',
+        'consumed_units',
+        'available_units',
+        'unit_price',
+        'synced_at',
+        'raw_data',
+    ];
+
+    protected $casts = [
+        'raw_data'   => 'array',
+        'synced_at'  => 'datetime',
+        'unit_price' => 'decimal:2',
+    ];
+
+    public function team()
+    {
+        return $this->belongsTo(\Platform\Core\Models\Team::class);
+    }
+
+    public function monthlyCost(): float
+    {
+        if ($this->unit_price === null) {
+            return 0.0;
+        }
+        return (float) $this->unit_price * $this->consumed_units;
+    }
+
+    public function utilizationPercent(): int
+    {
+        if ($this->purchased_units === 0) {
+            return 0;
+        }
+        return (int) round($this->consumed_units / $this->purchased_units * 100);
+    }
+}

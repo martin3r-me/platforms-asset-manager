@@ -85,6 +85,11 @@ return [
                     'route' => 'asset-manager.devices.index',
                     'icon'  => 'heroicon-o-computer-desktop',
                 ],
+                [
+                    'label' => 'Lizenzen',
+                    'route' => 'asset-manager.licenses.index',
+                    'icon'  => 'heroicon-o-key',
+                ],
             ],
         ],
         [

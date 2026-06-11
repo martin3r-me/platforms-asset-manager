@@ -104,6 +104,45 @@
                 </div>
             </div>
 
+            {{-- Lizenz-Kacheln --}}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <a href="{{ route('asset-manager.licenses.index') }}" wire:navigate
+                   class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+                    <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent"></div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-medium uppercase tracking-wider text-gray-400">Lizenzkosten / Monat</span>
+                        <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-violet-500/10">
+                            @svg('heroicon-o-currency-euro', 'w-4 h-4 text-violet-500')
+                        </div>
+                    </div>
+                    <div class="text-3xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+                        {{ $licenseCost > 0 ? number_format($licenseCost, 0, ',', '.') . ' €' : '—' }}
+                    </div>
+                    <div class="text-xs text-gray-400 mt-1">Basierend auf gepflegten Preisen</div>
+                </a>
+
+                <a href="{{ route('asset-manager.licenses.index') }}" wire:navigate
+                   class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+                    <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-500/50 to-transparent"></div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-medium uppercase tracking-wider text-gray-400">Ungenutzte Lizenzen</span>
+                        <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-500/10">
+                            @svg('heroicon-o-key', 'w-4 h-4 text-amber-500')
+                        </div>
+                    </div>
+                    <div class="text-3xl font-semibold tracking-tight {{ $unusedLicenses > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-gray-100' }}">
+                        {{ $unusedLicenses }}
+                    </div>
+                    <div class="text-xs text-gray-400 mt-1">
+                        @if($lastLicenseSync)
+                            Letzter Sync {{ $lastLicenseSync->started_at->diffForHumans() }}
+                        @else
+                            Noch kein Lizenz-Sync
+                        @endif
+                    </div>
+                </a>
+            </div>
+
             {{-- Content Grid --}}
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 {{-- Zuletzt aktualisierte Geräte --}}

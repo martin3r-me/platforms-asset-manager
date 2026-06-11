@@ -31,6 +31,10 @@
             @svg('heroicon-o-computer-desktop', 'w-4 h-4 text-[var(--ui-secondary)]')
             <span class="ml-2 text-sm">Alle Geräte</span>
         </x-ui-sidebar-item>
+        <x-ui-sidebar-item :href="route('asset-manager.licenses.index')">
+            @svg('heroicon-o-key', 'w-4 h-4 text-[var(--ui-secondary)]')
+            <span class="ml-2 text-sm">Lizenzen</span>
+        </x-ui-sidebar-item>
     </x-ui-sidebar-list>
 
     <x-ui-sidebar-list label="Einstellungen">
@@ -48,6 +52,9 @@
             </a>
             <a href="{{ route('asset-manager.devices.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
                 @svg('heroicon-o-computer-desktop', 'w-5 h-5')
+            </a>
+            <a href="{{ route('asset-manager.licenses.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
+                @svg('heroicon-o-key', 'w-5 h-5')
             </a>
             <a href="{{ route('asset-manager.setup') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
                 @svg('heroicon-o-wrench-screwdriver', 'w-5 h-5')

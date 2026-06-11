@@ -16,6 +16,11 @@ class AssetDevicePolicy
         return $device->team_id === $user->currentTeam?->id;
     }
 
+    public function viewLicenses(Authenticatable $user): bool
+    {
+        return true;
+    }
+
     public function sync(Authenticatable $user): bool
     {
         return $this->isOwnerOrAdmin($user);

@@ -22,8 +22,12 @@ use Platform\AssetManager\Livewire\Dashboard;
 use Platform\AssetManager\Livewire\ConnectorSetup;
 use Platform\AssetManager\Livewire\Devices\Index as DevicesIndex;
 use Platform\AssetManager\Livewire\Devices\Show as DevicesShow;
+use Platform\AssetManager\Livewire\Licenses\Index as LicensesIndex;
+use Platform\AssetManager\Livewire\Licenses\Show as LicensesShow;
 
 Route::get('/', Dashboard::class)->name('asset-manager.dashboard');
 Route::get('/devices', DevicesIndex::class)->name('asset-manager.devices.index');
 Route::get('/devices/{device}', DevicesShow::class)->name('asset-manager.devices.show');
+Route::get('/licenses', LicensesIndex::class)->name('asset-manager.licenses.index');
+Route::get('/licenses/{sku}', LicensesShow::class)->name('asset-manager.licenses.show');
 Route::get('/setup', ConnectorSetup::class)->name('asset-manager.setup');

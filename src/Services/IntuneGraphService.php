@@ -145,6 +145,102 @@ class IntuneGraphService
     }
 
     /**
+     * Holt alle abonnierten SKUs (Lizenz-Typen) aus dem Tenant.
+     * Benötigte Application Permission: Organization.Read.All
+     */
+    public function getSubscribedSkus(AssetConnectorConfig $config): ?array
+    {
+        $this->lastError = null;
+
+        $token = $this->getAccessToken($config);
+        if (!$token) {
+            $this->lastError = 'Token-Abruf fehlgeschlagen. Client ID, Tenant ID und Secret prüfen.';
+            return null;
+        }
+
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $token,
+            ])->get("{$this->graphBase}/subscribedSkus?\$select=id,skuId,skuPartNumber,consumedUnits,prepaidUnits,servicePlans");
+
+            if ($response->status() === 403) {
+                $this->lastError = 'Keine Berechtigung (403): Organization.Read.All muss als Application Permission mit Admin-Consent erteilt sein.';
+                Log::error('AssetManager: Keine Lizenz-Berechtigung (403)', ['team_id' => $config->team_id]);
+                return null;
+            }
+
+            if (!$response->successful()) {
+                $msg = $response->json('error.message', 'Unbekannter Fehler');
+                $this->lastError = "Graph-API Fehler (HTTP {$response->status()}): {$msg}";
+                return null;
+            }
+
+            return $response->json('value', []);
+
+        } catch (\Throwable $e) {
+            $this->lastError = 'Verbindungsfehler: ' . $e->getMessage();
+            Log::error('AssetManager: Exception beim SKU-Abruf', [
+                'team_id' => $config->team_id,
+                'error'   => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Holt alle User mit ihren zugewiesenen Lizenzen.
+     * Benötigte Application Permission: User.Read.All
+     */
+    public function getUsersWithLicenses(AssetConnectorConfig $config): ?array
+    {
+        $this->lastError = null;
+
+        $token = $this->getAccessToken($config);
+        if (!$token) {
+            $this->lastError = 'Token-Abruf fehlgeschlagen. Client ID, Tenant ID und Secret prüfen.';
+            return null;
+        }
+
+        $users = [];
+        $url   = "{$this->graphBase}/users?\$select=id,displayName,userPrincipalName,assignedLicenses&\$top=999";
+
+        while ($url) {
+            try {
+                $response = Http::withHeaders([
+                    'Authorization'    => 'Bearer ' . $token,
+                    'ConsistencyLevel' => 'eventual',
+                ])->get($url);
+
+                if ($response->status() === 403) {
+                    $this->lastError = 'Keine Berechtigung (403): User.Read.All muss als Application Permission mit Admin-Consent erteilt sein.';
+                    Log::error('AssetManager: Keine User-Berechtigung (403)', ['team_id' => $config->team_id]);
+                    return null;
+                }
+
+                if (!$response->successful()) {
+                    $msg = $response->json('error.message', 'Unbekannter Fehler');
+                    $this->lastError = "Graph-API Fehler (HTTP {$response->status()}): {$msg}";
+                    return null;
+                }
+
+                $data  = $response->json();
+                $users = array_merge($users, $data['value'] ?? []);
+                $url   = $data['@odata.nextLink'] ?? null;
+
+            } catch (\Throwable $e) {
+                $this->lastError = 'Verbindungsfehler: ' . $e->getMessage();
+                Log::error('AssetManager: Exception beim User-Abruf', [
+                    'team_id' => $config->team_id,
+                    'error'   => $e->getMessage(),
+                ]);
+                return null;
+            }
+        }
+
+        return $users;
+    }
+
+    /**
      * Testet die Verbindung. Gibt null bei Erfolg zurück, sonst eine Fehlermeldung.
      */
     public function testConnection(AssetConnectorConfig $config): ?string
