@@ -21,6 +21,9 @@ namespace Platform\AssetManager\Livewire;
 
 use Livewire\Component;
 use Illuminate\Support\Facades\Auth;
+use Platform\AssetManager\Models\AssetConnectorConfig;
+use Platform\AssetManager\Models\AssetDevice;
+use Platform\AssetManager\Models\AssetDeviceSyncLog;
 
 class Dashboard extends Component
 {
@@ -74,10 +77,42 @@ class Dashboard extends Component
          * ];
          */
 
+        $team   = $user->currentTeam;
+        $config = AssetConnectorConfig::where('team_id', $team->id)->first();
+
+        $stats = [
+            'total'        => 0,
+            'compliant'    => 0,
+            'noncompliant' => 0,
+            'unknown'      => 0,
+        ];
+
+        $recentDevices = collect();
+        $lastLog       = null;
+
+        if ($config && $config->isConfigured()) {
+            $stats = [
+                'total'        => AssetDevice::where('team_id', $team->id)->count(),
+                'compliant'    => AssetDevice::where('team_id', $team->id)->where('compliance_state', 'compliant')->count(),
+                'noncompliant' => AssetDevice::where('team_id', $team->id)->where('compliance_state', 'noncompliant')->count(),
+                'unknown'      => AssetDevice::where('team_id', $team->id)->whereIn('compliance_state', ['unknown', 'error', 'conflict'])->count(),
+            ];
+
+            $recentDevices = AssetDevice::where('team_id', $team->id)
+                ->orderBy('updated_at', 'desc')
+                ->limit(5)
+                ->get();
+
+            $lastLog = AssetDeviceSyncLog::where('team_id', $team->id)
+                ->orderBy('started_at', 'desc')
+                ->first();
+        }
+
         return view('asset-manager::livewire.dashboard', [
-            'currentDate' => now()->format('d.m.Y'),
-            'currentDay' => now()->format('l'),
-            // Füge hier deine Daten hinzu
+            'config'        => $config,
+            'stats'         => $stats,
+            'recentDevices' => $recentDevices,
+            'lastLog'       => $lastLog,
         ])->layout('platform::layouts.app');
     }
 }

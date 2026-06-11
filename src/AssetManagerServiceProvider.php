@@ -23,10 +23,12 @@
 
 namespace Platform\AssetManager;
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
+use Platform\AssetManager\Jobs\SyncIntuneDevicesJob;
 use Platform\Core\PlatformCore;
 use Platform\Core\Routing\ModuleRouter;
 use RecursiveDirectoryIterator;
@@ -56,17 +58,11 @@ class AssetManagerServiceProvider extends ServiceProvider
          */
         $this->mergeConfigFrom(__DIR__.'/../config/asset-manager.php', 'asset-manager');
         
-        /**
-         * Commands registrieren (optional)
-         * 
-         * Falls dein Modul Artisan Commands hat:
-         * 
-         * if ($this->app->runningInConsole()) {
-         *     $this->commands([
-         *         \Platform\AssetManager\Console\Commands\YourCommand::class,
-         *     ]);
-         * }
-         */
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                \Platform\AssetManager\Console\Commands\SyncIntuneDevicesCommand::class,
+            ]);
+        }
     }
 
     /**
@@ -194,13 +190,10 @@ class AssetManagerServiceProvider extends ServiceProvider
          */
         $this->registerLivewireComponents();
         
-        /**
-         * SCHRITT 7: Tools registrieren (optional)
-         * 
-         * Falls dein Modul AI/Chat-Tools hat:
-         * 
-         * $this->registerTools();
-         */
+        // Stündlicher Intune-Sync für alle konfigurierten Teams
+        $this->callAfterResolving(Schedule::class, function (Schedule $schedule) {
+            $schedule->command('asset-manager:sync-intune')->hourly();
+        });
     }
 
     /**

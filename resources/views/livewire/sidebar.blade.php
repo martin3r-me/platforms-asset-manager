@@ -15,20 +15,28 @@
 --}}
 
 <div>
-    {{-- Modul Header --}}
     <div x-show="!collapsed" class="p-3 text-sm italic text-[var(--ui-secondary)] uppercase border-b border-[var(--ui-border)] mb-2">
         Asset Manager
     </div>
-    
-    {{-- Abschnitt: Allgemein --}}
-    <x-ui-sidebar-list label="Allgemein">
+
+    <x-ui-sidebar-list label="Übersicht">
         <x-ui-sidebar-item :href="route('asset-manager.dashboard')">
             @svg('heroicon-o-home', 'w-4 h-4 text-[var(--ui-secondary)]')
             <span class="ml-2 text-sm">Dashboard</span>
         </x-ui-sidebar-item>
-        <x-ui-sidebar-item :href="route('asset-manager.test')">
-            @svg('heroicon-o-beaker', 'w-4 h-4 text-[var(--ui-secondary)]')
-            <span class="ml-2 text-sm">Test</span>
+    </x-ui-sidebar-list>
+
+    <x-ui-sidebar-list label="Geräte">
+        <x-ui-sidebar-item :href="route('asset-manager.devices.index')">
+            @svg('heroicon-o-computer-desktop', 'w-4 h-4 text-[var(--ui-secondary)]')
+            <span class="ml-2 text-sm">Alle Geräte</span>
+        </x-ui-sidebar-item>
+    </x-ui-sidebar-list>
+
+    <x-ui-sidebar-list label="Einstellungen">
+        <x-ui-sidebar-item :href="route('asset-manager.setup')">
+            @svg('heroicon-o-wrench-screwdriver', 'w-4 h-4 text-[var(--ui-secondary)]')
+            <span class="ml-2 text-sm">Connector</span>
         </x-ui-sidebar-item>
     </x-ui-sidebar-list>
 
@@ -38,21 +46,12 @@
             <a href="{{ route('asset-manager.dashboard') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
                 @svg('heroicon-o-home', 'w-5 h-5')
             </a>
-            <a href="{{ route('asset-manager.test') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
-                @svg('heroicon-o-beaker', 'w-5 h-5')
+            <a href="{{ route('asset-manager.devices.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
+                @svg('heroicon-o-computer-desktop', 'w-5 h-5')
+            </a>
+            <a href="{{ route('asset-manager.setup') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
+                @svg('heroicon-o-wrench-screwdriver', 'w-5 h-5')
             </a>
         </div>
     </div>
-
-    {{-- BEISPIEL: Dynamische Liste (auskommentiert) --}}
-    {{--
-    <x-ui-sidebar-list label="Dynamische Liste">
-        @foreach($entities as $entity)
-            <x-ui-sidebar-item :href="route('asset-manager.entities.show', ['entity' => $entity])">
-                @svg('heroicon-o-cube', 'w-4 h-4 text-[var(--ui-secondary)]')
-                <span class="ml-2 text-sm">{{ $entity->name }}</span>
-            </x-ui-sidebar-item>
-        @endforeach
-    </x-ui-sidebar-list>
-    --}}
 </div>

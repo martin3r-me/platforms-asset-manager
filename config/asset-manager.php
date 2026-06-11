@@ -68,17 +68,32 @@ return [
      */
     'sidebar' => [
         [
-            'group' => 'Allgemein',
+            'group' => 'Übersicht',
             'items' => [
                 [
                     'label' => 'Dashboard',
                     'route' => 'asset-manager.dashboard',
                     'icon'  => 'heroicon-o-home',
                 ],
+            ],
+        ],
+        [
+            'group' => 'Geräte',
+            'items' => [
                 [
-                    'label' => 'Test',
-                    'route' => 'asset-manager.test',
-                    'icon'  => 'heroicon-o-beaker',
+                    'label' => 'Alle Geräte',
+                    'route' => 'asset-manager.devices.index',
+                    'icon'  => 'heroicon-o-computer-desktop',
+                ],
+            ],
+        ],
+        [
+            'group' => 'Einstellungen',
+            'items' => [
+                [
+                    'label' => 'Connector',
+                    'route' => 'asset-manager.setup',
+                    'icon'  => 'heroicon-o-wrench-screwdriver',
                 ],
             ],
         ],
