@@ -87,7 +87,7 @@ class IntuneGraphService
         $devices = [];
         $url = "{$this->graphBase}/deviceManagement/managedDevices"
             . '?$select=id,deviceName,userDisplayName,userPrincipalName,operatingSystem,osVersion'
-            . ',complianceState,managementState,deviceType,manufacturer,model,serialNumber'
+            . ',complianceState,managementState,managedDeviceOwnerType,manufacturer,model,serialNumber'
             . ',enrolledDateTime,lastSyncDateTime';
 
         $retried = false;

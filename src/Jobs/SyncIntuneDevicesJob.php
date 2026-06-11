@@ -134,7 +134,7 @@ class SyncIntuneDevicesJob implements ShouldQueue
             'os_version'          => $d['osVersion'] ?? null,
             'compliance_state'    => $d['complianceState'] ?? 'unknown',
             'management_state'    => $d['managementState'] ?? null,
-            'device_type'         => $d['deviceType'] ?? null,
+            'device_type'         => $d['managedDeviceOwnerType'] ?? null,
             'manufacturer'        => $d['manufacturer'] ?? null,
             'model'               => $d['model'] ?? null,
             'serial_number'       => $d['serialNumber'] ?? null,
