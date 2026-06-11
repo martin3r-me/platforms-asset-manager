@@ -22,15 +22,6 @@ class ConnectorSetup extends Component
     public bool    $testSuccess = false;
     public bool    $saved       = false;
 
-    protected array $rules = [
-        'clientId'     => 'nullable|string|max:255',
-        'tenantId'     => 'nullable|string|max:255',
-        'objectId'     => 'nullable|string|max:255',
-        'keyId'        => 'nullable|string|max:255',
-        'clientSecret' => 'nullable|string|max:1000',
-        'enabled'      => 'boolean',
-    ];
-
     public function mount(): void
     {
         Gate::authorize('manageConnector', AssetDevice::class);
@@ -51,7 +42,27 @@ class ConnectorSetup extends Component
     public function save(): void
     {
         Gate::authorize('manageConnector', AssetDevice::class);
-        $this->validate();
+
+        $this->validate([
+            'clientId'     => 'required|string|max:255',
+            'tenantId'     => 'required|string|max:255',
+            'objectId'     => 'nullable|string|max:255',
+            'keyId'        => 'nullable|string|max:255',
+            'clientSecret' => [
+                'nullable', 'string', 'max:1000',
+                // Bei Neueintrag ist Secret Pflichtfeld
+                function ($attr, $value, $fail) {
+                    $team   = Auth::user()->currentTeam;
+                    $exists = AssetConnectorConfig::where('team_id', $team->id)
+                        ->whereNotNull('client_secret')
+                        ->exists();
+                    if (!$exists && empty($value)) {
+                        $fail('Das Secret ist beim ersten Einrichten erforderlich.');
+                    }
+                },
+            ],
+            'enabled' => 'boolean',
+        ]);
 
         $team = Auth::user()->currentTeam;
 
@@ -79,8 +90,8 @@ class ConnectorSetup extends Component
         $team   = Auth::user()->currentTeam;
         $config = AssetConnectorConfig::where('team_id', $team->id)->first();
 
-        if (!$config) {
-            $this->testResult  = 'Bitte zuerst speichern.';
+        if (!$config || !$config->isConfigured()) {
+            $this->testResult  = 'Bitte zuerst alle Pflichtfelder speichern (Client ID, Tenant ID, Secret).';
             $this->testSuccess = false;
             return;
         }
