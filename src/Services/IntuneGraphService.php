@@ -152,6 +152,8 @@ class IntuneGraphService
     {
         $this->lastError = null;
 
+        // Token komplett frisch holen (umgeht stale Tokens nach Permission-Änderungen)
+        $this->clearTokenCache($config->team_id);
         $token = $this->getAccessToken($config);
         if (!$token) {
             $this->lastError = 'Token-Abruf fehlgeschlagen. Client ID, Tenant ID und Secret prüfen.';
@@ -164,8 +166,16 @@ class IntuneGraphService
             ])->get("{$this->graphBase}/subscribedSkus?\$select=id,skuId,skuPartNumber,consumedUnits,prepaidUnits,servicePlans");
 
             if ($response->status() === 403) {
-                $this->lastError = 'Keine Berechtigung (403): Organization.Read.All muss als Application Permission mit Admin-Consent erteilt sein.';
-                Log::error('AssetManager: Keine Lizenz-Berechtigung (403)', ['team_id' => $config->team_id]);
+                $graphMsg = $response->json('error.message', '');
+                $graphCode = $response->json('error.code', '');
+                $this->lastError = "Keine Berechtigung (403) für /subscribedSkus. "
+                    . "Benötigt: Organization.Read.All als Application Permission mit Admin-Consent. "
+                    . "Graph: [{$graphCode}] {$graphMsg}";
+                Log::error('AssetManager: Keine Lizenz-Berechtigung (403)', [
+                    'team_id' => $config->team_id,
+                    'code'    => $graphCode,
+                    'msg'     => $graphMsg,
+                ]);
                 return null;
             }
 
@@ -212,8 +222,16 @@ class IntuneGraphService
                 ])->get($url);
 
                 if ($response->status() === 403) {
-                    $this->lastError = 'Keine Berechtigung (403): User.Read.All muss als Application Permission mit Admin-Consent erteilt sein.';
-                    Log::error('AssetManager: Keine User-Berechtigung (403)', ['team_id' => $config->team_id]);
+                    $graphMsg  = $response->json('error.message', '');
+                    $graphCode = $response->json('error.code', '');
+                    $this->lastError = "Keine Berechtigung (403) für /users. "
+                        . "Benötigt: User.Read.All als Application Permission mit Admin-Consent. "
+                        . "Graph: [{$graphCode}] {$graphMsg}";
+                    Log::error('AssetManager: Keine User-Berechtigung (403)', [
+                        'team_id' => $config->team_id,
+                        'code'    => $graphCode,
+                        'msg'     => $graphMsg,
+                    ]);
                     return null;
                 }
 

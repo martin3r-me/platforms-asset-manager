@@ -105,6 +105,21 @@
                                         </span>
                                     </button>
 
+                                    <button wire:click="refreshToken"
+                                        wire:loading.attr="disabled"
+                                        wire:target="refreshToken"
+                                        title="Cache leeren — nötig nach dem Hinzufügen neuer Azure Permissions"
+                                        class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-black/[0.04] dark:bg-white/[0.06] rounded-lg hover:bg-black/[0.07] transition-all">
+                                        <span wire:loading.remove wire:target="refreshToken">
+                                            @svg('heroicon-o-key', 'w-4 h-4')
+                                            Token erneuern
+                                        </span>
+                                        <span wire:loading wire:target="refreshToken" class="flex items-center gap-2">
+                                            @svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin')
+                                            Erneuere...
+                                        </span>
+                                    </button>
+
                                     <a href="{{ route('asset-manager.devices.index') }}" wire:navigate
                                        class="text-sm text-violet-600 dark:text-violet-400 hover:underline">
                                         Geräte ansehen →
@@ -156,9 +171,17 @@
                 </div>
                 <ol class="text-xs text-blue-700/80 dark:text-blue-400/80 space-y-1 list-decimal list-inside ml-1">
                     <li>App-Registration in Azure AD anlegen</li>
-                    <li>API-Permission hinzufügen: <strong>DeviceManagementManagedDevices.Read.All</strong> (Application)</li>
-                    <li>Admin-Consent für die Permission erteilen</li>
+                    <li>
+                        Application-Permissions hinzufügen (nicht Delegated!):
+                        <ul class="list-disc list-inside ml-4 mt-1 space-y-0.5">
+                            <li><strong>DeviceManagementManagedDevices.Read.All</strong> — Intune-Geräte</li>
+                            <li><strong>Organization.Read.All</strong> — Lizenz-SKUs</li>
+                            <li><strong>User.Read.All</strong> — Lizenz-Zuweisungen pro User</li>
+                        </ul>
+                    </li>
+                    <li><strong>Admin-Consent</strong> für ALLE Permissions erteilen</li>
                     <li>Client-Secret erstellen und Key ID + Secret Value notieren</li>
+                    <li>Nach Permission-Änderungen: <strong>"Token erneuern"</strong> klicken (der gecachte Token enthält sonst die alten Scopes)</li>
                 </ol>
             </div>
 

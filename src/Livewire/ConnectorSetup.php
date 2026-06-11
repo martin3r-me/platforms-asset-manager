@@ -114,6 +114,17 @@ class ConnectorSetup extends Component
         $this->testSuccess = true;
     }
 
+    public function refreshToken(): void
+    {
+        Gate::authorize('manageConnector', AssetDevice::class);
+
+        $team = Auth::user()->currentTeam;
+        app(IntuneGraphService::class)->clearTokenCache($team->id);
+
+        $this->testResult  = 'Token-Cache wurde geleert. Beim nächsten API-Aufruf wird ein frischer Token mit den aktuellen Permissions geholt.';
+        $this->testSuccess = true;
+    }
+
     public function render()
     {
         $team   = Auth::user()->currentTeam;
