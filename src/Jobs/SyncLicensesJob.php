@@ -105,8 +105,8 @@ class SyncLicensesJob implements ShouldQueue
                 return;
             }
 
-            $added     = 0;
-            $seenKeys  = [];
+            $added   = 0;
+            $keptIds = [];
 
             foreach ($users as $user) {
                 $upn         = $user['userPrincipalName'] ?? null;
@@ -115,47 +115,38 @@ class SyncLicensesJob implements ShouldQueue
                 if (!$upn) continue;
 
                 foreach (($user['assignedLicenses'] ?? []) as $license) {
-                    $skuId   = $license['skuId'] ?? null;
+                    $skuId = $license['skuId'] ?? null;
                     if (!$skuId) continue;
 
-                    $partNum    = $skuPartMap[$skuId] ?? null;
-                    $seenKeys[] = $upn . '|' . $skuId;
-
-                    $existing = AssetUserLicense::where('team_id', $this->teamId)
-                        ->where('user_principal_name', $upn)
-                        ->where('sku_id', $skuId)
-                        ->first();
-
-                    $data = [
-                        'sku_part_number'     => $partNum,
-                        'display_name'        => $displayName,
-                        'raw_data'            => $license,
-                    ];
-
-                    if (!$existing) {
-                        AssetUserLicense::create(array_merge($data, [
+                    $record = AssetUserLicense::updateOrCreate(
+                        [
                             'team_id'             => $this->teamId,
-                            'sku_id'              => $skuId,
                             'user_principal_name' => $upn,
-                            'assigned_at'         => now(),
-                        ]));
+                            'sku_id'              => $skuId,
+                        ],
+                        [
+                            'sku_part_number' => $skuPartMap[$skuId] ?? null,
+                            'display_name'    => $displayName,
+                            'raw_data'        => $license,
+                        ]
+                    );
+
+                    if ($record->wasRecentlyCreated) {
+                        $record->update(['assigned_at' => now()]);
                         $added++;
-                    } else {
-                        $existing->update($data);
                     }
+
+                    $keptIds[] = $record->id;
                 }
             }
 
-            // Einträge entfernen, die nicht mehr in Graph vorhanden sind
-            $allExisting = AssetUserLicense::where('team_id', $this->teamId)->get();
-            $removed = 0;
-            foreach ($allExisting as $entry) {
-                $key = $entry->user_principal_name . '|' . $entry->sku_id;
-                if (!in_array($key, $seenKeys)) {
-                    $entry->delete();
-                    $removed++;
-                }
-            }
+            $removed = AssetUserLicense::where('team_id', $this->teamId)
+                ->whereNotIn('id', $keptIds)
+                ->count();
+
+            AssetUserLicense::where('team_id', $this->teamId)
+                ->whereNotIn('id', $keptIds)
+                ->delete();
 
             $totalAssignments = AssetUserLicense::where('team_id', $this->teamId)->count();
             $durationMs       = (int) ($startedAt->diffInMilliseconds(now()));
