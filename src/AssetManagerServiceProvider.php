@@ -24,11 +24,14 @@
 namespace Platform\AssetManager;
 
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Platform\AssetManager\Jobs\SyncIntuneDevicesJob;
+use Platform\AssetManager\Models\AssetDevice;
+use Platform\AssetManager\Policies\AssetDevicePolicy;
 use Platform\Core\PlatformCore;
 use Platform\Core\Routing\ModuleRouter;
 use RecursiveDirectoryIterator;
@@ -132,17 +135,13 @@ class AssetManagerServiceProvider extends ServiceProvider
             ModuleRouter::group('asset-manager', function () {
                 $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
             });
-            
-            /**
-             * API-Routes (optional)
-             * 
-             * Falls dein Modul API-Endpoints hat:
-             * 
-             * ModuleRouter::apiGroup('asset-manager', function () {
-             *     $this->loadRoutesFrom(__DIR__.'/../routes/api.php');
-             * });
-             */
+
+            ModuleRouter::apiGroup('asset-manager', function () {
+                $this->loadRoutesFrom(__DIR__.'/../routes/api.php');
+            });
         }
+
+        Gate::policy(AssetDevice::class, AssetDevicePolicy::class);
 
         /**
          * SCHRITT 3: Migrationen laden

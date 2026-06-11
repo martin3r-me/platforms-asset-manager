@@ -9,6 +9,19 @@
             ['label' => 'Geräte', 'icon' => 'computer-desktop'],
         ]">
             <x-slot name="actions">
+                @if($canSync && $config && $config->isConfigured())
+                    <button wire:click="syncNow" wire:loading.attr="disabled" wire:target="syncNow"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg hover:from-violet-600 hover:to-indigo-700 transition-all shadow-sm disabled:opacity-60">
+                        <span wire:loading.remove wire:target="syncNow">
+                            @svg('heroicon-o-arrow-path', 'w-3.5 h-3.5')
+                            Jetzt synchronisieren
+                        </span>
+                        <span wire:loading wire:target="syncNow" class="flex items-center gap-1.5">
+                            @svg('heroicon-o-arrow-path', 'w-3.5 h-3.5 animate-spin')
+                            Startet...
+                        </span>
+                    </button>
+                @endif
                 <a href="{{ route('asset-manager.setup') }}" wire:navigate
                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-black/[0.04] dark:bg-white/[0.06] rounded-lg hover:bg-black/[0.07] transition-all">
                     @svg('heroicon-o-wrench-screwdriver', 'w-3.5 h-3.5')
@@ -21,6 +34,14 @@
     <x-ui-page-container>
         <div class="space-y-5">
 
+            {{-- Sync-Feedback --}}
+            @if($syncResult)
+                <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-violet-500/10 border border-violet-500/20">
+                    @svg('heroicon-o-arrow-path', 'w-4 h-4 text-violet-500 animate-spin flex-shrink-0')
+                    <p class="text-sm text-violet-700 dark:text-violet-400">{{ $syncResult }}</p>
+                </div>
+            @endif
+
             {{-- Kein Connector konfiguriert --}}
             @if(!$config || !$config->isConfigured())
                 <div class="flex flex-col items-center justify-center py-16 text-center">
@@ -29,12 +50,32 @@
                     </div>
                     <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Connector nicht konfiguriert</h3>
                     <p class="text-xs text-gray-400 mb-4 max-w-xs">Trage die Azure App-Registration Credentials ein, um Intune-Gerätedaten zu synchronisieren.</p>
-                    <a href="{{ route('asset-manager.setup') }}" wire:navigate
-                       class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg hover:from-violet-600 hover:to-indigo-700 transition-all shadow-sm">
-                        @svg('heroicon-o-arrow-right', 'w-4 h-4')
-                        Connector einrichten
-                    </a>
+                    @if($canSync)
+                        <a href="{{ route('asset-manager.setup') }}" wire:navigate
+                           class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg hover:from-violet-600 hover:to-indigo-700 transition-all shadow-sm">
+                            @svg('heroicon-o-arrow-right', 'w-4 h-4')
+                            Connector einrichten
+                        </a>
+                    @else
+                        <p class="text-xs text-gray-400">Bitte einen Team-Admin bitten, den Connector einzurichten.</p>
+                    @endif
                 </div>
+
+            {{-- Connector Fehler --}}
+            @elseif($config->sync_status === 'error' && $config->sync_error)
+                <div class="flex items-start gap-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                    @svg('heroicon-o-exclamation-triangle', 'w-4 h-4 text-red-500 flex-shrink-0 mt-0.5')
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-red-700 dark:text-red-400">Letzter Sync fehlgeschlagen</p>
+                        <p class="text-xs text-red-600/80 dark:text-red-400/80 mt-0.5">{{ $config->sync_error }}</p>
+                        @if(str_contains($config->sync_error, 'Berechtigung') || str_contains($config->sync_error, 'DeviceManagement'))
+                            <p class="text-xs text-red-600/70 dark:text-red-400/60 mt-1">
+                                Stelle sicher, dass <strong>DeviceManagementManagedDevices.Read.All</strong> als Application Permission mit Admin-Consent erteilt wurde.
+                            </p>
+                        @endif
+                    </div>
+                </div>
+
             @else
 
             {{-- Stat-Karten --}}
@@ -60,6 +101,27 @@
                     <div class="text-xs text-gray-400 mt-0.5">Unbekannt</div>
                 </div>
             </div>
+
+            {{-- Letzter Sync --}}
+            @if($lastLog)
+                <div class="flex items-center gap-3 text-xs text-gray-400">
+                    @svg('heroicon-o-clock', 'w-3.5 h-3.5')
+                    <span>
+                        Letzter Sync:
+                        @if($lastLog->status === 'success')
+                            <span class="text-emerald-600 dark:text-emerald-400">erfolgreich</span>
+                            ({{ $lastLog->devices_synced ?? 0 }} Geräte)
+                        @elseif($lastLog->status === 'error')
+                            <span class="text-red-500">fehlgeschlagen</span>
+                        @else
+                            <span class="text-amber-500">läuft...</span>
+                        @endif
+                        @if($config->last_sync_at)
+                            — {{ $config->last_sync_at->diffForHumans() }}
+                        @endif
+                    </span>
+                </div>
+            @endif
 
             {{-- Filter + Suche --}}
             <div class="flex flex-wrap items-center gap-3">
@@ -115,6 +177,9 @@
                                 Keine Geräte gefunden für diese Filtereinstellungen.
                             @else
                                 Noch keine Geräte synchronisiert.
+                                @if($canSync)
+                                    <br><button wire:click="syncNow" class="mt-2 text-violet-500 hover:underline">Jetzt synchronisieren</button>
+                                @endif
                             @endif
                         </p>
                     </div>
@@ -192,7 +257,7 @@
                 @endif
             </div>
 
-            @endif {{-- Ende: Connector konfiguriert --}}
+            @endif {{-- Ende: Connector konfiguriert / kein Fehler --}}
 
         </div>
     </x-ui-page-container>

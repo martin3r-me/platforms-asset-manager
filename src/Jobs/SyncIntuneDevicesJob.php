@@ -70,7 +70,9 @@ class SyncIntuneDevicesJob implements ShouldQueue
                 } else {
                     AssetDevice::create(array_merge($data, [
                         'team_id'   => $this->teamId,
+                        'tenant_id' => $config->tenant_id,
                         'intune_id' => $device['id'],
+                        'source'    => 'intune',
                     ]));
                     $added++;
                 }

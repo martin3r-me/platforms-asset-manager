@@ -10,7 +10,9 @@ class AssetDevice extends Model
 
     protected $fillable = [
         'team_id',
+        'tenant_id',
         'intune_id',
+        'source',
         'device_name',
         'user_display_name',
         'user_principal_name',

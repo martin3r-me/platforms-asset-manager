@@ -4,7 +4,9 @@ namespace Platform\AssetManager\Livewire;
 
 use Livewire\Component;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetConnectorConfig;
+use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Services\IntuneGraphService;
 
 class ConnectorSetup extends Component
@@ -31,44 +33,40 @@ class ConnectorSetup extends Component
 
     public function mount(): void
     {
+        Gate::authorize('manageConnector', AssetDevice::class);
+
         $team   = Auth::user()->currentTeam;
         $config = AssetConnectorConfig::where('team_id', $team->id)->first();
 
         if ($config) {
-            $this->clientId = $config->client_id     ?? '';
-            $this->tenantId = $config->tenant_id     ?? '';
-            $this->objectId = $config->object_id     ?? '';
-            $this->keyId    = $config->key_id        ?? '';
-            // Secret wird aus Sicherheitsgründen nicht vorausgefüllt
+            $this->clientId = $config->client_id ?? '';
+            $this->tenantId = $config->tenant_id ?? '';
+            $this->objectId = $config->object_id ?? '';
+            $this->keyId    = $config->key_id    ?? '';
             $this->enabled  = $config->enabled;
+            // Secret wird aus Sicherheitsgründen nicht vorausgefüllt
         }
     }
 
     public function save(): void
     {
+        Gate::authorize('manageConnector', AssetDevice::class);
         $this->validate();
 
         $team = Auth::user()->currentTeam;
 
-        $data = [
-            'enabled' => $this->enabled,
-        ];
+        $data = ['enabled' => $this->enabled];
 
-        if ($this->clientId !== '')     $data['client_id']     = $this->clientId;
-        if ($this->tenantId !== '')     $data['tenant_id']     = $this->tenantId;
-        if ($this->objectId !== '')     $data['object_id']     = $this->objectId;
-        if ($this->keyId    !== '')     $data['key_id']        = $this->keyId;
+        if ($this->clientId     !== '') $data['client_id']     = $this->clientId;
+        if ($this->tenantId     !== '') $data['tenant_id']     = $this->tenantId;
+        if ($this->objectId     !== '') $data['object_id']     = $this->objectId;
+        if ($this->keyId        !== '') $data['key_id']        = $this->keyId;
         if ($this->clientSecret !== '') $data['client_secret'] = $this->clientSecret;
 
-        $config = AssetConnectorConfig::updateOrCreate(
-            ['team_id' => $team->id],
-            $data
-        );
+        AssetConnectorConfig::updateOrCreate(['team_id' => $team->id], $data);
 
-        // Token-Cache leeren damit neue Credentials sofort greifen
         app(IntuneGraphService::class)->clearTokenCache($team->id);
 
-        // Secret nach dem Speichern leeren
         $this->clientSecret = '';
         $this->saved        = true;
         $this->testResult   = null;
@@ -76,6 +74,8 @@ class ConnectorSetup extends Component
 
     public function testConnection(): void
     {
+        Gate::authorize('manageConnector', AssetDevice::class);
+
         $team   = Auth::user()->currentTeam;
         $config = AssetConnectorConfig::where('team_id', $team->id)->first();
 
@@ -87,17 +87,14 @@ class ConnectorSetup extends Component
 
         $error = app(IntuneGraphService::class)->testConnection($config);
 
-        if ($error === null) {
-            $this->testResult  = 'Verbindung erfolgreich. Intune-API ist erreichbar.';
-            $this->testSuccess = true;
-        } else {
-            $this->testResult  = $error;
-            $this->testSuccess = false;
-        }
+        $this->testResult  = $error ?? 'Verbindung erfolgreich. Intune-API ist erreichbar.';
+        $this->testSuccess = $error === null;
     }
 
     public function syncNow(): void
     {
+        Gate::authorize('sync', AssetDevice::class);
+
         $team = Auth::user()->currentTeam;
 
         \Platform\AssetManager\Jobs\SyncIntuneDevicesJob::dispatch($team->id);
