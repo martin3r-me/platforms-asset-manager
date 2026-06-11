@@ -18,7 +18,7 @@ class SyncIntuneDevicesJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $timeout = 300;
-    public int $tries = 1;
+    public int $tries   = 1;
 
     public function __construct(
         public readonly int $teamId
@@ -31,6 +31,7 @@ class SyncIntuneDevicesJob implements ShouldQueue
             ->first();
 
         if (!$config || !$config->isConfigured()) {
+            Log::warning('AssetManager: Sync übersprungen — Connector nicht konfiguriert', ['team_id' => $this->teamId]);
             return;
         }
 
@@ -47,12 +48,13 @@ class SyncIntuneDevicesJob implements ShouldQueue
             $devices = $service->getManagedDevices($config);
 
             if ($devices === null) {
-                $this->markFailed($config, $log, $startedAt, 'Geräte konnten nicht abgerufen werden. Token oder Berechtigungen prüfen.');
+                $error = $service->lastError ?? 'Unbekannter Fehler beim Geräte-Abruf.';
+                $this->markFailed($config, $log, $startedAt, $error);
                 return;
             }
 
-            $added   = 0;
-            $updated = 0;
+            $added     = 0;
+            $updated   = 0;
             $intuneIds = [];
 
             foreach ($devices as $device) {
@@ -78,7 +80,6 @@ class SyncIntuneDevicesJob implements ShouldQueue
                 }
             }
 
-            // Geräte entfernen, die nicht mehr in Intune vorhanden sind
             $removed = AssetDevice::where('team_id', $this->teamId)
                 ->whereNotIn('intune_id', $intuneIds)
                 ->count();
@@ -116,7 +117,6 @@ class SyncIntuneDevicesJob implements ShouldQueue
 
         } catch (\Throwable $e) {
             $this->markFailed($config, $log, $startedAt, $e->getMessage());
-
             Log::error('AssetManager: Sync-Exception', [
                 'team_id' => $this->teamId,
                 'error'   => $e->getMessage(),
@@ -127,20 +127,20 @@ class SyncIntuneDevicesJob implements ShouldQueue
     protected function mapDevice(array $d): array
     {
         return [
-            'device_name'          => $d['deviceName'] ?? null,
-            'user_display_name'    => $d['userDisplayName'] ?? null,
-            'user_principal_name'  => $d['userPrincipalName'] ?? null,
-            'operating_system'     => $d['operatingSystem'] ?? null,
-            'os_version'           => $d['osVersion'] ?? null,
-            'compliance_state'     => $d['complianceState'] ?? 'unknown',
-            'management_state'     => $d['managementState'] ?? null,
-            'device_type'          => $d['deviceType'] ?? null,
-            'manufacturer'         => $d['manufacturer'] ?? null,
-            'model'                => $d['model'] ?? null,
-            'serial_number'        => $d['serialNumber'] ?? null,
-            'enrolled_at'          => isset($d['enrolledDateTime']) ? \Carbon\Carbon::parse($d['enrolledDateTime']) : null,
-            'last_check_in_at'     => isset($d['lastSyncDateTime']) ? \Carbon\Carbon::parse($d['lastSyncDateTime']) : null,
-            'raw_data'             => $d,
+            'device_name'         => $d['deviceName'] ?? null,
+            'user_display_name'   => $d['userDisplayName'] ?? null,
+            'user_principal_name' => $d['userPrincipalName'] ?? null,
+            'operating_system'    => $d['operatingSystem'] ?? null,
+            'os_version'          => $d['osVersion'] ?? null,
+            'compliance_state'    => $d['complianceState'] ?? 'unknown',
+            'management_state'    => $d['managementState'] ?? null,
+            'device_type'         => $d['deviceType'] ?? null,
+            'manufacturer'        => $d['manufacturer'] ?? null,
+            'model'               => $d['model'] ?? null,
+            'serial_number'       => $d['serialNumber'] ?? null,
+            'enrolled_at'         => isset($d['enrolledDateTime']) ? \Carbon\Carbon::parse($d['enrolledDateTime']) : null,
+            'last_check_in_at'    => isset($d['lastSyncDateTime']) ? \Carbon\Carbon::parse($d['lastSyncDateTime']) : null,
+            'raw_data'            => $d,
         ];
     }
 

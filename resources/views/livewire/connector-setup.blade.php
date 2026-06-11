@@ -39,14 +39,14 @@
 
                         @if($config->isConfigured())
                             {{-- Aktueller Sync-Status --}}
-                            <div class="flex items-center gap-3">
-                                <div class="w-2.5 h-2.5 rounded-full flex-shrink-0
+                            <div class="flex items-start gap-3">
+                                <div class="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1.5
                                     {{ $config->sync_status === 'success' ? 'bg-emerald-500' : '' }}
                                     {{ $config->sync_status === 'error'   ? 'bg-red-500'     : '' }}
                                     {{ $config->sync_status === 'running' ? 'bg-amber-500 animate-pulse' : '' }}
                                     {{ $config->sync_status === 'idle'    ? 'bg-gray-400'    : '' }}">
                                 </div>
-                                <div class="flex-1">
+                                <div class="flex-1 min-w-0">
                                     <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
                                         @if($config->sync_status === 'success')     Letzter Sync erfolgreich
                                         @elseif($config->sync_status === 'error')   Letzter Sync fehlgeschlagen
@@ -55,17 +55,28 @@
                                         @endif
                                     </div>
                                     @if($config->last_sync_at)
-                                        <div class="text-xs text-gray-400">{{ $config->last_sync_at->diffForHumans() }}</div>
+                                        <div class="text-xs text-gray-400 mt-0.5">{{ $config->last_sync_at->diffForHumans() }}</div>
                                     @endif
                                     @if($config->sync_status === 'error' && $config->sync_error)
-                                        <div class="text-xs text-red-500 mt-1">{{ \Illuminate\Support\Str::limit($config->sync_error, 150) }}</div>
+                                        <div class="text-xs text-red-500 mt-1.5 leading-relaxed">{{ $config->sync_error }}</div>
+                                        @if(str_contains($config->sync_error, '403') || str_contains($config->sync_error, 'Berechtigung') || str_contains($config->sync_error, 'DeviceManagement'))
+                                            <div class="mt-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-lg px-3 py-2">
+                                                Stelle sicher, dass in der Azure App-Registration die Permission
+                                                <strong>DeviceManagementManagedDevices.Read.All</strong> (Application, nicht Delegated)
+                                                hinzugefügt und <strong>Admin-Consent</strong> erteilt wurde.
+                                            </div>
+                                        @elseif(str_contains($config->sync_error, 'Token') || str_contains($config->sync_error, 'token'))
+                                            <div class="mt-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-lg px-3 py-2">
+                                                Prüfe Client ID, Tenant ID und Secret. Das Secret könnte abgelaufen sein.
+                                            </div>
+                                        @endif
                                     @endif
                                 </div>
                             </div>
 
-                            {{-- Sync-Button --}}
+                            {{-- Aktions-Buttons --}}
                             @if($config->sync_status !== 'running')
-                                <div class="flex items-center gap-3 pt-1">
+                                <div class="flex flex-wrap items-center gap-3 pt-1">
                                     <button wire:click="syncNow"
                                         wire:loading.attr="disabled"
                                         wire:target="syncNow"
@@ -79,6 +90,21 @@
                                             Starte Sync...
                                         </span>
                                     </button>
+
+                                    <button wire:click="testConnection"
+                                        wire:loading.attr="disabled"
+                                        wire:target="testConnection"
+                                        class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-black/[0.04] dark:bg-white/[0.06] rounded-lg hover:bg-black/[0.07] transition-all">
+                                        <span wire:loading.remove wire:target="testConnection">
+                                            @svg('heroicon-o-signal', 'w-4 h-4')
+                                            Verbindung testen
+                                        </span>
+                                        <span wire:loading wire:target="testConnection" class="flex items-center gap-2">
+                                            @svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin')
+                                            Teste...
+                                        </span>
+                                    </button>
+
                                     <a href="{{ route('asset-manager.devices.index') }}" wire:navigate
                                        class="text-sm text-violet-600 dark:text-violet-400 hover:underline">
                                         Geräte ansehen →

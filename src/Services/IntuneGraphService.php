@@ -12,10 +12,6 @@ class IntuneGraphService
     protected string $graphBase = 'https://graph.microsoft.com/v1.0';
     protected string $loginBase = 'https://login.microsoftonline.com';
 
-    /**
-     * Holt ein App-only Access Token via client_credentials grant.
-     * Token wird für 58 Minuten gecacht (Ablaufzeit 3600s - 120s Puffer).
-     */
     public function getAccessToken(AssetConnectorConfig $config): ?string
     {
         if (!$config->isConfigured()) {
@@ -44,10 +40,13 @@ class IntuneGraphService
             );
 
             if (!$response->successful()) {
+                $errorCode = $response->json('error');
+                $errorDesc = $response->json('error_description');
                 Log::error('AssetManager: Token-Abruf fehlgeschlagen', [
-                    'team_id' => $config->team_id,
-                    'status'  => $response->status(),
-                    'body'    => $response->body(),
+                    'team_id'    => $config->team_id,
+                    'status'     => $response->status(),
+                    'error'      => $errorCode,
+                    'error_desc' => $errorDesc,
                 ]);
                 return null;
             }
@@ -62,9 +61,6 @@ class IntuneGraphService
         }
     }
 
-    /**
-     * Löscht den gecachten Token (z.B. nach Credential-Änderung).
-     */
     public function clearTokenCache(int $teamId): void
     {
         Cache::forget('asset_manager_token_' . $teamId);
@@ -72,14 +68,19 @@ class IntuneGraphService
 
     /**
      * Holt alle verwalteten Geräte aus Intune.
-     * Paginiert automatisch via @odata.nextLink.
+     * Gibt null zurück bei Fehler — Fehlerdetails in $this->lastError.
      *
      * Benötigte Application Permission: DeviceManagementManagedDevices.Read.All
      */
+    public ?string $lastError = null;
+
     public function getManagedDevices(AssetConnectorConfig $config): ?array
     {
+        $this->lastError = null;
+
         $token = $this->getAccessToken($config);
         if (!$token) {
+            $this->lastError = 'Token-Abruf fehlgeschlagen. Client ID, Tenant ID und Secret prüfen.';
             return null;
         }
 
@@ -89,30 +90,35 @@ class IntuneGraphService
             . ',complianceState,managementState,deviceType,manufacturer,model,serialNumber'
             . ',enrolledDateTime,lastSyncDateTime';
 
+        $retried = false;
+
         while ($url) {
             try {
                 $response = Http::withHeaders([
-                    'Authorization' => 'Bearer ' . $token,
+                    'Authorization'    => 'Bearer ' . $token,
                     'ConsistencyLevel' => 'eventual',
                 ])->get($url);
 
-                if ($response->status() === 401) {
-                    // Token ungültig — Cache leeren und einmal neu versuchen
+                if ($response->status() === 401 && !$retried) {
+                    $retried = true;
                     $this->clearTokenCache($config->team_id);
-                    $token = $this->getAccessToken($config);
-                    if (!$token) return null;
+                    $token = $this->fetchToken($config);
+                    if (!$token) {
+                        $this->lastError = 'Token abgelaufen und Erneuerung fehlgeschlagen. Credentials prüfen.';
+                        return null;
+                    }
                     continue;
                 }
 
                 if ($response->status() === 403) {
-                    Log::error('AssetManager: Keine Intune-Berechtigung (403)', [
-                        'team_id' => $config->team_id,
-                        'hint'    => 'App-Registration braucht DeviceManagementManagedDevices.Read.All (Application Permission)',
-                    ]);
+                    $this->lastError = 'Keine Berechtigung (403): DeviceManagementManagedDevices.Read.All muss als Application Permission mit Admin-Consent erteilt sein.';
+                    Log::error('AssetManager: Keine Intune-Berechtigung (403)', ['team_id' => $config->team_id]);
                     return null;
                 }
 
                 if (!$response->successful()) {
+                    $msg = $response->json('error.message', 'Unbekannter Fehler');
+                    $this->lastError = "Graph-API Fehler (HTTP {$response->status()}): {$msg}";
                     Log::error('AssetManager: Graph-API Fehler', [
                         'team_id' => $config->team_id,
                         'status'  => $response->status(),
@@ -121,11 +127,12 @@ class IntuneGraphService
                     return null;
                 }
 
-                $data = $response->json();
+                $data    = $response->json();
                 $devices = array_merge($devices, $data['value'] ?? []);
-                $url = $data['@odata.nextLink'] ?? null;
+                $url     = $data['@odata.nextLink'] ?? null;
 
             } catch (\Throwable $e) {
+                $this->lastError = 'Verbindungsfehler: ' . $e->getMessage();
                 Log::error('AssetManager: Exception beim Geräte-Abruf', [
                     'team_id' => $config->team_id,
                     'error'   => $e->getMessage(),
@@ -138,8 +145,7 @@ class IntuneGraphService
     }
 
     /**
-     * Testet die Verbindung mit den gespeicherten Credentials.
-     * Gibt null zurück bei Erfolg, sonst eine Fehlermeldung.
+     * Testet die Verbindung. Gibt null bei Erfolg zurück, sonst eine Fehlermeldung.
      */
     public function testConnection(AssetConnectorConfig $config): ?string
     {
@@ -148,10 +154,30 @@ class IntuneGraphService
         }
 
         $this->clearTokenCache($config->team_id);
-        $token = $this->fetchToken($config);
 
-        if (!$token) {
-            return 'Token-Abruf fehlgeschlagen. Bitte Client ID, Tenant ID und Secret prüfen.';
+        try {
+            $tokenResponse = Http::asForm()->post(
+                "{$this->loginBase}/{$config->tenant_id}/oauth2/v2.0/token",
+                [
+                    'grant_type'    => 'client_credentials',
+                    'client_id'     => $config->client_id,
+                    'client_secret' => $config->client_secret,
+                    'scope'         => 'https://graph.microsoft.com/.default',
+                ]
+            );
+
+            if (!$tokenResponse->successful()) {
+                $err  = $tokenResponse->json('error', 'unknown_error');
+                $desc = $tokenResponse->json('error_description', '');
+                // Beschreibung kürzen (oft sehr lang)
+                $desc = preg_replace('/\s*Trace ID:.*$/s', '', $desc);
+                $desc = trim($desc);
+                return "Token-Fehler ({$err}): {$desc}";
+            }
+
+            $token = $tokenResponse->json('access_token');
+        } catch (\Throwable $e) {
+            return 'Token-Abruf fehlgeschlagen: ' . $e->getMessage();
         }
 
         try {
@@ -160,7 +186,7 @@ class IntuneGraphService
             ])->get("{$this->graphBase}/deviceManagement/managedDevices?\$top=1&\$select=id");
 
             if ($response->status() === 403) {
-                return 'Verbindung erfolgreich, aber fehlende Berechtigung: DeviceManagementManagedDevices.Read.All muss als Application Permission mit Admin-Consent erteilt sein.';
+                return 'Token OK, aber fehlende Berechtigung (403): DeviceManagementManagedDevices.Read.All muss als Application Permission mit Admin-Consent erteilt sein.';
             }
 
             if (!$response->successful()) {
