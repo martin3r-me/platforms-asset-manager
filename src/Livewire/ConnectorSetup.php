@@ -72,11 +72,6 @@ class ConnectorSetup extends Component
         $this->clientSecret = '';
         $this->saved        = true;
         $this->testResult   = null;
-
-        $this->dispatch('notifications:store', [
-            'type'    => 'success',
-            'message' => 'Connector-Einstellungen gespeichert.',
-        ]);
     }
 
     public function testConnection(): void
@@ -107,10 +102,8 @@ class ConnectorSetup extends Component
 
         \Platform\AssetManager\Jobs\SyncIntuneDevicesJob::dispatch($team->id);
 
-        $this->dispatch('notifications:store', [
-            'type'    => 'success',
-            'message' => 'Sync-Job wurde gestartet.',
-        ]);
+        $this->testResult  = 'Sync-Job wurde gestartet. Die Geräte werden im Hintergrund synchronisiert.';
+        $this->testSuccess = true;
     }
 
     public function render()
