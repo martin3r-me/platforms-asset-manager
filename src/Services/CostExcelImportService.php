@@ -4,7 +4,7 @@ namespace Platform\AssetManager\Services;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use PhpOffice\PhpSpreadsheet\IOFactory;
+use OpenSpout\Reader\XLSX\Reader as XlsxReader;
 use Platform\AssetManager\Models\AssetCategory;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostLine;
@@ -58,15 +58,10 @@ class CostExcelImportService
             ->keyBy(fn($e) => $this->normName($e->display_name ?: $e->user_principal_name))
             ->all();
 
-        $spreadsheet = IOFactory::load($path);
+        $sheets = $this->readWorkbook($path);
 
         DB::beginTransaction();
         try {
-            $sheets = [];
-            foreach ($spreadsheet->getSheetNames() as $name) {
-                $sheets[$this->normName($name)] = $spreadsheet->getSheetByName($name);
-            }
-
             $this->importUebersicht($this->findSheet($sheets, ['ubersicht', 'übersicht']));
             $this->importInternet($this->findSheet($sheets, ['internet']));
             $this->importDrucker($this->findSheet($sheets, ['drucker']));
@@ -95,10 +90,9 @@ class CostExcelImportService
     // ── Sheet-Importer ────────────────────────────────────────────────────
 
     /** Sheet3: pro Mitarbeiter mehrere Kostenarten (Spalten). */
-    protected function importUebersicht($sheet): void
+    protected function importUebersicht(?array $rows): void
     {
-        if (!$sheet) return;
-        $rows = $sheet->toArray(null, true, true, true);
+        if (!$rows) return;
 
         // Spalte → Kostenart-Key (MS Lizenz/D bewusst ausgelassen — kommt aus Graph)
         $map = [
@@ -141,10 +135,9 @@ class CostExcelImportService
     }
 
     /** Sheet4: Internet-Anschlüsse (standortbezogen) → AssetItem + cost_line. */
-    protected function importInternet($sheet): void
+    protected function importInternet(?array $rows): void
     {
-        if (!$sheet) return;
-        $rows = $sheet->toArray(null, true, true, true);
+        if (!$rows) return;
         $cat  = $this->category('internet', 'Internet', 'heroicon-o-wifi');
 
         $count = 0;
@@ -176,10 +169,9 @@ class CostExcelImportService
     }
 
     /** Sheet6: Drucker → AssetItem + 2 cost_lines (Wartung + Leasing). */
-    protected function importDrucker($sheet): void
+    protected function importDrucker(?array $rows): void
     {
-        if (!$sheet) return;
-        $rows = $sheet->toArray(null, true, true, true);
+        if (!$rows) return;
         $cat  = $this->category('drucker', 'Drucker', 'heroicon-o-printer');
 
         $count = 0;
@@ -221,10 +213,9 @@ class CostExcelImportService
     }
 
     /** Sheet7: BPEvent je Kostenstelle (+ GL-Konten). */
-    protected function importBpEvent($sheet): void
+    protected function importBpEvent(?array $rows): void
     {
-        if (!$sheet) return;
-        $rows = $sheet->toArray(null, true, true, true);
+        if (!$rows) return;
 
         $count = 0;
         foreach ($rows as $i => $row) {
@@ -248,10 +239,9 @@ class CostExcelImportService
     }
 
     /** Sheet8/9: HGK bzw. necta je Kostenstelle. A=Name, B=Kosten mtl., C=Kostenstelle, D=Faktor. */
-    protected function importPerCostCenter($sheet, string $typeKey, bool $withFactor): void
+    protected function importPerCostCenter(?array $rows, string $typeKey, bool $withFactor): void
     {
-        if (!$sheet) return;
-        $rows = $sheet->toArray(null, true, true, true);
+        if (!$rows) return;
 
         $count = 0;
         foreach ($rows as $i => $row) {
@@ -274,10 +264,9 @@ class CostExcelImportService
     }
 
     /** Sheet10: Laptops → AssetItem-Inventar (Kosten kommen aus Übersicht/lap_dock, kein cost_line). */
-    protected function importLaptops($sheet): void
+    protected function importLaptops(?array $rows): void
     {
-        if (!$sheet) return;
-        $rows = $sheet->toArray(null, true, true, true);
+        if (!$rows) return;
         $cat  = $this->category('laptop', 'Laptop', 'heroicon-o-computer-desktop');
 
         $count = 0;
@@ -303,10 +292,9 @@ class CostExcelImportService
     }
 
     /** Sheet11/12: Seat-Listen (ChatGPT/Canva). Spalte $amountCol enthält EUR-Monatsbetrag. */
-    protected function importSeatSheet($sheet, string $typeKey, string $amountCol): void
+    protected function importSeatSheet(?array $rows, string $typeKey, string $amountCol): void
     {
-        if (!$sheet) return;
-        $rows = $sheet->toArray(null, true, true, true);
+        if (!$rows) return;
 
         $count = 0;
         foreach ($rows as $i => $row) {
@@ -440,16 +428,54 @@ class CostExcelImportService
         );
     }
 
-    protected function findSheet(array $sheets, array $candidates)
+    /** Liest die Arbeitsmappe in ['normname' => [zeilennr => ['A'=>wert, 'B'=>wert, …]]] (1-basiert). */
+    protected function readWorkbook(string $path): array
+    {
+        $reader = new XlsxReader();
+        $reader->open($path);
+
+        $sheets = [];
+        foreach ($reader->getSheetIterator() as $sheet) {
+            $rows = [];
+            $r = 0;
+            foreach ($sheet->getRowIterator() as $row) {
+                $r++;
+                $assoc = [];
+                foreach ($row->toArray() as $i => $val) {
+                    $assoc[$this->colLetter((int) $i)] = $val;
+                }
+                $rows[$r] = $assoc;
+            }
+            $sheets[$this->normName($sheet->getName())] = $rows;
+        }
+        $reader->close();
+
+        return $sheets;
+    }
+
+    /** 0-basierter Spaltenindex → Excel-Buchstabe (0→A, 25→Z, 26→AA). */
+    protected function colLetter(int $index): string
+    {
+        $letters = '';
+        $index++; // 1-basiert
+        while ($index > 0) {
+            $mod     = ($index - 1) % 26;
+            $letters = chr(65 + $mod) . $letters;
+            $index   = intdiv($index - 1, 26);
+        }
+        return $letters;
+    }
+
+    protected function findSheet(array $sheets, array $candidates): ?array
     {
         foreach ($candidates as $c) {
             $key = $this->normName($c);
             if (isset($sheets[$key])) return $sheets[$key];
         }
         // Teilstring-Suche als Fallback
-        foreach ($sheets as $key => $sheet) {
+        foreach ($sheets as $key => $rows) {
             foreach ($candidates as $c) {
-                if (Str::contains($key, $this->normName($c))) return $sheet;
+                if (Str::contains($key, $this->normName($c))) return $rows;
             }
         }
         return null;
