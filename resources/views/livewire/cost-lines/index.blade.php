@@ -113,14 +113,19 @@
                 @else
                     <table class="w-full text-sm">
                         <thead>
+                            @php
+                                $sortIcon = fn($f) => $sortField === $f
+                                    ? '<svg class="w-3 h-3 inline -mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="' . ($sortDirection === 'asc' ? 'M4.5 15.75l7.5-7.5 7.5 7.5' : 'M19.5 8.25l-7.5 7.5-7.5-7.5') . '" /></svg>'
+                                    : '';
+                            @endphp
                             <tr class="border-b border-black/5 text-xs uppercase tracking-wider text-gray-400">
-                                <th class="text-left px-4 py-3">Bezeichnung</th>
-                                <th class="text-left px-4 py-3">Kostenart</th>
-                                <th class="text-left px-4 py-3">KSt</th>
-                                <th class="text-left px-4 py-3">Kreditor</th>
-                                <th class="text-right px-4 py-3">Betrag</th>
-                                <th class="text-left px-4 py-3">Frequenz</th>
-                                <th class="text-right px-4 py-3">€/Monat</th>
+                                <th class="text-left px-4 py-3"><button wire:click="sortBy('label')" class="inline-flex items-center gap-1 uppercase hover:text-gray-600">Bezeichnung {!! $sortIcon('label') !!}</button></th>
+                                <th class="text-left px-4 py-3"><button wire:click="sortBy('cost_type')" class="inline-flex items-center gap-1 uppercase hover:text-gray-600">Kostenart {!! $sortIcon('cost_type') !!}</button></th>
+                                <th class="text-left px-4 py-3"><button wire:click="sortBy('cost_center')" class="inline-flex items-center gap-1 uppercase hover:text-gray-600">KSt {!! $sortIcon('cost_center') !!}</button></th>
+                                <th class="text-left px-4 py-3"><button wire:click="sortBy('vendor')" class="inline-flex items-center gap-1 uppercase hover:text-gray-600">Kreditor {!! $sortIcon('vendor') !!}</button></th>
+                                <th class="text-right px-4 py-3"><button wire:click="sortBy('amount')" class="inline-flex items-center gap-1 uppercase hover:text-gray-600">Betrag {!! $sortIcon('amount') !!}</button></th>
+                                <th class="text-left px-4 py-3"><button wire:click="sortBy('frequency')" class="inline-flex items-center gap-1 uppercase hover:text-gray-600">Frequenz {!! $sortIcon('frequency') !!}</button></th>
+                                <th class="text-right px-4 py-3"><button wire:click="sortBy('monthly_amount')" class="inline-flex items-center gap-1 uppercase hover:text-gray-600">€/Monat {!! $sortIcon('monthly_amount') !!}</button></th>
                                 <th class="px-4 py-3"></th>
                             </tr>
                         </thead>

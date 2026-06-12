@@ -21,6 +21,8 @@ class Index extends Component
     public ?int   $filterVendor   = null;
     public string $filterActive   = '';  // ''|'1'|'0'
     public int    $perPage        = 30;
+    public string $sortField      = 'monthly_amount';
+    public string $sortDirection  = 'desc';
 
     // Editor (Create/Update)
     public bool    $showEditor    = false;
@@ -40,6 +42,8 @@ class Index extends Component
         'filterCenter' => ['except' => null],
         'filterVendor' => ['except' => null],
         'filterActive' => ['except' => ''],
+        'sortField'    => ['except' => 'monthly_amount'],
+        'sortDirection'=> ['except' => 'desc'],
     ];
 
     public function updatingSearch(): void       { $this->resetPage(); }
@@ -51,6 +55,40 @@ class Index extends Component
     protected function teamId(): int
     {
         return Auth::user()->currentTeam->id;
+    }
+
+    /** Spaltensortierung umschalten: gleiches Feld → Richtung kippen, sonst aufsteigend. */
+    public function sortBy(string $field): void
+    {
+        if ($this->sortField === $field) {
+            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            $this->sortField     = $field;
+            $this->sortDirection = 'asc';
+        }
+        $this->resetPage();
+    }
+
+    /** Sortierung auf die Query anwenden — verknüpfte Spalten alphabetisch per Join. */
+    protected function applySort($query): void
+    {
+        $dir = $this->sortDirection === 'asc' ? 'asc' : 'desc';
+
+        match ($this->sortField) {
+            'cost_type' => $query
+                ->leftJoin('asset_cost_types', 'asset_cost_types.id', '=', 'asset_cost_lines.cost_type_id')
+                ->orderBy('asset_cost_types.name', $dir),
+            'cost_center' => $query
+                ->leftJoin('asset_cost_centers', 'asset_cost_centers.id', '=', 'asset_cost_lines.cost_center_id')
+                ->orderBy('asset_cost_centers.code', $dir),
+            'vendor' => $query
+                ->leftJoin('asset_vendors', 'asset_vendors.id', '=', 'asset_cost_lines.vendor_id')
+                ->orderBy('asset_vendors.name', $dir),
+            'label'     => $query->orderBy('asset_cost_lines.label', $dir),
+            'amount'    => $query->orderBy('asset_cost_lines.amount', $dir),
+            'frequency' => $query->orderBy('asset_cost_lines.frequency', $dir),
+            default     => $query->orderBy('asset_cost_lines.monthly_amount', $dir),
+        };
     }
 
     public function newLine(): void
@@ -138,23 +176,31 @@ class Index extends Component
     {
         $teamId = $this->teamId();
 
-        $query = AssetCostLine::where('team_id', $teamId)
-            ->with(['costType', 'costCenter', 'vendor', 'assignee']);
+        // Basis mit Filtern (Spalten qualifiziert, da die Sortierung Joins ergänzen kann)
+        $base = AssetCostLine::where('asset_cost_lines.team_id', $teamId);
 
-        if ($this->search)       $query->where('label', 'like', '%' . $this->search . '%');
-        if ($this->filterType)   $query->where('cost_type_id', $this->filterType);
-        if ($this->filterCenter) $query->where('cost_center_id', $this->filterCenter);
-        if ($this->filterVendor) $query->where('vendor_id', $this->filterVendor);
-        if ($this->filterActive !== '') $query->where('active', $this->filterActive === '1');
+        if ($this->search)       $base->where('asset_cost_lines.label', 'like', '%' . $this->search . '%');
+        if ($this->filterType)   $base->where('asset_cost_lines.cost_type_id', $this->filterType);
+        if ($this->filterCenter) $base->where('asset_cost_lines.cost_center_id', $this->filterCenter);
+        if ($this->filterVendor) $base->where('asset_cost_lines.vendor_id', $this->filterVendor);
+        if ($this->filterActive !== '') $base->where('asset_cost_lines.active', $this->filterActive === '1');
 
-        $lines = $query->orderByDesc('monthly_amount')->paginate($this->perPage);
+        // Summe ohne Sortier-Join berechnen (Join wäre 1:1, aber so bleibt es robust)
+        $monthlySum = round((float) (clone $base)->sum('monthly_amount'), 2);
+
+        $query = (clone $base)
+            ->with(['costType', 'costCenter', 'vendor', 'assignee'])
+            ->select('asset_cost_lines.*');
+        $this->applySort($query);
+
+        $lines = $query->paginate($this->perPage);
 
         return view('asset-manager::livewire.cost-lines.index', [
             'lines'       => $lines,
             'costTypes'   => AssetCostType::where('team_id', $teamId)->orderBy('sort_order')->get(),
             'costCenters' => AssetCostCenter::where('team_id', $teamId)->orderBy('code')->get(),
             'vendors'     => AssetVendor::where('team_id', $teamId)->orderBy('name')->get(),
-            'monthlySum'  => round((float) $query->sum('monthly_amount'), 2),
+            'monthlySum'  => $monthlySum,
         ])->layout('platform::layouts.app');
     }
 }
