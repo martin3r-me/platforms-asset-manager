@@ -23,6 +23,14 @@
             @svg('heroicon-o-key', 'w-4 h-4 text-[var(--ui-secondary)]')
             <span class="ml-2 text-sm">Lizenzen</span>
         </x-ui-sidebar-item>
+        <x-ui-sidebar-item :href="route('asset-manager.printers.index')">
+            @svg('heroicon-o-printer', 'w-4 h-4 text-[var(--ui-secondary)]')
+            <span class="ml-2 text-sm">Drucker</span>
+        </x-ui-sidebar-item>
+        <x-ui-sidebar-item :href="route('asset-manager.internet.index')">
+            @svg('heroicon-o-wifi', 'w-4 h-4 text-[var(--ui-secondary)]')
+            <span class="ml-2 text-sm">Internet</span>
+        </x-ui-sidebar-item>
     </x-ui-sidebar-list>
 
     <x-ui-sidebar-list label="Mitarbeiter">
@@ -33,13 +41,37 @@
     </x-ui-sidebar-list>
 
     <x-ui-sidebar-list label="Auswertungen">
+        <x-ui-sidebar-item :href="route('asset-manager.costs.allocation')">
+            @svg('heroicon-o-table-cells', 'w-4 h-4 text-[var(--ui-secondary)]')
+            <span class="ml-2 text-sm">Kostenaufteilung</span>
+        </x-ui-sidebar-item>
+        <x-ui-sidebar-item :href="route('asset-manager.cost-lines.index')">
+            @svg('heroicon-o-list-bullet', 'w-4 h-4 text-[var(--ui-secondary)]')
+            <span class="ml-2 text-sm">Kostenpositionen</span>
+        </x-ui-sidebar-item>
         <x-ui-sidebar-item :href="route('asset-manager.costs')">
             @svg('heroicon-o-banknotes', 'w-4 h-4 text-[var(--ui-secondary)]')
-            <span class="ml-2 text-sm">Kosten</span>
+            <span class="ml-2 text-sm">Kosten (pro MA)</span>
         </x-ui-sidebar-item>
     </x-ui-sidebar-list>
 
     <x-ui-sidebar-list label="Einstellungen">
+        <x-ui-sidebar-item :href="route('asset-manager.cost-centers.index')">
+            @svg('heroicon-o-clipboard-document-list', 'w-4 h-4 text-[var(--ui-secondary)]')
+            <span class="ml-2 text-sm">Kostenstellen</span>
+        </x-ui-sidebar-item>
+        <x-ui-sidebar-item :href="route('asset-manager.vendors.index')">
+            @svg('heroicon-o-building-storefront', 'w-4 h-4 text-[var(--ui-secondary)]')
+            <span class="ml-2 text-sm">Kreditoren</span>
+        </x-ui-sidebar-item>
+        <x-ui-sidebar-item :href="route('asset-manager.cost-types.index')">
+            @svg('heroicon-o-tag', 'w-4 h-4 text-[var(--ui-secondary)]')
+            <span class="ml-2 text-sm">Kostenarten</span>
+        </x-ui-sidebar-item>
+        <x-ui-sidebar-item :href="route('asset-manager.costs.import')">
+            @svg('heroicon-o-arrow-up-tray', 'w-4 h-4 text-[var(--ui-secondary)]')
+            <span class="ml-2 text-sm">Kosten-Import</span>
+        </x-ui-sidebar-item>
         <x-ui-sidebar-item :href="route('asset-manager.setup')">
             @svg('heroicon-o-wrench-screwdriver', 'w-4 h-4 text-[var(--ui-secondary)]')
             <span class="ml-2 text-sm">Connector</span>
@@ -61,11 +93,35 @@
             <a href="{{ route('asset-manager.licenses.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
                 @svg('heroicon-o-key', 'w-5 h-5')
             </a>
+            <a href="{{ route('asset-manager.printers.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
+                @svg('heroicon-o-printer', 'w-5 h-5')
+            </a>
+            <a href="{{ route('asset-manager.internet.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
+                @svg('heroicon-o-wifi', 'w-5 h-5')
+            </a>
             <a href="{{ route('asset-manager.employees.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
                 @svg('heroicon-o-users', 'w-5 h-5')
             </a>
+            <a href="{{ route('asset-manager.costs.allocation') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
+                @svg('heroicon-o-table-cells', 'w-5 h-5')
+            </a>
+            <a href="{{ route('asset-manager.cost-lines.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
+                @svg('heroicon-o-list-bullet', 'w-5 h-5')
+            </a>
             <a href="{{ route('asset-manager.costs') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
                 @svg('heroicon-o-banknotes', 'w-5 h-5')
+            </a>
+            <a href="{{ route('asset-manager.cost-centers.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
+                @svg('heroicon-o-clipboard-document-list', 'w-5 h-5')
+            </a>
+            <a href="{{ route('asset-manager.vendors.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
+                @svg('heroicon-o-building-storefront', 'w-5 h-5')
+            </a>
+            <a href="{{ route('asset-manager.cost-types.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
+                @svg('heroicon-o-tag', 'w-5 h-5')
+            </a>
+            <a href="{{ route('asset-manager.costs.import') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
+                @svg('heroicon-o-arrow-up-tray', 'w-5 h-5')
             </a>
             <a href="{{ route('asset-manager.setup') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
                 @svg('heroicon-o-wrench-screwdriver', 'w-5 h-5')
