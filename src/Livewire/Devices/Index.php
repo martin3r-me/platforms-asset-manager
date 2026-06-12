@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceSyncLog;
+use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetUserLicense;
 use Platform\AssetManager\Jobs\SyncIntuneDevicesJob;
 
 class Index extends Component
@@ -24,6 +26,10 @@ class Index extends Component
 
     public bool    $syncing    = false;
     public ?string $syncResult = null;
+
+    /** Master-Detail: 'device' | 'employee' | null  */
+    public ?string $detailType = null;
+    public ?int    $detailId   = null;
 
     public array $columnOrder = ['device', 'user', 'os', 'status', 'lastCheckIn'];
 
@@ -99,6 +105,31 @@ class Index extends Component
         $this->syncResult = 'Sync gestartet — Geräte werden im Hintergrund synchronisiert.';
     }
 
+    public function selectDevice(int $deviceId): void
+    {
+        $this->detailType = 'device';
+        $this->detailId   = $deviceId;
+    }
+
+    public function selectEmployeeByUpn(string $upn): void
+    {
+        $team     = Auth::user()->currentTeam;
+        $employee = AssetEmployee::where('team_id', $team->id)
+            ->where('user_principal_name', $upn)
+            ->first();
+
+        if ($employee) {
+            $this->detailType = 'employee';
+            $this->detailId   = $employee->id;
+        }
+    }
+
+    public function clearSelection(): void
+    {
+        $this->detailType = null;
+        $this->detailId   = null;
+    }
+
     public function render()
     {
         $team  = Auth::user()->currentTeam;
@@ -165,6 +196,31 @@ class Index extends Component
 
         $canSync = Gate::allows('sync', AssetDevice::class);
 
+        // Master-Detail-Daten laden
+        $selectedDevice   = null;
+        $selectedEmployee = null;
+        $employeeDevices  = collect();
+        $employeeLicenses = collect();
+
+        if ($this->detailType === 'device' && $this->detailId) {
+            $selectedDevice = AssetDevice::where('team_id', $team->id)
+                ->where('id', $this->detailId)
+                ->first();
+        } elseif ($this->detailType === 'employee' && $this->detailId) {
+            $selectedEmployee = AssetEmployee::where('team_id', $team->id)
+                ->where('id', $this->detailId)
+                ->first();
+
+            if ($selectedEmployee) {
+                $employeeDevices = AssetDevice::where('team_id', $team->id)
+                    ->where('user_principal_name', $selectedEmployee->user_principal_name)
+                    ->get();
+                $employeeLicenses = AssetUserLicense::where('team_id', $team->id)
+                    ->where('user_principal_name', $selectedEmployee->user_principal_name)
+                    ->get();
+            }
+        }
+
         return view('asset-manager::livewire.devices.index', [
             'devices'             => $devices,
             'stats'               => $stats,
@@ -176,6 +232,10 @@ class Index extends Component
             'complianceBreakdown' => $complianceBreakdown,
             'canSync'             => $canSync,
             'columns'             => $this->columnOrder,
+            'selectedDevice'      => $selectedDevice,
+            'selectedEmployee'    => $selectedEmployee,
+            'employeeDevices'     => $employeeDevices,
+            'employeeLicenses'    => $employeeLicenses,
         ])->layout('platform::layouts.app');
     }
 }

@@ -9,7 +9,9 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Platform\AssetManager\Models\AssetDevice;
+use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Policies\AssetDevicePolicy;
+use Platform\AssetManager\Policies\AssetItemPolicy;
 use Platform\Core\PlatformCore;
 use Platform\Core\Routing\ModuleRouter;
 use RecursiveDirectoryIterator;
@@ -58,6 +60,7 @@ class AssetManagerServiceProvider extends ServiceProvider
         }
 
         Gate::policy(AssetDevice::class, AssetDevicePolicy::class);
+        Gate::policy(AssetItem::class, AssetItemPolicy::class);
 
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
 

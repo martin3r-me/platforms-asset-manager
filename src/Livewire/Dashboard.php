@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Auth;
 use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceSyncLog;
+use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetLicenseSyncLog;
 
@@ -60,6 +62,15 @@ class Dashboard extends Component
                 ->first();
         }
 
+        $assetCounts = [
+            'items'     => AssetItem::where('team_id', $team->id)->count(),
+            'employees' => AssetEmployee::where('team_id', $team->id)->where('is_active', true)->count(),
+        ];
+
+        $hardwareCost = AssetItem::where('team_id', $team->id)
+            ->get()
+            ->sum(fn($i) => $i->monthlyCost());
+
         return view('asset-manager::livewire.dashboard', [
             'config'          => $config,
             'stats'           => $stats,
@@ -68,6 +79,9 @@ class Dashboard extends Component
             'licenseCost'     => $licenseCost,
             'unusedLicenses'  => $unusedLicenses,
             'lastLicenseSync' => $lastLicenseSync,
+            'assetCounts'     => $assetCounts,
+            'hardwareCost'    => $hardwareCost,
+            'totalMonthly'    => $licenseCost + $hardwareCost,
         ])->layout('platform::layouts.app');
     }
 }

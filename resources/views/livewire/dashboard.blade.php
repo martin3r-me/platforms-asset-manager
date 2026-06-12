@@ -53,7 +53,60 @@
                 </div>
             @else
 
-            {{-- Stat-Karten --}}
+            {{-- Asset Manager Top-Karten --}}
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <a href="{{ route('asset-manager.assets.index') }}" wire:navigate
+                    class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+                    <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent"></div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-medium uppercase tracking-wider text-gray-400">Assets</span>
+                        <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-violet-500/10">
+                            @svg('heroicon-o-cube-transparent', 'w-4 h-4 text-violet-500')
+                        </div>
+                    </div>
+                    <div class="text-3xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">{{ $assetCounts['items'] }}</div>
+                    <div class="text-xs text-gray-400 mt-1">Hardware gesamt</div>
+                </a>
+
+                <a href="{{ route('asset-manager.employees.index') }}" wire:navigate
+                    class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+                    <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent"></div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-medium uppercase tracking-wider text-gray-400">Mitarbeiter</span>
+                        <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-500/10">
+                            @svg('heroicon-o-users', 'w-4 h-4 text-indigo-500')
+                        </div>
+                    </div>
+                    <div class="text-3xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">{{ $assetCounts['employees'] }}</div>
+                    <div class="text-xs text-gray-400 mt-1">Aktive</div>
+                </a>
+
+                <div class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5">
+                    <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-500/50 to-transparent"></div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-medium uppercase tracking-wider text-gray-400">Kosten / Monat</span>
+                        <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-500/10">
+                            @svg('heroicon-o-banknotes', 'w-4 h-4 text-amber-500')
+                        </div>
+                    </div>
+                    <div class="text-2xl font-semibold tracking-tight text-amber-600 dark:text-amber-400">{{ number_format($totalMonthly, 2, ',', '.') }} €</div>
+                    <div class="text-xs text-gray-400 mt-1">HW + Lizenzen</div>
+                </div>
+
+                <div class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5">
+                    <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent"></div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-medium uppercase tracking-wider text-gray-400">Freie Lizenzen</span>
+                        <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500/10">
+                            @svg('heroicon-o-key', 'w-4 h-4 text-emerald-500')
+                        </div>
+                    </div>
+                    <div class="text-3xl font-semibold tracking-tight text-emerald-600 dark:text-emerald-400">{{ $unusedLicenses }}</div>
+                    <div class="text-xs text-gray-400 mt-1">SKUs mit Reserve</div>
+                </div>
+            </div>
+
+            {{-- Intune-Geräte Stats --}}
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
                     <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent"></div>

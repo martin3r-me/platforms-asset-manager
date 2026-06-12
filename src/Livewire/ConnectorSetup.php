@@ -125,6 +125,17 @@ class ConnectorSetup extends Component
         $this->testSuccess = true;
     }
 
+    public function importTenantUsers(): void
+    {
+        Gate::authorize('manageConnector', AssetDevice::class);
+
+        $team = Auth::user()->currentTeam;
+        \Platform\AssetManager\Jobs\ImportTenantUsersJob::dispatch($team->id);
+
+        $this->testResult  = 'Import gestartet — alle Tenant-User werden im Hintergrund angelegt.';
+        $this->testSuccess = true;
+    }
+
     public function render()
     {
         $team   = Auth::user()->currentTeam;

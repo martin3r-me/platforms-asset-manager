@@ -120,6 +120,21 @@
                                         </span>
                                     </button>
 
+                                    <button wire:click="importTenantUsers"
+                                        wire:loading.attr="disabled"
+                                        wire:target="importTenantUsers"
+                                        title="Importiert alle Tenant-User als Employees (für komplettes Mitarbeiter-Verzeichnis)"
+                                        class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-black/[0.04] dark:bg-white/[0.06] rounded-lg hover:bg-black/[0.07] transition-all">
+                                        <span wire:loading.remove wire:target="importTenantUsers">
+                                            @svg('heroicon-o-user-plus', 'w-4 h-4')
+                                            Alle Tenant-User importieren
+                                        </span>
+                                        <span wire:loading wire:target="importTenantUsers" class="flex items-center gap-2">
+                                            @svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin')
+                                            Importiere...
+                                        </span>
+                                    </button>
+
                                     <a href="{{ route('asset-manager.devices.index') }}" wire:navigate
                                        class="text-sm text-violet-600 dark:text-violet-400 hover:underline">
                                         Geräte ansehen →
