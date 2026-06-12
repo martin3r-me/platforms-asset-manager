@@ -9,29 +9,64 @@ use Illuminate\Support\Facades\DB;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetItem;
+use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetUserLicense;
 
 class Index extends Component
 {
     use WithPagination;
 
-    public string $search        = '';
-    public string $filterDept    = '';
-    public bool   $onlyActive    = true;
-    public int    $perPage       = 25;
-    public string $sortField     = 'display_name';
-    public string $sortDirection = 'asc';
+    public string $preset           = 'active'; // all|active|with_license|with_device|with_asset|unassigned|inactive
+    public string $search           = '';
+    public string $filterDept       = '';
+    public string $filterSku        = '';
+    public string $filterSource     = '';
+    public bool   $filterHasLicense = false;
+    public bool   $filterHasDevice  = false;
+    public bool   $filterHasAsset   = false;
+    public int    $perPage          = 25;
+    public string $sortField        = 'display_name';
+    public string $sortDirection    = 'asc';
 
     protected $queryString = [
-        'search'     => ['except' => ''],
-        'filterDept' => ['except' => ''],
-        'onlyActive' => ['except' => true],
-        'perPage'    => ['except' => 25],
+        'preset'           => ['except' => 'active'],
+        'search'           => ['except' => ''],
+        'filterDept'       => ['except' => ''],
+        'filterSku'        => ['except' => ''],
+        'filterSource'     => ['except' => ''],
+        'filterHasLicense' => ['except' => false],
+        'filterHasDevice'  => ['except' => false],
+        'filterHasAsset'   => ['except' => false],
+        'perPage'          => ['except' => 25],
     ];
 
-    public function updatingSearch(): void     { $this->resetPage(); }
-    public function updatingFilterDept(): void { $this->resetPage(); }
-    public function updatingOnlyActive(): void { $this->resetPage(); }
+    public function updatingPreset(): void           { $this->resetPage(); }
+    public function updatingSearch(): void           { $this->resetPage(); }
+    public function updatingFilterDept(): void       { $this->resetPage(); }
+    public function updatingFilterSku(): void        { $this->resetPage(); }
+    public function updatingFilterSource(): void     { $this->resetPage(); }
+    public function updatingFilterHasLicense(): void { $this->resetPage(); }
+    public function updatingFilterHasDevice(): void  { $this->resetPage(); }
+    public function updatingFilterHasAsset(): void   { $this->resetPage(); }
+
+    public function setPreset(string $preset): void
+    {
+        $this->preset = $preset;
+        $this->resetPage();
+    }
+
+    public function resetFilters(): void
+    {
+        $this->preset           = 'active';
+        $this->search           = '';
+        $this->filterDept       = '';
+        $this->filterSku        = '';
+        $this->filterSource     = '';
+        $this->filterHasLicense = false;
+        $this->filterHasDevice  = false;
+        $this->filterHasAsset   = false;
+        $this->resetPage();
+    }
 
     public function sortBy(string $field): void
     {
@@ -43,12 +78,107 @@ class Index extends Component
         }
     }
 
+    /** UPNs aller User mit mindestens einer Lizenz im Team (optional gefiltert nach sku_id). */
+    protected function upnsWithLicense(int $teamId, ?string $skuId = null)
+    {
+        $q = AssetUserLicense::where('team_id', $teamId);
+        if ($skuId) $q->where('sku_id', $skuId);
+        return $q->distinct()->pluck('user_principal_name');
+    }
+
+    /** UPNs aller User mit mindestens einem Intune-Gerät im Team. */
+    protected function upnsWithDevice(int $teamId)
+    {
+        return AssetDevice::where('team_id', $teamId)
+            ->whereNotNull('user_principal_name')
+            ->distinct()
+            ->pluck('user_principal_name');
+    }
+
+    /** Employee-IDs mit mindestens einem zugewiesenen Asset. */
+    protected function employeeIdsWithAsset(int $teamId)
+    {
+        return AssetItem::where('team_id', $teamId)
+            ->whereNotNull('assignee_id')
+            ->distinct()
+            ->pluck('assignee_id');
+    }
+
+    /**
+     * Wendet das Preset auf die Query an.
+     * Preset 'inactive' überschreibt is_active-Filter — sonst implizit is_active=true.
+     */
+    protected function applyPreset($query, int $teamId): void
+    {
+        $licenseUpns = $this->upnsWithLicense($teamId);
+        $deviceUpns  = $this->upnsWithDevice($teamId);
+        $assetIds    = $this->employeeIdsWithAsset($teamId);
+        $allUpns     = $licenseUpns->merge($deviceUpns)->unique()->values();
+
+        switch ($this->preset) {
+            case 'inactive':
+                $query->where('is_active', false);
+                return;
+            case 'with_license':
+                $query->where('is_active', true)->whereIn('user_principal_name', $licenseUpns);
+                return;
+            case 'with_device':
+                $query->where('is_active', true)->whereIn('user_principal_name', $deviceUpns);
+                return;
+            case 'with_asset':
+                $query->where('is_active', true)->whereIn('id', $assetIds);
+                return;
+            case 'active':
+                $query->where('is_active', true)
+                    ->where(function ($q) use ($allUpns, $assetIds) {
+                        $q->whereIn('user_principal_name', $allUpns)
+                          ->orWhereIn('id', $assetIds);
+                    });
+                return;
+            case 'unassigned':
+                $query->where('is_active', true)
+                    ->whereNotIn('user_principal_name', $allUpns)
+                    ->whereNotIn('id', $assetIds);
+                return;
+            case 'all':
+            default:
+                // keine Einschränkung
+        }
+    }
+
     public function render()
     {
         $teamId = Auth::user()->currentTeam->id;
 
-        $query = AssetEmployee::where('team_id', $teamId);
+        // --- Counts für Chips (immer "echt", nicht durch Sidebar gefiltert) ---
+        $licenseUpns = $this->upnsWithLicense($teamId);
+        $deviceUpns  = $this->upnsWithDevice($teamId);
+        $assetIds    = $this->employeeIdsWithAsset($teamId);
+        $allUpns     = $licenseUpns->merge($deviceUpns)->unique()->values();
 
+        $base = AssetEmployee::where('team_id', $teamId);
+
+        $counts = [
+            'all'          => (clone $base)->count(),
+            'active'       => (clone $base)->where('is_active', true)
+                                ->where(function ($q) use ($allUpns, $assetIds) {
+                                    $q->whereIn('user_principal_name', $allUpns)
+                                      ->orWhereIn('id', $assetIds);
+                                })->count(),
+            'with_license' => (clone $base)->where('is_active', true)->whereIn('user_principal_name', $licenseUpns)->count(),
+            'with_device'  => (clone $base)->where('is_active', true)->whereIn('user_principal_name', $deviceUpns)->count(),
+            'with_asset'   => (clone $base)->where('is_active', true)->whereIn('id', $assetIds)->count(),
+            'unassigned'   => (clone $base)->where('is_active', true)
+                                ->whereNotIn('user_principal_name', $allUpns)
+                                ->whereNotIn('id', $assetIds)->count(),
+            'inactive'     => (clone $base)->where('is_active', false)->count(),
+        ];
+
+        // --- Hauptquery ---
+        $query = AssetEmployee::where('team_id', $teamId);
+        $this->applyPreset($query, $teamId);
+
+        // Sidebar-Filter (kombiniert mit Preset)
         if ($this->search) {
             $query->where(function ($q) {
                 $q->where('display_name', 'like', '%' . $this->search . '%')
@@ -56,41 +186,45 @@ class Index extends Component
                   ->orWhere('email', 'like', '%' . $this->search . '%');
             });
         }
-        if ($this->filterDept) $query->where('department', $this->filterDept);
-        if ($this->onlyActive) $query->where('is_active', true);
+        if ($this->filterDept)   $query->where('department', $this->filterDept);
+        if ($this->filterSource) $query->where('source', $this->filterSource);
+
+        if ($this->filterHasLicense || $this->filterSku) {
+            $query->whereIn('user_principal_name', $this->upnsWithLicense($teamId, $this->filterSku ?: null));
+        }
+        if ($this->filterHasDevice) {
+            $query->whereIn('user_principal_name', $deviceUpns);
+        }
+        if ($this->filterHasAsset) {
+            $query->whereIn('id', $assetIds);
+        }
 
         $employees = $query
             ->orderBy($this->sortField, $this->sortDirection)
             ->paginate($this->perPage);
 
-        // Counts pro Employee als Map: [employee_id => [devices, items, licenses]]
-        $employeeIds = $employees->pluck('id')->toArray();
-        $upns        = $employees->pluck('user_principal_name')->toArray();
+        // --- Counts pro angezeigtem Employee ---
+        $pageEmpIds = $employees->pluck('id')->toArray();
+        $pageUpns   = $employees->pluck('user_principal_name')->toArray();
 
-        $itemCounts = AssetItem::whereIn('assignee_id', $employeeIds)
+        $itemCounts = AssetItem::whereIn('assignee_id', $pageEmpIds)
             ->select('assignee_id', DB::raw('count(*) as count'))
             ->groupBy('assignee_id')
             ->pluck('count', 'assignee_id');
 
         $deviceCounts = AssetDevice::where('team_id', $teamId)
-            ->whereIn('user_principal_name', $upns)
+            ->whereIn('user_principal_name', $pageUpns)
             ->select('user_principal_name', DB::raw('count(*) as count'))
             ->groupBy('user_principal_name')
             ->pluck('count', 'user_principal_name');
 
         $licenseCounts = AssetUserLicense::where('team_id', $teamId)
-            ->whereIn('user_principal_name', $upns)
+            ->whereIn('user_principal_name', $pageUpns)
             ->select('user_principal_name', DB::raw('count(*) as count'))
             ->groupBy('user_principal_name')
             ->pluck('count', 'user_principal_name');
 
-        $stats = [
-            'total'    => AssetEmployee::where('team_id', $teamId)->count(),
-            'active'   => AssetEmployee::where('team_id', $teamId)->where('is_active', true)->count(),
-            'fromGraph'=> AssetEmployee::where('team_id', $teamId)->where('source', 'graph')->count(),
-            'derived'  => AssetEmployee::where('team_id', $teamId)->where('source', 'derived')->count(),
-        ];
-
+        // --- Dropdowns ---
         $departments = AssetEmployee::where('team_id', $teamId)
             ->whereNotNull('department')
             ->select('department')
@@ -98,13 +232,18 @@ class Index extends Component
             ->orderBy('department')
             ->pluck('department');
 
+        $skus = AssetLicenseSku::where('team_id', $teamId)
+            ->orderBy('display_name')
+            ->get(['id', 'sku_id', 'sku_part_number', 'display_name']);
+
         return view('asset-manager::livewire.employees.index', [
             'employees'     => $employees,
             'itemCounts'    => $itemCounts,
             'deviceCounts'  => $deviceCounts,
             'licenseCounts' => $licenseCounts,
-            'stats'         => $stats,
+            'counts'        => $counts,
             'departments'   => $departments,
+            'skus'          => $skus,
         ])->layout('platform::layouts.app');
     }
 }
