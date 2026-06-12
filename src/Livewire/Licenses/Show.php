@@ -6,6 +6,7 @@ use Livewire\Component;
 use Livewire\WithPagination;
 use Illuminate\Support\Facades\Auth;
 use Platform\AssetManager\Models\AssetLicenseSku;
+use Platform\AssetManager\Models\AssetLicenseSyncLog;
 use Platform\AssetManager\Models\AssetUserLicense;
 
 class Show extends Component
@@ -42,8 +43,14 @@ class Show extends Component
             ->orderBy('display_name')
             ->paginate(50);
 
+        $activities = AssetLicenseSyncLog::where('team_id', $this->sku->team_id)
+            ->orderByDesc('started_at')
+            ->limit(10)
+            ->get();
+
         return view('asset-manager::livewire.licenses.show', [
             'assignments' => $assignments,
+            'activities'  => $activities,
         ])->layout('platform::layouts.app');
     }
 }
