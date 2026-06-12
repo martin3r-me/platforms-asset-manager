@@ -67,7 +67,8 @@ class CostExcelImportService
             $this->importBpEvent($this->findSheet($sheets, ['bpevent']));
             $this->importPerCostCenter($this->findSheet($sheets, ['hgk']), 'hgk', true);
             $this->importPerCostCenter($this->findSheet($sheets, ['necta']), 'necta', false);
-            $this->importLaptops($this->findSheet($sheets, ['laptops', 'lap+dock', 'laptop']));
+            // Laptops bewusst NICHT importiert — sie kommen aus Intune (asset_devices) und sind dort
+            // bereits korrekt den Mitarbeitern zugeordnet. Ihre Kosten stecken in der Übersicht (lap_dock).
             $this->importSeatSheet($this->findSheet($sheets, ['chatgpt']), 'chatgpt', 'E'); // Kosten in Euro
             $this->importSeatSheet($this->findSheet($sheets, ['canva']), 'canva', 'D');
 
@@ -115,7 +116,7 @@ class CostExcelImportService
             $code = $this->cc($row['B'] ?? null);
             if ($name === '') continue;
 
-            $employee = $this->resolveEmployee($name, $code);
+            $employee = $this->findEmployee($name);
             $center   = $this->bootstrap->resolveCostCenter($this->teamId, $code);
 
             foreach ($map as $col => $typeKey) {
@@ -262,34 +263,6 @@ class CostExcelImportService
         $this->stats[$typeKey] = $count;
     }
 
-    /** Sheet10: Laptops → AssetItem-Inventar (Kosten kommen aus Übersicht/lap_dock, kein cost_line). */
-    protected function importLaptops(?array $rows): void
-    {
-        if (!$rows) return;
-        $cat  = $this->category('laptop', 'Laptop', 'heroicon-o-computer-desktop');
-
-        $count = 0;
-        foreach ($rows as $i => $row) {
-            if ($i === 1) continue;
-            $assetTag = trim((string) ($row['B'] ?? ''));
-            if ($assetTag === '') continue;
-
-            $empName = trim((string) ($row['A'] ?? ''));
-            $code    = $this->cc($row['D'] ?? null);
-            $employee = $empName !== '' ? $this->resolveEmployee($empName, $code) : null;
-
-            $this->upsertItem($cat->id, $assetTag, [
-                'model'         => $row['G'] ?? null,
-                'serial_number' => $row['C'] ?? null,
-                'assignee_id'   => $employee?->id,
-                'status'        => $employee ? 'assigned' : 'in_stock',
-                'raw_data'      => ['kostenstelle' => $code],
-            ]);
-            $count++;
-        }
-        $this->stats['laptops'] = $count;
-    }
-
     /** Sheet11/12: Seat-Listen (ChatGPT/Canva). Spalte $amountCol enthält EUR-Monatsbetrag. */
     protected function importSeatSheet(?array $rows, string $typeKey, string $amountCol): void
     {
@@ -304,7 +277,7 @@ class CostExcelImportService
             $amount = $this->num($row[$amountCol] ?? null);
             if ($amount == 0.0) continue;
 
-            $employee = $this->resolveEmployee($name, $code, $this->str($row['B'] ?? null));
+            $employee = $this->findEmployee($name);
             $this->upsertLine($typeKey, [
                 'cost_center_id' => $this->bootstrap->resolveCostCenter($this->teamId, $code)?->id,
                 'assignee_id'    => $employee?->id,
@@ -377,35 +350,14 @@ class CostExcelImportService
         );
     }
 
-    protected function resolveEmployee(string $name, ?string $code, ?string $email = null): AssetEmployee
+    /**
+     * Findet einen bestehenden Mitarbeiter über den normalisierten Anzeigenamen — legt NICHTS an
+     * und schreibt nichts. Die Kostenstelle am Mitarbeiter ist manuell gepflegte Quelle der Wahrheit
+     * (UI), nicht Sache des Imports. Kein Match → null → Cost-Line hängt nur an der Kostenstelle.
+     */
+    protected function findEmployee(string $name): ?AssetEmployee
     {
-        $key = $this->normName($name);
-        if (isset($this->employeesByName[$key])) {
-            $emp = $this->employeesByName[$key];
-            // Kostenstelle nachziehen wenn leer
-            if ($code && !$emp->cost_center) {
-                $emp->cost_center = $code;
-                $emp->cost_center_id = $this->bootstrap->resolveCostCenter($this->teamId, $code)?->id;
-                $emp->save();
-            }
-            return $emp;
-        }
-
-        $isFunction = $this->looksLikeFunctionAccount($name);
-        $upn = $email ?: (Str::slug($name) . '@funktion.import.local');
-
-        $emp = AssetEmployee::firstOrNew(['team_id' => $this->teamId, 'user_principal_name' => $upn]);
-        $emp->display_name   = $emp->display_name ?: $name;
-        $emp->email          = $emp->email ?: $email;
-        $emp->cost_center    = $emp->cost_center ?: $code;
-        $emp->cost_center_id = $emp->cost_center_id ?: $this->bootstrap->resolveCostCenter($this->teamId, $code)?->id;
-        $emp->account_type   = $isFunction ? 'function' : ($emp->account_type ?? 'person');
-        $emp->source         = $emp->exists ? $emp->source : 'manual';
-        $emp->is_active      = $emp->exists ? $emp->is_active : true;
-        $emp->save();
-
-        $this->employeesByName[$key] = $emp;
-        return $emp;
+        return $this->employeesByName[$this->normName($name)] ?? null;
     }
 
     protected function resolveVendor(string $name): ?AssetVendor
@@ -552,20 +504,6 @@ class CostExcelImportService
     {
         $s = mb_strtolower(trim((string) $s));
         return str_replace(['ä', 'ö', 'ü', 'ß', ' ', '.'], ['a', 'o', 'u', 'ss', '', ''], $s);
-    }
-
-    protected function looksLikeFunctionAccount(string $name): bool
-    {
-        $upper = mb_strtoupper($name);
-        // Funktionskonto = kein "VORNAME NACHNAME"-Muster oder bekannte Schlüsselwörter
-        $keywords = ['CONTROLLING', 'HELPDESK', 'WEBSHOP', 'TELEFON', 'PROTOKOLL', 'PRAKTIKANT', 'NEWSLETTER',
-            'REGISTRIERUNG', 'TROCKENLAGER', 'KUECHE', 'KÜCHE', 'PRODUKTION', 'SUPPORT', 'INVOICE', 'FOOD',
-            'TEAM', 'ASSISTENZ', 'ZENTRALE', 'FINANZ', 'PERSONAL', 'LOGISTIK', 'FACILITY', 'SPEISEN',
-            'NICHT EINGESETZTE', 'DIGITALER', 'AVATAR', 'TABLET', 'ADMINISTRATOR', 'BANKETTPROFI', 'SHARED'];
-        foreach ($keywords as $kw) {
-            if (Str::contains($upper, $kw)) return true;
-        }
-        return false;
     }
 
     /** Kostenstellen-Code als String normalisieren (z.B. 2599.0 → "2599", "EFP" bleibt). */

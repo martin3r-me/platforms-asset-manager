@@ -79,7 +79,21 @@
                     </div>
                 </section>
 
-                @if($preset !== 'active' || $search || $filterDept || $filterSku || $filterSource || $filterHasLicense || $filterHasDevice || $filterHasAsset)
+                @if($costCenters->count() > 0)
+                    <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                        <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Kostenstelle</h3>
+                        <div class="px-3 pb-3">
+                            <select wire:model.live="filterCostCenter" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40">
+                                <option value="">Alle</option>
+                                @foreach($costCenters as $cc)
+                                    <option value="{{ $cc->id }}">{{ $cc->name ? $cc->code . ' — ' . $cc->name : $cc->code }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </section>
+                @endif
+
+                @if($preset !== 'active' || $search || $filterDept || $filterSku || $filterSource || $filterCostCenter || $filterHasLicense || $filterHasDevice || $filterHasAsset)
                     <button wire:click="resetFilters"
                             class="w-full px-3 py-2 text-[11px] font-medium text-red-500 bg-red-500/5 border border-red-500/20 rounded-lg hover:bg-red-500/10">
                         @svg('heroicon-o-arrow-uturn-left', 'w-3.5 h-3.5 inline -mt-0.5 mr-1')
@@ -123,7 +137,7 @@
             </div>
 
             {{-- Aktive Sidebar-Filter als Badges --}}
-            @if($search || $filterDept || $filterSku || $filterSource || $filterHasLicense || $filterHasDevice || $filterHasAsset)
+            @if($search || $filterDept || $filterSku || $filterSource || $filterCostCenter || $filterHasLicense || $filterHasDevice || $filterHasAsset)
                 <div class="flex flex-wrap items-center gap-2 text-xs">
                     <span class="text-gray-400">Zusatzfilter:</span>
                     @if($search) <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/10 text-violet-600">"{{ Str::limit($search, 30) }}" <button wire:click="$set('search', '')">×</button></span> @endif
@@ -136,6 +150,10 @@
                     @if($filterHasAsset)   <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/10 text-violet-600">Hat Asset <button wire:click="$set('filterHasAsset', false)">×</button></span> @endif
                     @if($filterDept)       <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/10 text-violet-600">{{ $filterDept }} <button wire:click="$set('filterDept', '')">×</button></span> @endif
                     @if($filterSource)     <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/10 text-violet-600">{{ $filterSource }} <button wire:click="$set('filterSource', '')">×</button></span> @endif
+                    @if($filterCostCenter)
+                        @php $ccLabel = optional($costCenters->firstWhere('id', (int) $filterCostCenter))->code ?? $filterCostCenter; @endphp
+                        <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/10 text-violet-600">KSt: {{ $ccLabel }} <button wire:click="$set('filterCostCenter', '')">×</button></span>
+                    @endif
                 </div>
             @endif
 
@@ -158,6 +176,7 @@
                                     </button>
                                 </th>
                                 <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Abteilung</th>
+                                <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Kostenstelle</th>
                                 <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Geräte</th>
                                 <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Assets</th>
                                 <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Lizenzen</th>
@@ -179,6 +198,19 @@
                                         </a>
                                     </td>
                                     <td class="px-5 py-3 text-xs text-gray-500">{{ $emp->department ?? '—' }}</td>
+                                    <td class="px-5 py-3">
+                                        @if($canManage)
+                                            <select wire:change="assignCostCenter({{ $emp->id }}, $event.target.value)"
+                                                    class="text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40 px-1.5 py-1 max-w-[170px] focus:outline-none focus:ring-2 focus:ring-violet-500/30">
+                                                <option value="">—</option>
+                                                @foreach($costCenters as $cc)
+                                                    <option value="{{ $cc->id }}" @selected($emp->cost_center_id == $cc->id)>{{ $cc->name ? $cc->code . ' — ' . $cc->name : $cc->code }}</option>
+                                                @endforeach
+                                            </select>
+                                        @else
+                                            <span class="text-xs text-gray-500">{{ $emp->cost_center ?: '—' }}</span>
+                                        @endif
+                                    </td>
                                     <td class="px-5 py-3 text-right text-sm tabular-nums">{{ $deviceCounts[$emp->user_principal_name] ?? 0 }}</td>
                                     <td class="px-5 py-3 text-right text-sm tabular-nums">{{ $itemCounts[$emp->id] ?? 0 }}</td>
                                     <td class="px-5 py-3 text-right text-sm tabular-nums">{{ $licenseCounts[$emp->user_principal_name] ?? 0 }}</td>

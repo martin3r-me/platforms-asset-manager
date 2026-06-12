@@ -6,6 +6,7 @@ use Livewire\Component;
 use Livewire\WithPagination;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetItem;
@@ -21,6 +22,7 @@ class Index extends Component
     public string $filterDept       = '';
     public string $filterSku        = '';
     public string $filterSource     = '';
+    public string $filterCostCenter = '';
     public bool   $filterHasLicense = false;
     public bool   $filterHasDevice  = false;
     public bool   $filterHasAsset   = false;
@@ -34,6 +36,7 @@ class Index extends Component
         'filterDept'       => ['except' => ''],
         'filterSku'        => ['except' => ''],
         'filterSource'     => ['except' => ''],
+        'filterCostCenter' => ['except' => ''],
         'filterHasLicense' => ['except' => false],
         'filterHasDevice'  => ['except' => false],
         'filterHasAsset'   => ['except' => false],
@@ -45,6 +48,7 @@ class Index extends Component
     public function updatingFilterDept(): void       { $this->resetPage(); }
     public function updatingFilterSku(): void        { $this->resetPage(); }
     public function updatingFilterSource(): void     { $this->resetPage(); }
+    public function updatingFilterCostCenter(): void { $this->resetPage(); }
     public function updatingFilterHasLicense(): void { $this->resetPage(); }
     public function updatingFilterHasDevice(): void  { $this->resetPage(); }
     public function updatingFilterHasAsset(): void   { $this->resetPage(); }
@@ -62,10 +66,46 @@ class Index extends Component
         $this->filterDept       = '';
         $this->filterSku        = '';
         $this->filterSource     = '';
+        $this->filterCostCenter = '';
         $this->filterHasLicense = false;
         $this->filterHasDevice  = false;
         $this->filterHasAsset   = false;
         $this->resetPage();
+    }
+
+    /** owner/admin im aktiven Team? (analog AssetDevicePolicy) */
+    public function canManage(): bool
+    {
+        $user = Auth::user();
+        $role = $user->teams()
+            ->where('team_id', $user->currentTeam?->id)
+            ->first()?->pivot?->role;
+
+        return in_array($role, ['owner', 'admin'], true);
+    }
+
+    /**
+     * Weist einem Mitarbeiter manuell eine Kostenstelle zu (Quelle der Wahrheit).
+     * Setzt FK (cost_center_id, für normalizedLines) UND String (cost_center=code, für byCostCenter).
+     * $costCenterId leer/0 → Zuordnung entfernen. Nur owner/admin.
+     */
+    public function assignCostCenter(int $employeeId, $costCenterId): void
+    {
+        abort_unless($this->canManage(), 403);
+
+        $teamId = Auth::user()->currentTeam->id;
+
+        $employee = AssetEmployee::where('team_id', $teamId)->findOrFail($employeeId);
+
+        $center = null;
+        if ($costCenterId) {
+            $center = AssetCostCenter::where('team_id', $teamId)->find((int) $costCenterId);
+            if (!$center) return; // fremde/ungültige Kostenstelle ignorieren
+        }
+
+        $employee->cost_center_id = $center?->id;
+        $employee->cost_center    = $center?->code;
+        $employee->save();
     }
 
     public function sortBy(string $field): void
@@ -186,8 +226,9 @@ class Index extends Component
                   ->orWhere('email', 'like', '%' . $this->search . '%');
             });
         }
-        if ($this->filterDept)   $query->where('department', $this->filterDept);
-        if ($this->filterSource) $query->where('source', $this->filterSource);
+        if ($this->filterDept)       $query->where('department', $this->filterDept);
+        if ($this->filterSource)     $query->where('source', $this->filterSource);
+        if ($this->filterCostCenter !== '') $query->where('cost_center_id', $this->filterCostCenter);
 
         if ($this->filterHasLicense || $this->filterSku) {
             $query->whereIn('user_principal_name', $this->upnsWithLicense($teamId, $this->filterSku ?: null));
@@ -236,6 +277,11 @@ class Index extends Component
             ->orderBy('display_name')
             ->get(['id', 'sku_id', 'sku_part_number', 'display_name']);
 
+        $costCenters = AssetCostCenter::where('team_id', $teamId)
+            ->orderBy('company_id')
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
+
         return view('asset-manager::livewire.employees.index', [
             'employees'     => $employees,
             'itemCounts'    => $itemCounts,
@@ -244,6 +290,8 @@ class Index extends Component
             'counts'        => $counts,
             'departments'   => $departments,
             'skus'          => $skus,
+            'costCenters'   => $costCenters,
+            'canManage'     => $this->canManage(),
         ])->layout('platform::layouts.app');
     }
 }

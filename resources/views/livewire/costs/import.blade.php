@@ -102,6 +102,49 @@
                 </div>
             @endif
 
+            {{-- Reset-Ergebnis --}}
+            @if($resetResult)
+                <div class="rounded-xl bg-white border border-rose-500/30 shadow-sm overflow-hidden">
+                    <div class="px-4 py-2.5 text-xs font-semibold bg-rose-500/10 text-rose-700">
+                        Import zurückgesetzt
+                    </div>
+                    <table class="w-full text-sm">
+                        <tbody class="divide-y divide-black/[0.03]">
+                            <tr><td class="px-4 py-2 text-gray-600">Kostenpositionen gelöscht</td><td class="px-4 py-2 text-right tabular-nums font-medium text-gray-800">{{ $resetResult['cost_lines'] }}</td></tr>
+                            <tr><td class="px-4 py-2 text-gray-600">Import-Assets gelöscht (Laptop/Internet/Drucker)</td><td class="px-4 py-2 text-right tabular-nums font-medium text-gray-800">{{ $resetResult['assets'] }}</td></tr>
+                            <tr><td class="px-4 py-2 text-gray-600">Funktionskonten gelöscht</td><td class="px-4 py-2 text-right tabular-nums font-medium text-gray-800">{{ $resetResult['employees'] }}</td></tr>
+                            <tr><td class="px-4 py-2 text-gray-600">Mitarbeiter-Kostenstellen zurückgesetzt</td><td class="px-4 py-2 text-right tabular-nums font-medium text-gray-800">{{ $resetResult['cleared_cost_centers'] }}</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+
+            {{-- Danger-Zone: Import zurücksetzen --}}
+            @if($canManage)
+                <div class="rounded-xl bg-rose-500/[0.03] border border-rose-500/20 p-5 space-y-3">
+                    <div>
+                        <h3 class="text-sm font-semibold text-rose-700">Import zurücksetzen</h3>
+                        <p class="text-xs text-[var(--ui-muted)] mt-1">
+                            Löscht <strong>alle importierten Kostenpositionen</strong>, die import-erzeugten
+                            <strong>Assets</strong> (Laptop/Internet/Drucker) und die fälschlich angelegten
+                            <strong>Funktionskonten</strong> (<code>{{ '@funktion.import.local' }}</code>) und setzt die
+                            <strong>Kostenstellen aller Mitarbeiter</strong> zurück.
+                            Stammdaten (Gesellschaften, Kostenstellen, Kreditoren, Kostenarten) sowie
+                            Intune-Geräte bleiben erhalten.
+                        </p>
+                    </div>
+                    <button wire:click="resetImport" wire:loading.attr="disabled" wire:target="resetImport"
+                            wire:confirm="Wirklich ALLE importierten Kosten, Funktionskonten und Import-Assets löschen und die Kostenstellen aller Mitarbeiter zurücksetzen? Stammdaten bleiben erhalten."
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-rose-600 rounded-lg hover:bg-rose-700 disabled:opacity-40 transition-all">
+                        @svg('heroicon-o-trash', 'w-3.5 h-3.5')
+                        Import zurücksetzen
+                    </button>
+                    <span wire:loading wire:target="resetImport" class="text-xs text-rose-600 ml-1">
+                        @svg('heroicon-o-arrow-path', 'w-4 h-4 inline animate-spin') lösche …
+                    </span>
+                </div>
+            @endif
+
         </div>
     </div>
 </x-ui-page>

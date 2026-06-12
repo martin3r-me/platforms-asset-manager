@@ -6,13 +6,15 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Platform\AssetManager\Services\CostExcelImportService;
+use Platform\AssetManager\Services\CostResetService;
 
 class Import extends Component
 {
     use WithFileUploads;
 
-    public $file;                 // TemporaryUploadedFile
-    public ?array $result = null; // Statistik je Sheet
+    public $file;                      // TemporaryUploadedFile
+    public ?array $result = null;      // Statistik je Sheet
+    public ?array $resetResult = null; // Gelöschte Anzahlen beim Reset
     public ?string $error = null;
     public bool $wasDryRun = true;
     public bool $running = false;
@@ -20,6 +22,17 @@ class Import extends Component
     protected function teamId(): int
     {
         return Auth::user()->currentTeam->id;
+    }
+
+    /** owner/admin im aktiven Team? (analog AssetDevicePolicy) */
+    protected function canManage(): bool
+    {
+        $user = Auth::user();
+        $role = $user->teams()
+            ->where('team_id', $user->currentTeam?->id)
+            ->first()?->pivot?->role;
+
+        return in_array($role, ['owner', 'admin'], true);
     }
 
     public function updatedFile(): void
@@ -85,9 +98,20 @@ class Import extends Component
         }
     }
 
+    /** Macht den Excel-Import komplett rückgängig (Stammdaten bleiben). Nur owner/admin. */
+    public function resetImport(CostResetService $reset): void
+    {
+        abort_unless($this->canManage(), 403);
+
+        $this->error       = null;
+        $this->result      = null;
+        $this->resetResult = $reset->clearImport($this->teamId());
+    }
+
     public function render()
     {
-        return view('asset-manager::livewire.costs.import')
-            ->layout('platform::layouts.app');
+        return view('asset-manager::livewire.costs.import', [
+            'canManage' => $this->canManage(),
+        ])->layout('platform::layouts.app');
     }
 }
