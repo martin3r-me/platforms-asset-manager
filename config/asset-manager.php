@@ -78,10 +78,15 @@ return [
             ],
         ],
         [
-            'group' => 'Geräte',
+            'group' => 'Assets',
             'items' => [
                 [
-                    'label' => 'Alle Geräte',
+                    'label' => 'Alle Assets',
+                    'route' => 'asset-manager.assets.index',
+                    'icon'  => 'heroicon-o-cube-transparent',
+                ],
+                [
+                    'label' => 'Intune-Geräte',
                     'route' => 'asset-manager.devices.index',
                     'icon'  => 'heroicon-o-computer-desktop',
                 ],
@@ -89,6 +94,26 @@ return [
                     'label' => 'Lizenzen',
                     'route' => 'asset-manager.licenses.index',
                     'icon'  => 'heroicon-o-key',
+                ],
+            ],
+        ],
+        [
+            'group' => 'Mitarbeiter',
+            'items' => [
+                [
+                    'label' => 'Alle Mitarbeiter',
+                    'route' => 'asset-manager.employees.index',
+                    'icon'  => 'heroicon-o-users',
+                ],
+            ],
+        ],
+        [
+            'group' => 'Auswertungen',
+            'items' => [
+                [
+                    'label' => 'Kosten',
+                    'route' => 'asset-manager.costs',
+                    'icon'  => 'heroicon-o-banknotes',
                 ],
             ],
         ],

@@ -32,6 +32,13 @@
         </x-ui-sidebar-item>
     </x-ui-sidebar-list>
 
+    <x-ui-sidebar-list label="Auswertungen">
+        <x-ui-sidebar-item :href="route('asset-manager.costs')">
+            @svg('heroicon-o-banknotes', 'w-4 h-4 text-[var(--ui-secondary)]')
+            <span class="ml-2 text-sm">Kosten</span>
+        </x-ui-sidebar-item>
+    </x-ui-sidebar-list>
+
     <x-ui-sidebar-list label="Einstellungen">
         <x-ui-sidebar-item :href="route('asset-manager.setup')">
             @svg('heroicon-o-wrench-screwdriver', 'w-4 h-4 text-[var(--ui-secondary)]')
@@ -56,6 +63,9 @@
             </a>
             <a href="{{ route('asset-manager.employees.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
                 @svg('heroicon-o-users', 'w-5 h-5')
+            </a>
+            <a href="{{ route('asset-manager.costs') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
+                @svg('heroicon-o-banknotes', 'w-5 h-5')
             </a>
             <a href="{{ route('asset-manager.setup') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
                 @svg('heroicon-o-wrench-screwdriver', 'w-5 h-5')

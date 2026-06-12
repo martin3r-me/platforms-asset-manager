@@ -11,6 +11,7 @@ use Platform\AssetManager\Livewire\Assets\Create as AssetsCreate;
 use Platform\AssetManager\Livewire\Assets\Show as AssetsShow;
 use Platform\AssetManager\Livewire\Employees\Index as EmployeesIndex;
 use Platform\AssetManager\Livewire\Employees\Show as EmployeesShow;
+use Platform\AssetManager\Livewire\Costs\Dashboard as CostsDashboard;
 
 Route::get('/', Dashboard::class)->name('asset-manager.dashboard');
 
@@ -26,5 +27,7 @@ Route::get('/employees/{employee}', EmployeesShow::class)->name('asset-manager.e
 
 Route::get('/licenses', LicensesIndex::class)->name('asset-manager.licenses.index');
 Route::get('/licenses/{sku}', LicensesShow::class)->name('asset-manager.licenses.show');
+
+Route::get('/costs', CostsDashboard::class)->name('asset-manager.costs');
 
 Route::get('/setup', ConnectorSetup::class)->name('asset-manager.setup');
