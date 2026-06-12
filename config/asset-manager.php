@@ -95,6 +95,16 @@ return [
                     'route' => 'asset-manager.licenses.index',
                     'icon'  => 'heroicon-o-key',
                 ],
+                [
+                    'label' => 'Drucker',
+                    'route' => 'asset-manager.printers.index',
+                    'icon'  => 'heroicon-o-printer',
+                ],
+                [
+                    'label' => 'Internet',
+                    'route' => 'asset-manager.internet.index',
+                    'icon'  => 'heroicon-o-wifi',
+                ],
             ],
         ],
         [
@@ -111,7 +121,17 @@ return [
             'group' => 'Auswertungen',
             'items' => [
                 [
-                    'label' => 'Kosten',
+                    'label' => 'Kostenaufteilung',
+                    'route' => 'asset-manager.costs.allocation',
+                    'icon'  => 'heroicon-o-table-cells',
+                ],
+                [
+                    'label' => 'Kostenpositionen',
+                    'route' => 'asset-manager.cost-lines.index',
+                    'icon'  => 'heroicon-o-list-bullet',
+                ],
+                [
+                    'label' => 'Kosten (pro MA)',
                     'route' => 'asset-manager.costs',
                     'icon'  => 'heroicon-o-banknotes',
                 ],
@@ -120,6 +140,21 @@ return [
         [
             'group' => 'Einstellungen',
             'items' => [
+                [
+                    'label' => 'Kostenstellen',
+                    'route' => 'asset-manager.cost-centers.index',
+                    'icon'  => 'heroicon-o-clipboard-document-list',
+                ],
+                [
+                    'label' => 'Kreditoren',
+                    'route' => 'asset-manager.vendors.index',
+                    'icon'  => 'heroicon-o-building-storefront',
+                ],
+                [
+                    'label' => 'Kostenarten',
+                    'route' => 'asset-manager.cost-types.index',
+                    'icon'  => 'heroicon-o-tag',
+                ],
                 [
                     'label' => 'Connector',
                     'route' => 'asset-manager.setup',

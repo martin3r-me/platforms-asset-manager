@@ -12,6 +12,13 @@ use Platform\AssetManager\Livewire\Assets\Show as AssetsShow;
 use Platform\AssetManager\Livewire\Employees\Index as EmployeesIndex;
 use Platform\AssetManager\Livewire\Employees\Show as EmployeesShow;
 use Platform\AssetManager\Livewire\Costs\Dashboard as CostsDashboard;
+use Platform\AssetManager\Livewire\Costs\Allocation as CostsAllocation;
+use Platform\AssetManager\Livewire\CostLines\Index as CostLinesIndex;
+use Platform\AssetManager\Livewire\CostCenters\Index as CostCentersIndex;
+use Platform\AssetManager\Livewire\Vendors\Index as VendorsIndex;
+use Platform\AssetManager\Livewire\CostTypes\Index as CostTypesIndex;
+use Platform\AssetManager\Livewire\Printers\Index as PrintersIndex;
+use Platform\AssetManager\Livewire\Internet\Index as InternetIndex;
 
 Route::get('/', Dashboard::class)->name('asset-manager.dashboard');
 
@@ -28,6 +35,15 @@ Route::get('/employees/{employee}', EmployeesShow::class)->name('asset-manager.e
 Route::get('/licenses', LicensesIndex::class)->name('asset-manager.licenses.index');
 Route::get('/licenses/{sku}', LicensesShow::class)->name('asset-manager.licenses.show');
 
+Route::get('/printers', PrintersIndex::class)->name('asset-manager.printers.index');
+Route::get('/internet', InternetIndex::class)->name('asset-manager.internet.index');
+
 Route::get('/costs', CostsDashboard::class)->name('asset-manager.costs');
+Route::get('/costs/allocation', CostsAllocation::class)->name('asset-manager.costs.allocation');
+Route::get('/cost-lines', CostLinesIndex::class)->name('asset-manager.cost-lines.index');
+
+Route::get('/cost-centers', CostCentersIndex::class)->name('asset-manager.cost-centers.index');
+Route::get('/vendors', VendorsIndex::class)->name('asset-manager.vendors.index');
+Route::get('/cost-types', CostTypesIndex::class)->name('asset-manager.cost-types.index');
 
 Route::get('/setup', ConnectorSetup::class)->name('asset-manager.setup');

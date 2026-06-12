@@ -9,7 +9,9 @@
             "email": "team@platform.com"
         }
     ],
-    "require": {},
+    "require": {
+        "phpoffice/phpspreadsheet": "^3.0"
+    },
     "autoload": {
         "psr-4": {
             "Platform\\AssetManager\\": "src/"

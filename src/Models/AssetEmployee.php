@@ -15,8 +15,10 @@ class AssetEmployee extends Model
         'email',
         'department',
         'cost_center',
+        'cost_center_id',
         'job_title',
         'is_active',
+        'account_type',
         'source',
         'graph_id',
         'raw_data',
@@ -32,6 +34,22 @@ class AssetEmployee extends Model
     public function team()
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);
+    }
+
+    public function costCenter()
+    {
+        return $this->belongsTo(AssetCostCenter::class, 'cost_center_id');
+    }
+
+    public function costLines()
+    {
+        return $this->hasMany(AssetCostLine::class, 'assignee_id');
+    }
+
+    /** True wenn Funktionskonto (kein echter Mitarbeiter). */
+    public function isFunctionAccount(): bool
+    {
+        return $this->account_type === 'function';
     }
 
     public function items()
