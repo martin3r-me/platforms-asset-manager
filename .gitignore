@@ -24,3 +24,8 @@ Thumbs.db
 # OS
 .DS_Store
 Thumbs.db
+
+# Asset-Manager Wissens-Vault + Operator-Harness (rein lokal, NICHT deployen)
+/SecondBrain/
+/.claude/
+/CLAUDE.local.md
