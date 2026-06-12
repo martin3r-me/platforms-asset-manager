@@ -145,16 +145,37 @@ class Index extends Component
             ->orderBy('started_at', 'desc')
             ->first();
 
+        $activities = AssetDeviceSyncLog::where('team_id', $team->id)
+            ->orderByDesc('started_at')
+            ->limit(10)
+            ->get();
+
+        // Verteilungen für Bottom-Panel
+        $osBreakdown = AssetDevice::where('team_id', $team->id)
+            ->selectRaw('COALESCE(operating_system, "Unbekannt") as os, count(*) as count')
+            ->groupBy('os')
+            ->orderByDesc('count')
+            ->get();
+
+        $complianceBreakdown = AssetDevice::where('team_id', $team->id)
+            ->selectRaw('compliance_state, count(*) as count')
+            ->groupBy('compliance_state')
+            ->orderByDesc('count')
+            ->get();
+
         $canSync = Gate::allows('sync', AssetDevice::class);
 
         return view('asset-manager::livewire.devices.index', [
-            'devices'  => $devices,
-            'stats'    => $stats,
-            'osList'   => $osList,
-            'config'   => $config,
-            'lastLog'  => $lastLog,
-            'canSync'  => $canSync,
-            'columns'  => $this->columnOrder,
+            'devices'             => $devices,
+            'stats'               => $stats,
+            'osList'              => $osList,
+            'config'              => $config,
+            'lastLog'             => $lastLog,
+            'activities'          => $activities,
+            'osBreakdown'         => $osBreakdown,
+            'complianceBreakdown' => $complianceBreakdown,
+            'canSync'             => $canSync,
+            'columns'             => $this->columnOrder,
         ])->layout('platform::layouts.app');
     }
 }
