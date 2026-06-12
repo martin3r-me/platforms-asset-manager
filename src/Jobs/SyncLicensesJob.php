@@ -176,6 +176,9 @@ class SyncLicensesJob implements ShouldQueue
                 'completed_at'        => now(),
             ]);
 
+            // Safety-Net: alle UPNs aus Bestandsdaten nachziehen
+            $employeeService->backfillForTeam($this->teamId);
+
             Log::info('AssetManager: Lizenz-Sync erfolgreich', [
                 'team_id'  => $this->teamId,
                 'skus'     => count($skus),

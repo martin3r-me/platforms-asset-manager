@@ -117,6 +117,9 @@ class SyncIntuneDevicesJob implements ShouldQueue
                 'last_sync_at' => now(),
             ]);
 
+            // Safety-Net: nochmal alle UPNs einsammeln (fängt Bestandsdaten vor Phase 3 ab)
+            $employeeService->backfillForTeam($this->teamId);
+
             Log::info('AssetManager: Sync erfolgreich', [
                 'team_id'  => $this->teamId,
                 'synced'   => count($devices),
