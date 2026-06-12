@@ -4,7 +4,6 @@ namespace Platform\AssetManager\Services;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use OpenSpout\Reader\XLSX\Reader as XlsxReader;
 use Platform\AssetManager\Models\AssetCategory;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostLine;
@@ -428,42 +427,110 @@ class CostExcelImportService
         );
     }
 
-    /** Liest die Arbeitsmappe in ['normname' => [zeilennr => ['A'=>wert, 'B'=>wert, …]]] (1-basiert). */
+    /**
+     * Liest die Arbeitsmappe in ['normname' => [zeilennr => ['A'=>wert, 'B'=>wert, …]]] (1-basiert).
+     *
+     * Eigener schlanker Reader (ZipArchive + SimpleXML): liest immer den GECACHTEN Zellwert (<v>),
+     * also auch das Ergebnis von Formeln — keine Dependency, kein ext-gd.
+     */
     protected function readWorkbook(string $path): array
     {
-        $reader = new XlsxReader();
-        $reader->open($path);
+        $zip = new \ZipArchive();
+        if ($zip->open($path) !== true) {
+            throw new \RuntimeException('Excel-Datei konnte nicht geöffnet werden.');
+        }
+
+        // Shared Strings
+        $shared = [];
+        if (($ss = $zip->getFromName('xl/sharedStrings.xml')) !== false) {
+            $xml = simplexml_load_string($ss);
+            if ($xml !== false) {
+                foreach ($xml->si as $si) {
+                    $shared[] = $this->siText($si);
+                }
+            }
+        }
+
+        // Relationship-Map (r:id → Target)
+        $relMap = [];
+        if (($relsXml = $zip->getFromName('xl/_rels/workbook.xml.rels')) !== false) {
+            $rels = simplexml_load_string($relsXml);
+            if ($rels !== false) {
+                foreach ($rels->Relationship as $rel) {
+                    $relMap[(string) $rel['Id']] = (string) $rel['Target'];
+                }
+            }
+        }
 
         $sheets = [];
-        foreach ($reader->getSheetIterator() as $sheet) {
-            $rows = [];
-            $r = 0;
-            foreach ($sheet->getRowIterator() as $row) {
-                $r++;
-                $assoc = [];
-                foreach ($row->toArray() as $i => $val) {
-                    $assoc[$this->colLetter((int) $i)] = $val;
+        $wb = simplexml_load_string($zip->getFromName('xl/workbook.xml') ?: '');
+        if ($wb !== false && isset($wb->sheets)) {
+            foreach ($wb->sheets->sheet as $sheet) {
+                $name = (string) $sheet['name'];
+                $rid  = '';
+                foreach ($sheet->attributes('http://schemas.openxmlformats.org/officeDocument/2006/relationships') as $k => $v) {
+                    if ($k === 'id') $rid = (string) $v;
                 }
-                $rows[$r] = $assoc;
+                $target = $relMap[$rid] ?? null;
+                if (!$target) continue;
+                if (!str_starts_with($target, 'xl/')) {
+                    $target = 'xl/' . ltrim($target, '/');
+                }
+                $data = $zip->getFromName($target);
+                if ($data === false) continue;
+                $sheets[$this->normName($name)] = $this->parseSheet($data, $shared);
             }
-            $sheets[$this->normName($sheet->getName())] = $rows;
         }
-        $reader->close();
+        $zip->close();
 
         return $sheets;
     }
 
-    /** 0-basierter Spaltenindex → Excel-Buchstabe (0→A, 25→Z, 26→AA). */
-    protected function colLetter(int $index): string
+    /** Text aus <si> (inkl. Rich-Text-Runs <r><t>). */
+    protected function siText(\SimpleXMLElement $si): string
     {
-        $letters = '';
-        $index++; // 1-basiert
-        while ($index > 0) {
-            $mod     = ($index - 1) % 26;
-            $letters = chr(65 + $mod) . $letters;
-            $index   = intdiv($index - 1, 26);
+        $text = '';
+        if (isset($si->t)) $text .= (string) $si->t;
+        foreach ($si->r as $r) {
+            if (isset($r->t)) $text .= (string) $r->t;
         }
-        return $letters;
+        return $text;
+    }
+
+    /** Eine Worksheet-XML → [zeilennr => ['A'=>wert, …]] mit gecachten Werten. */
+    protected function parseSheet(string $xml, array $shared): array
+    {
+        $sx = simplexml_load_string($xml);
+        $rows = [];
+        if ($sx === false || !isset($sx->sheetData)) return $rows;
+
+        foreach ($sx->sheetData->row as $row) {
+            $rn    = (int) $row['r'];
+            $assoc = [];
+            foreach ($row->c as $c) {
+                $ref = (string) $c['r'];
+                if (!preg_match('/^([A-Z]+)/', $ref, $m)) continue;
+                $col = $m[1];
+                $t   = (string) $c['t'];
+                $val = null;
+
+                if ($t === 's') {
+                    $val = isset($c->v) ? ($shared[(int) $c->v] ?? null) : null;
+                } elseif ($t === 'inlineStr') {
+                    $val = isset($c->is) ? $this->siText($c->is) : null;
+                } elseif (isset($c->v)) {
+                    // numerisch / boolean / gecachtes Formelergebnis (t='' | 'n' | 'str' | 'b')
+                    $raw = (string) $c->v;
+                    $val = is_numeric($raw) ? $raw + 0 : $raw;
+                }
+
+                if ($val !== null && $val !== '') {
+                    $assoc[$col] = $val;
+                }
+            }
+            if ($assoc) $rows[$rn] = $assoc;
+        }
+        return $rows;
     }
 
     protected function findSheet(array $sheets, array $candidates): ?array

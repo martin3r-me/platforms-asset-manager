@@ -9,9 +9,7 @@
             "email": "team@platform.com"
         }
     ],
-    "require": {
-        "openspout/openspout": "^4.0"
-    },
+    "require": {},
     "autoload": {
         "psr-4": {
             "Platform\\AssetManager\\": "src/"
