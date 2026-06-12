@@ -6,6 +6,7 @@ use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetLicenseSyncLog;
 use Platform\AssetManager\Models\AssetUserLicense;
+use Platform\AssetManager\Services\EmployeeService;
 use Platform\AssetManager\Services\IntuneGraphService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -37,7 +38,7 @@ class SyncLicensesJob implements ShouldQueue
         public readonly int $teamId
     ) {}
 
-    public function handle(IntuneGraphService $service): void
+    public function handle(IntuneGraphService $service, EmployeeService $employeeService): void
     {
         $config = AssetConnectorConfig::where('team_id', $this->teamId)
             ->where('enabled', true)
@@ -113,6 +114,20 @@ class SyncLicensesJob implements ShouldQueue
                 $displayName = $user['displayName']       ?? null;
 
                 if (!$upn) continue;
+
+                // Employee aus Graph-User-Daten anlegen/aktualisieren
+                $employee = $employeeService->findOrCreateByUpn(
+                    $this->teamId,
+                    $upn,
+                    $displayName,
+                    'graph'
+                );
+                // Wenn Sync von Graph kommt, source nachträglich auf 'graph' upgrade
+                if ($employee->source === 'derived') {
+                    $employee->update(['source' => 'graph', 'synced_at' => now()]);
+                } else {
+                    $employee->update(['synced_at' => now()]);
+                }
 
                 foreach (($user['assignedLicenses'] ?? []) as $license) {
                     $skuId = $license['skuId'] ?? null;

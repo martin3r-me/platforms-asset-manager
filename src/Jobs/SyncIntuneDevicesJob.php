@@ -5,6 +5,7 @@ namespace Platform\AssetManager\Jobs;
 use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceSyncLog;
+use Platform\AssetManager\Services\EmployeeService;
 use Platform\AssetManager\Services\IntuneGraphService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -24,7 +25,7 @@ class SyncIntuneDevicesJob implements ShouldQueue
         public readonly int $teamId
     ) {}
 
-    public function handle(IntuneGraphService $service): void
+    public function handle(IntuneGraphService $service, EmployeeService $employeeService): void
     {
         $config = AssetConnectorConfig::where('team_id', $this->teamId)
             ->where('enabled', true)
@@ -77,6 +78,16 @@ class SyncIntuneDevicesJob implements ShouldQueue
                         'source'    => 'intune',
                     ]));
                     $added++;
+                }
+
+                // Employee aus UPN ableiten (Intune liefert userPrincipalName)
+                if (!empty($device['userPrincipalName'])) {
+                    $employeeService->findOrCreateByUpn(
+                        $this->teamId,
+                        $device['userPrincipalName'],
+                        $device['userDisplayName'] ?? null,
+                        'derived'
+                    );
                 }
             }
 
