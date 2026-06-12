@@ -13,6 +13,7 @@ use Platform\AssetManager\Livewire\Employees\Index as EmployeesIndex;
 use Platform\AssetManager\Livewire\Employees\Show as EmployeesShow;
 use Platform\AssetManager\Livewire\Costs\Dashboard as CostsDashboard;
 use Platform\AssetManager\Livewire\Costs\Allocation as CostsAllocation;
+use Platform\AssetManager\Livewire\Costs\Import as CostsImport;
 use Platform\AssetManager\Livewire\CostLines\Index as CostLinesIndex;
 use Platform\AssetManager\Livewire\CostCenters\Index as CostCentersIndex;
 use Platform\AssetManager\Livewire\Vendors\Index as VendorsIndex;
@@ -41,6 +42,7 @@ Route::get('/internet', InternetIndex::class)->name('asset-manager.internet.inde
 Route::get('/costs', CostsDashboard::class)->name('asset-manager.costs');
 Route::get('/costs/allocation', CostsAllocation::class)->name('asset-manager.costs.allocation');
 Route::get('/cost-lines', CostLinesIndex::class)->name('asset-manager.cost-lines.index');
+Route::get('/costs/import', CostsImport::class)->name('asset-manager.costs.import');
 
 Route::get('/cost-centers', CostCentersIndex::class)->name('asset-manager.cost-centers.index');
 Route::get('/vendors', VendorsIndex::class)->name('asset-manager.vendors.index');

@@ -156,6 +156,11 @@ return [
                     'icon'  => 'heroicon-o-tag',
                 ],
                 [
+                    'label' => 'Kosten-Import',
+                    'route' => 'asset-manager.costs.import',
+                    'icon'  => 'heroicon-o-arrow-up-tray',
+                ],
+                [
                     'label' => 'Connector',
                     'route' => 'asset-manager.setup',
                     'icon'  => 'heroicon-o-wrench-screwdriver',
