@@ -46,6 +46,16 @@ class Index extends Component
         $this->flash  = 'Kostenstelle gespeichert.';
     }
 
+    public function delete(int $id): void
+    {
+        $cc = AssetCostCenter::where('team_id', $this->teamId())->findOrFail($id);
+        $code = $cc->code;
+        // FKs sind nullOnDelete → Zuordnungen an Mitarbeitern/Kostenpositionen werden entfernt, nicht gelöscht.
+        $cc->delete();
+        if ($this->editId === $id) $this->editId = null;
+        $this->flash = "Kostenstelle {$code} gelöscht (Zuordnungen wurden entfernt).";
+    }
+
     public function create(): void
     {
         $this->validate(['newCode' => 'required|string|max:50']);

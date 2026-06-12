@@ -34,6 +34,10 @@ class CostExcelImportService
 
     protected array $stats = [];
 
+    /** Herkunft der aktuell verarbeiteten Zeile — wird in raw_data der Cost-Line geschrieben. */
+    protected ?string $sheetLabel = null;
+    protected ?int    $sheetRow   = null;
+
     public function __construct(
         protected CostBootstrapService $bootstrap
     ) {}
@@ -93,6 +97,7 @@ class CostExcelImportService
     protected function importUebersicht(?array $rows): void
     {
         if (!$rows) return;
+        $this->sheetLabel = 'Übersicht';
 
         // Spalte → Kostenart-Key (MS Lizenz/D bewusst ausgelassen — kommt aus Graph)
         $map = [
@@ -112,6 +117,7 @@ class CostExcelImportService
         $count = 0;
         foreach ($rows as $i => $row) {
             if ($i === 1) continue; // Header
+            $this->sheetRow = (int) $i;
             $name = trim((string) ($row['A'] ?? ''));
             $code = $this->cc($row['B'] ?? null);
             if ($name === '') continue;
@@ -138,11 +144,13 @@ class CostExcelImportService
     protected function importInternet(?array $rows): void
     {
         if (!$rows) return;
+        $this->sheetLabel = 'Internet';
         $cat  = $this->category('internet', 'Internet', 'heroicon-o-wifi');
 
         $count = 0;
         foreach ($rows as $i => $row) {
             if ($i === 1) continue;
+            $this->sheetRow = (int) $i;
             $anschluss = trim((string) ($row['A'] ?? ''));
             if ($anschluss === '') continue;
             $amount = $this->num($row['E'] ?? null);
@@ -172,11 +180,13 @@ class CostExcelImportService
     protected function importDrucker(?array $rows): void
     {
         if (!$rows) return;
+        $this->sheetLabel = 'Drucker';
         $cat  = $this->category('drucker', 'Drucker', 'heroicon-o-printer');
 
         $count = 0;
         foreach ($rows as $i => $row) {
             if ($i === 1) continue;
+            $this->sheetRow = (int) $i;
             $modell = trim((string) ($row['C'] ?? ''));
             $standort = trim((string) ($row['B'] ?? ''));
             if ($modell === '' && $standort === '') continue;
@@ -216,10 +226,12 @@ class CostExcelImportService
     protected function importBpEvent(?array $rows): void
     {
         if (!$rows) return;
+        $this->sheetLabel = 'BPEvent';
 
         $count = 0;
         foreach ($rows as $i => $row) {
             if ($i === 1) continue;
+            $this->sheetRow = (int) $i;
             $code = $this->cc($row['A'] ?? null);
             if ($code === null) continue;
             $amount = $this->num($row['G'] ?? null);  // Kosten (Monatsbasis der Pivot)
@@ -242,10 +254,12 @@ class CostExcelImportService
     protected function importPerCostCenter(?array $rows, string $typeKey, bool $withFactor): void
     {
         if (!$rows) return;
+        $this->sheetLabel = strtoupper($typeKey);
 
         $count = 0;
         foreach ($rows as $i => $row) {
             if ($i === 1) continue;
+            $this->sheetRow = (int) $i;
             $label = trim((string) ($row['A'] ?? ''));
             $code  = $this->cc($row['C'] ?? null);
             $amount = $this->num($row['B'] ?? null);
@@ -267,10 +281,12 @@ class CostExcelImportService
     protected function importSeatSheet(?array $rows, string $typeKey, string $amountCol): void
     {
         if (!$rows) return;
+        $this->sheetLabel = $this->costTypes[$typeKey]->name ?? ucfirst($typeKey);
 
         $count = 0;
         foreach ($rows as $i => $row) {
             if ($i === 1) continue;
+            $this->sheetRow = (int) $i;
             $name = trim((string) ($row['A'] ?? ''));
             if ($name === '') continue;
             $code = $this->cc($row['C'] ?? null);
@@ -329,6 +345,10 @@ class CostExcelImportService
                 'source'              => 'excel_import',
                 'active'              => true,
                 'import_batch_id'     => $this->batchId,
+                'raw_data'            => array_filter([
+                    'sheet' => $this->sheetLabel,
+                    'row'   => $this->sheetRow,
+                ], fn($v) => $v !== null) ?: null,
             ]
         );
     }

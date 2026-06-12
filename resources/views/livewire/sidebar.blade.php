@@ -72,6 +72,10 @@
             @svg('heroicon-o-arrow-up-tray', 'w-4 h-4 text-[var(--ui-secondary)]')
             <span class="ml-2 text-sm">Kosten-Import</span>
         </x-ui-sidebar-item>
+        <x-ui-sidebar-item :href="route('asset-manager.costs.import-log')">
+            @svg('heroicon-o-document-magnifying-glass', 'w-4 h-4 text-[var(--ui-secondary)]')
+            <span class="ml-2 text-sm">Import-Log</span>
+        </x-ui-sidebar-item>
         <x-ui-sidebar-item :href="route('asset-manager.setup')">
             @svg('heroicon-o-wrench-screwdriver', 'w-4 h-4 text-[var(--ui-secondary)]')
             <span class="ml-2 text-sm">Connector</span>
@@ -122,6 +126,9 @@
             </a>
             <a href="{{ route('asset-manager.costs.import') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
                 @svg('heroicon-o-arrow-up-tray', 'w-5 h-5')
+            </a>
+            <a href="{{ route('asset-manager.costs.import-log') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
+                @svg('heroicon-o-document-magnifying-glass', 'w-5 h-5')
             </a>
             <a href="{{ route('asset-manager.setup') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
                 @svg('heroicon-o-wrench-screwdriver', 'w-5 h-5')

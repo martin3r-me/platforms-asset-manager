@@ -161,6 +161,11 @@ return [
                     'icon'  => 'heroicon-o-arrow-up-tray',
                 ],
                 [
+                    'label' => 'Import-Log',
+                    'route' => 'asset-manager.costs.import-log',
+                    'icon'  => 'heroicon-o-document-magnifying-glass',
+                ],
+                [
                     'label' => 'Connector',
                     'route' => 'asset-manager.setup',
                     'icon'  => 'heroicon-o-wrench-screwdriver',

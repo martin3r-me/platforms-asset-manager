@@ -66,8 +66,11 @@
                                             <td class="px-4 py-2 font-mono font-medium text-gray-800">{{ $cc->code }}</td>
                                             <td class="px-4 py-2 text-gray-600">{{ $cc->name ?? '—' }}</td>
                                             <td class="px-4 py-2 text-xs text-gray-400">{{ $cc->employees_count }} MA</td>
-                                            <td class="px-4 py-2 text-right">
+                                            <td class="px-4 py-2 text-right whitespace-nowrap">
                                                 <button wire:click="edit({{ $cc->id }})" class="text-xs text-gray-400 hover:text-violet-600">@svg('heroicon-o-pencil-square', 'w-4 h-4 inline')</button>
+                                                <button wire:click="delete({{ $cc->id }})"
+                                                        wire:confirm="Kostenstelle {{ $cc->code }} wirklich löschen?{{ $cc->employees_count ? ' '.$cc->employees_count.' Mitarbeiter verlieren die Zuordnung.' : '' }} Kostenpositionen behalten ihren Betrag, verlieren aber die Kostenstelle."
+                                                        class="text-xs text-gray-400 hover:text-red-600 ml-2">@svg('heroicon-o-trash', 'w-4 h-4 inline')</button>
                                             </td>
                                         @endif
                                     </tr>
