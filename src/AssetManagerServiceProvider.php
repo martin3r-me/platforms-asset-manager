@@ -25,6 +25,7 @@ class AssetManagerServiceProvider extends ServiceProvider
             $this->commands([
                 \Platform\AssetManager\Console\Commands\SyncIntuneDevicesCommand::class,
                 \Platform\AssetManager\Console\Commands\SyncLicensesCommand::class,
+                \Platform\AssetManager\Console\Commands\BackfillEmployeesCommand::class,
             ]);
         }
     }
