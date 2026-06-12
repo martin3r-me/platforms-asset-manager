@@ -25,12 +25,54 @@ class Index extends Component
     public bool    $syncing    = false;
     public ?string $syncResult = null;
 
+    public array $columnOrder = ['device', 'user', 'os', 'status', 'lastCheckIn'];
+
+    public const COLUMN_KEYS = ['device', 'user', 'os', 'status', 'lastCheckIn'];
+
     protected $queryString = [
         'search'           => ['except' => ''],
         'filterCompliance' => ['except' => ''],
         'filterOs'         => ['except' => ''],
         'perPage'          => ['except' => 25],
     ];
+
+    public function mount(): void
+    {
+        $stored = session('asset-manager.devices.columnOrder');
+        if (is_array($stored)) {
+            $this->columnOrder = $this->normalizeColumnOrder($stored);
+        }
+    }
+
+    public function reorderColumns(array $order): void
+    {
+        $this->columnOrder = $this->normalizeColumnOrder($order);
+        session(['asset-manager.devices.columnOrder' => $this->columnOrder]);
+    }
+
+    public function resetColumnOrder(): void
+    {
+        $this->columnOrder = self::COLUMN_KEYS;
+        session()->forget('asset-manager.devices.columnOrder');
+    }
+
+    protected function normalizeColumnOrder(array $order): array
+    {
+        // wotz/livewire-sortablejs liefert ggf. [['order' => 0, 'value' => 'device'], ...]
+        $flat = array_map(
+            fn($i) => is_array($i) ? ($i['value'] ?? null) : $i,
+            $order
+        );
+        $valid = array_values(array_intersect($flat, self::COLUMN_KEYS));
+
+        // Fehlende Spalten ans Ende anhängen, damit nichts verschwindet
+        foreach (self::COLUMN_KEYS as $key) {
+            if (!in_array($key, $valid, true)) {
+                $valid[] = $key;
+            }
+        }
+        return $valid;
+    }
 
     public function updatingSearch(): void          { $this->resetPage(); }
     public function updatingFilterCompliance(): void { $this->resetPage(); }
@@ -112,6 +154,7 @@ class Index extends Component
             'config'   => $config,
             'lastLog'  => $lastLog,
             'canSync'  => $canSync,
+            'columns'  => $this->columnOrder,
         ])->layout('platform::layouts.app');
     }
 }

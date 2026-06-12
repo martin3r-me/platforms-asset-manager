@@ -166,8 +166,30 @@
             </div>
 
             {{-- Tabelle --}}
+            @php
+                $columnDefs = [
+                    'device'      => ['label' => 'Gerät',           'sortField' => 'device_name'],
+                    'user'        => ['label' => 'Nutzer',          'sortField' => null],
+                    'os'          => ['label' => 'Betriebssystem',  'sortField' => null],
+                    'status'      => ['label' => 'Status',          'sortField' => 'compliance_state'],
+                    'lastCheckIn' => ['label' => 'Letztes Check-In','sortField' => 'last_check_in_at'],
+                ];
+            @endphp
+
             <div class="relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm">
                 <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/30 to-transparent"></div>
+
+                {{-- Tabellen-Toolbar --}}
+                <div class="px-5 py-2 border-b border-black/5 dark:border-white/5 flex items-center justify-between">
+                    <span class="text-xs text-gray-400">
+                        @svg('heroicon-o-information-circle', 'w-3.5 h-3.5 inline -mt-0.5')
+                        Spalten per Drag &amp; Drop am Griff verschieben
+                    </span>
+                    <button wire:click="resetColumnOrder"
+                            class="text-xs text-gray-400 hover:text-violet-500 transition-colors">
+                        Spalten zurücksetzen
+                    </button>
+                </div>
 
                 @if($devices->isEmpty())
                     <div class="flex flex-col items-center justify-center py-16 text-center">
@@ -186,64 +208,85 @@
                 @else
                     <table class="w-full text-sm">
                         <thead>
-                            <tr class="border-b border-black/5 dark:border-white/5">
-                                <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">
-                                    <button wire:click="sortBy('device_name')" class="flex items-center gap-1 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-                                        Gerät
-                                        @if($sortField === 'device_name') @svg($sortDirection === 'asc' ? 'heroicon-o-chevron-up' : 'heroicon-o-chevron-down', 'w-3 h-3') @endif
-                                    </button>
-                                </th>
-                                <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Nutzer</th>
-                                <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Betriebssystem</th>
-                                <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">
-                                    <button wire:click="sortBy('compliance_state')" class="flex items-center gap-1 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-                                        Status
-                                        @if($sortField === 'compliance_state') @svg($sortDirection === 'asc' ? 'heroicon-o-chevron-up' : 'heroicon-o-chevron-down', 'w-3 h-3') @endif
-                                    </button>
-                                </th>
-                                <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">
-                                    <button wire:click="sortBy('last_check_in_at')" class="flex items-center gap-1 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-                                        Letztes Check-In
-                                        @if($sortField === 'last_check_in_at') @svg($sortDirection === 'asc' ? 'heroicon-o-chevron-up' : 'heroicon-o-chevron-down', 'w-3 h-3') @endif
-                                    </button>
-                                </th>
+                            <tr wire:sortable="reorderColumns"
+                                wire:sortable.options="{ axis: 'x' }"
+                                class="border-b border-black/5 dark:border-white/5">
+                                @foreach($columns as $colKey)
+                                    @php $def = $columnDefs[$colKey] ?? null; @endphp
+                                    @if($def)
+                                        <th wire:sortable.item="{{ $colKey }}"
+                                            wire:key="col-head-{{ $colKey }}"
+                                            class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400 bg-white/40 dark:bg-white/[0.02]">
+                                            <div class="flex items-center gap-2">
+                                                <button wire:sortable.handle
+                                                        type="button"
+                                                        title="Spalte verschieben"
+                                                        class="text-gray-300 hover:text-gray-500 dark:hover:text-gray-300 cursor-grab active:cursor-grabbing">
+                                                    @svg('heroicon-o-bars-3', 'w-3.5 h-3.5')
+                                                </button>
+                                                @if($def['sortField'])
+                                                    <button wire:click="sortBy('{{ $def['sortField'] }}')" class="flex items-center gap-1 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                                                        {{ $def['label'] }}
+                                                        @if($sortField === $def['sortField']) @svg($sortDirection === 'asc' ? 'heroicon-o-chevron-up' : 'heroicon-o-chevron-down', 'w-3 h-3') @endif
+                                                    </button>
+                                                @else
+                                                    <span>{{ $def['label'] }}</span>
+                                                @endif
+                                            </div>
+                                        </th>
+                                    @endif
+                                @endforeach
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-black/[0.03] dark:divide-white/[0.04]">
                             @foreach($devices as $device)
-                                <tr class="hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors group">
-                                    <td class="px-5 py-3">
-                                        <a href="{{ route('asset-manager.devices.show', $device) }}" wire:navigate
-                                           class="font-medium text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 transition-colors">
-                                            {{ $device->device_name ?? '—' }}
-                                        </a>
-                                        @if($device->model)
-                                            <div class="text-xs text-gray-400">{{ $device->manufacturer }} {{ $device->model }}</div>
-                                        @endif
-                                    </td>
-                                    <td class="px-5 py-3">
-                                        <div class="text-gray-700 dark:text-gray-300">{{ $device->user_display_name ?? '—' }}</div>
-                                        @if($device->user_principal_name)
-                                            <div class="text-xs text-gray-400 truncate max-w-[180px]">{{ $device->user_principal_name }}</div>
-                                        @endif
-                                    </td>
-                                    <td class="px-5 py-3">
-                                        <div class="text-gray-700 dark:text-gray-300">{{ $device->operating_system ?? '—' }}</div>
-                                        @if($device->os_version)
-                                            <div class="text-xs text-gray-400">{{ $device->os_version }}</div>
-                                        @endif
-                                    </td>
-                                    <td class="px-5 py-3">
-                                        @php $color = $device->complianceBadgeColor() @endphp
-                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium
-                                            bg-{{ $color }}-500/10 text-{{ $color }}-600 dark:text-{{ $color }}-400">
-                                            <span class="w-1.5 h-1.5 rounded-full bg-{{ $color }}-500"></span>
-                                            {{ $device->complianceLabel() }}
-                                        </span>
-                                    </td>
-                                    <td class="px-5 py-3 text-sm text-gray-500 dark:text-gray-400">
-                                        {{ $device->last_check_in_at ? $device->last_check_in_at->diffForHumans() : '—' }}
-                                    </td>
+                                <tr wire:key="row-{{ $device->id }}" class="hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors group">
+                                    @foreach($columns as $colKey)
+                                        @switch($colKey)
+                                            @case('device')
+                                                <td class="px-5 py-3">
+                                                    <a href="{{ route('asset-manager.devices.show', $device) }}" wire:navigate
+                                                       class="font-medium text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 transition-colors">
+                                                        {{ $device->device_name ?? '—' }}
+                                                    </a>
+                                                    @if($device->model)
+                                                        <div class="text-xs text-gray-400">{{ $device->manufacturer }} {{ $device->model }}</div>
+                                                    @endif
+                                                </td>
+                                            @break
+                                            @case('user')
+                                                <td class="px-5 py-3">
+                                                    <div class="text-gray-700 dark:text-gray-300">{{ $device->user_display_name ?? '—' }}</div>
+                                                    @if($device->user_principal_name)
+                                                        <div class="text-xs text-gray-400 truncate max-w-[180px]">{{ $device->user_principal_name }}</div>
+                                                    @endif
+                                                </td>
+                                            @break
+                                            @case('os')
+                                                <td class="px-5 py-3">
+                                                    <div class="text-gray-700 dark:text-gray-300">{{ $device->operating_system ?? '—' }}</div>
+                                                    @if($device->os_version)
+                                                        <div class="text-xs text-gray-400">{{ $device->os_version }}</div>
+                                                    @endif
+                                                </td>
+                                            @break
+                                            @case('status')
+                                                <td class="px-5 py-3">
+                                                    @php $color = $device->complianceBadgeColor() @endphp
+                                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium
+                                                        bg-{{ $color }}-500/10 text-{{ $color }}-600 dark:text-{{ $color }}-400">
+                                                        <span class="w-1.5 h-1.5 rounded-full bg-{{ $color }}-500"></span>
+                                                        {{ $device->complianceLabel() }}
+                                                    </span>
+                                                </td>
+                                            @break
+                                            @case('lastCheckIn')
+                                                <td class="px-5 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                                    {{ $device->last_check_in_at ? $device->last_check_in_at->diffForHumans() : '—' }}
+                                                </td>
+                                            @break
+                                        @endswitch
+                                    @endforeach
                                 </tr>
                             @endforeach
                         </tbody>
