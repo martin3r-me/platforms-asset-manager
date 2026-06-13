@@ -90,6 +90,7 @@ class Show extends Component
 
         // Monatliche Kosten
         $hardwareCost = $items->sum(fn($i) => $i->monthlyCost());
+        $deviceCost   = $devices->sum(fn($d) => $d->resolvedMonthlyCost());
         $licenseCost  = 0.0;
         foreach ($licenses as $lic) {
             $sku = $skuMap[$lic->sku_id] ?? null;
@@ -105,8 +106,9 @@ class Show extends Component
             'licenses'     => $licenses,
             'skuMap'       => $skuMap,
             'hardwareCost' => $hardwareCost,
+            'deviceCost'   => $deviceCost,
             'licenseCost'  => $licenseCost,
-            'totalCost'    => $hardwareCost + $licenseCost,
+            'totalCost'    => $hardwareCost + $deviceCost + $licenseCost,
         ])->layout('platform::layouts.app');
     }
 }
