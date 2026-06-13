@@ -7,6 +7,7 @@ use Illuminate\Support\Str;
 use Livewire\Component;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetVendor;
+use Platform\AssetManager\Services\CostBootstrapService;
 
 class Index extends Component
 {
@@ -68,6 +69,13 @@ class Index extends Component
         ]);
         $this->reset(['newName', 'newFrequency', 'newAggSource']);
         $this->flash = 'Kostenart angelegt.';
+    }
+
+    /** Neutrale Standard-Kostenarten als Starthilfe laden (idempotent, keine Firmenspezifika). */
+    public function seedDefaults(CostBootstrapService $bootstrap): void
+    {
+        $bootstrap->seedForTeam($this->teamId());
+        $this->flash = 'Standard-Kostenarten geladen.';
     }
 
     public function edit(int $id): void

@@ -3,17 +3,32 @@
 namespace Platform\AssetManager\Support;
 
 /**
- * Stammdaten-Definitionen für die Kostenaufteilung (abgeleitet aus Kostenaufteilung_IT.xlsx).
+ * Stammdaten-Definitionen für die Kostenaufteilung.
  *
- * Eine einzige Quelle der Wahrheit für:
- *  - Gesellschaften (companies) + Zuordnung Kostenstelle → Gesellschaft
- *  - Kostenarten (cost types) inkl. Vendor-/System-/Frequenz-Defaults und Aggregations-Quelle
- *  - Kreditoren (vendors)
- *
- * Genutzt von: Backfill-Migration, Seeder, Excel-Import.
+ * Zwei klar getrennte Sets:
+ *  - NEUTRAL_COST_TYPES: firmen-agnostische Erst-Defaults für JEDES neue Team (kein Firmenname,
+ *    kein Vendor, kein Buchungssystem). Wird von seedForTeam() angelegt.
+ *  - COMPANIES / COST_CENTER_COMPANY / COST_TYPES / VENDORS: BROICH-spezifisches Set (abgeleitet aus
+ *    Kostenaufteilung_IT.xlsx). NUR opt-in über seedBroichDefaults() bzw. den BROICH-Excel-Import —
+ *    fließt nie automatisch in fremde Teams (Multi-Tenant).
  */
 class CostBootstrap
 {
+    /**
+     * Neutrale Erst-Defaults für jedes Team. Bewusst klein und ohne Firmenspezifika.
+     * Gleiche Feld-Struktur wie COST_TYPES (vendor/system bleiben null).
+     * hardware_afa + ms_lizenz sind drin, weil die beiden virtuellen Pivot-Quellen
+     * (CostAggregationService) eine passende Kostenart-Zeile als Spalte brauchen — beides universell.
+     */
+    public const NEUTRAL_COST_TYPES = [
+        ['key' => 'hardware_afa', 'name' => 'Hardware (AfA)', 'vendor' => null, 'system' => null, 'frequency' => 'monthly', 'per_employee' => true,  'aggregation_source' => 'hardware_afa', 'allow_negative' => false],
+        ['key' => 'ms_lizenz',    'name' => 'MS Lizenz',      'vendor' => null, 'system' => null, 'frequency' => 'monthly', 'per_employee' => true,  'aggregation_source' => 'ms_license',   'allow_negative' => false],
+        ['key' => 'software_abo', 'name' => 'Software-Abo',   'vendor' => null, 'system' => null, 'frequency' => 'monthly', 'per_employee' => false, 'aggregation_source' => 'cost_line',    'allow_negative' => false],
+        ['key' => 'mobilfunk',    'name' => 'Mobilfunk',      'vendor' => null, 'system' => null, 'frequency' => 'monthly', 'per_employee' => true,  'aggregation_source' => 'cost_line',    'allow_negative' => false],
+        ['key' => 'internet',     'name' => 'Internet',       'vendor' => null, 'system' => null, 'frequency' => 'monthly', 'per_employee' => false, 'aggregation_source' => 'cost_line',    'allow_negative' => false],
+        ['key' => 'telefonie',    'name' => 'Telefonie',      'vendor' => null, 'system' => null, 'frequency' => 'monthly', 'per_employee' => false, 'aggregation_source' => 'cost_line',    'allow_negative' => false],
+    ];
+
     /** Gesellschaften: slug => Anzeigename (Reihenfolge wie in der Excel-Pivot). */
     public const COMPANIES = [
         'gf-gl'       => 'BROICH - GF GL',

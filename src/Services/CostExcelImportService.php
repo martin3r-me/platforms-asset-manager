@@ -52,8 +52,9 @@ class CostExcelImportService
         $this->dryRun  = $dryRun;
         $this->stats   = [];
 
-        // Stammdaten sicherstellen
-        $this->bootstrap->seedForTeam($teamId);
+        // Stammdaten sicherstellen — der BROICH-Excel-Import braucht das BROICH-Set (feste
+        // Kostenart-Keys), sonst würden Positionen mit unbekanntem Key übersprungen.
+        $this->bootstrap->seedBroichDefaults($teamId);
 
         $this->costTypes = AssetCostType::where('team_id', $teamId)->get()->keyBy('key')->all();
         $this->vendors   = AssetVendor::where('team_id', $teamId)->get()->keyBy('name')->all();

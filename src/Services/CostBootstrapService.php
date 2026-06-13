@@ -16,9 +16,20 @@ use Platform\AssetManager\Support\CostBootstrap;
 class CostBootstrapService
 {
     /**
-     * Stammdaten für ein Team sicherstellen. Idempotent (firstOrCreate).
+     * Neutrale Erst-Defaults für ein neues Team: nur generische Kostenarten, KEINE Firmenspezifika
+     * (keine Gesellschaften, keine Kreditoren). Idempotent (firstOrCreate nach team_id+key).
      */
     public function seedForTeam(int $teamId): void
+    {
+        $this->seedCostTypes($teamId, CostBootstrap::NEUTRAL_COST_TYPES);
+    }
+
+    /**
+     * BROICH-spezifisches Set (Gesellschaften, Kreditoren, Kostenarten aus Kostenaufteilung_IT.xlsx).
+     * Opt-in: wird nur vom BROICH-Excel-Import aufgerufen — fließt nie automatisch in fremde Teams.
+     * Idempotent (firstOrCreate).
+     */
+    public function seedBroichDefaults(int $teamId): void
     {
         // 1. Gesellschaften
         $sort = 0;
@@ -35,12 +46,22 @@ class CostBootstrapService
         }
 
         // 3. Kostenarten (mit Vendor-Default-Verknüpfung)
-        // firstOrCreate (NICHT updateOrCreate): legt nur fehlende Kostenarten an. Bestehende bleiben
-        // unangetastet, damit UI-Pflege (Name, frequency_default, aggregation_source …) jeden weiteren
-        // Seed-/Import-Lauf überlebt. Die Konstanten sind ab hier reine Erst-Defaults, nicht die Wahrheit.
+        $this->seedCostTypes($teamId, CostBootstrap::COST_TYPES);
+    }
+
+    /**
+     * Legt fehlende Kostenarten an (firstOrCreate, NICHT updateOrCreate): Bestehende bleiben
+     * unangetastet, damit UI-Pflege (Name, frequency_default, aggregation_source …) jeden weiteren
+     * Seed-/Import-Lauf überlebt. Die Konstanten sind reine Erst-Defaults, nicht die Wahrheit.
+     * sort_order zählt ab dem aktuellen Maximum weiter, damit neutrales + BROICH-Set nicht kollidieren.
+     *
+     * @param array<int,array<string,mixed>> $types
+     */
+    protected function seedCostTypes(int $teamId, array $types): void
+    {
         $vendorIds = AssetVendor::where('team_id', $teamId)->pluck('id', 'name');
-        $sort = 0;
-        foreach (CostBootstrap::COST_TYPES as $type) {
+        $sort = (int) (AssetCostType::where('team_id', $teamId)->max('sort_order') ?? 0);
+        foreach ($types as $type) {
             AssetCostType::firstOrCreate(
                 ['team_id' => $teamId, 'key' => $type['key']],
                 [

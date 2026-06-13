@@ -130,6 +130,14 @@
                                 @endif
                             </tr>
                         @endforeach
+                        @if($types->isEmpty())
+                            <tr>
+                                <td colspan="8" class="px-4 py-10 text-center">
+                                    <p class="text-sm text-gray-400 mb-3">Noch keine Kostenarten angelegt. Lege oben eine eigene an — oder lade generische Standard-Kostenarten als Starthilfe.</p>
+                                    <button wire:click="seedDefaults" class="px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">Standard-Kostenarten laden</button>
+                                </td>
+                            </tr>
+                        @endif
                     </tbody>
                 </table>
             </div>
