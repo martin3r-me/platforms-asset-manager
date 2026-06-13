@@ -90,8 +90,8 @@ class Import extends Component
             $this->result = $service->import($this->teamId(), $path, 'excel-upload', $dryRun);
         } catch (\Throwable $e) {
             $this->error = $e->getMessage();
-            if (str_contains($e->getMessage(), 'PhpOffice') || str_contains($e->getMessage(), 'IOFactory') || str_contains($e->getMessage(), 'not found')) {
-                $this->error .= ' — Hinweis: ggf. ist phpspreadsheet noch nicht installiert (composer update).';
+            if (str_contains($e->getMessage(), 'geöffnet werden')) {
+                $this->error .= ' — Hinweis: Es wird eine echte .xlsx-Datei erwartet (kein altes .xls/CSV, nicht passwortgeschützt).';
             }
         } finally {
             $this->running = false;

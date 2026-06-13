@@ -7,7 +7,7 @@ Domänen-Sprache und Kernkonzepte des Asset-Managers. Kurz halten, bei Bedarf er
 Verwaltet IT-Assets (Hardware, Lizenzen, Geräte) **und** deren Kosten je **Kostenstelle** und
 **Gesellschaft** — als digitales Abbild der bisherigen manuellen Excel `Kostenaufteilung_IT.xlsx`.
 
-## Datenquellen (drei, doppelzählungsfrei)
+## Datenquellen (vier, doppelzählungsfrei)
 
 Jede **Kostenart** (`asset_cost_types.aggregation_source`) zieht ihren Pivot-Wert aus **genau einer** Quelle:
 
@@ -16,8 +16,11 @@ Jede **Kostenart** (`asset_cost_types.aggregation_source`) zieht ihren Pivot-Wer
 | Kostenposition | `cost_line` | Mobilfunk, Leasing, Internet, Drucker, ChatGPT, Canva, necta, HGK, BPEvent | manuell / Excel-Import |
 | Hardware-AfA | `hardware_afa` | gekaufte Hardware (lineare Abschreibung) | `asset_items.monthlyCost()` |
 | MS-Lizenz | `ms_license` | Microsoft 365 SKUs | Graph-Sync (`asset_license_skus` × `asset_user_licenses`) |
+| Gerät | `asset_device` | Intune-Geräte (Laptops/Notebooks) mit Leasing- oder AfA-Kosten | `asset_devices` (Kosten je Gerät-Override → `asset_device_models`-Default) |
 
-→ MS-Lizenzen und gekaufte Hardware werden **nie** als `cost_line` doppelt erfasst.
+→ MS-Lizenzen, gekaufte Hardware und Intune-Geräte werden **nie** zusätzlich als `cost_line` doppelt erfasst.
+Wird eine Kostenart von `cost_line` auf `asset_device` umgestellt, fallen ihre manuellen Importzeilen
+automatisch aus dem `cost_line`-Block (Aggregation gated über `aggregation_source`).
 
 ## Glossar
 

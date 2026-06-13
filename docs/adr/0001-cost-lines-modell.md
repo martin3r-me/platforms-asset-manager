@@ -22,8 +22,10 @@ als Entität fehlten.
    `employee.cost_center`-String per Backfill → FK migriert, String bleibt Fallback), `asset_vendors` (Kreditor),
    `asset_cost_types` (Kostenart-Katalog).
 3. **Doppelzählung verhindern** über `asset_cost_types.aggregation_source` ∈ {`cost_line`, `hardware_afa`,
-   `ms_license`}. Jede Kostenart-Spalte zieht aus genau einer Quelle. MS-Lizenzen bleiben in den SKU-Tabellen,
-   Hardware-AfA in `asset_items.monthlyCost()`.
+   `ms_license`, `asset_device`}. Jede Kostenart-Spalte zieht aus genau einer Quelle. MS-Lizenzen bleiben in den
+   SKU-Tabellen, Hardware-AfA in `asset_items.monthlyCost()`, Intune-Geräte in `asset_devices` (Kosten je
+   Gerät-Override → `asset_device_models`-Default). Stellt man eine Kostenart von `cost_line` auf `asset_device`
+   um, fallen ihre manuellen Importzeilen automatisch aus dem `cost_line`-Block.
 4. **Excel-Import** als einmaliger Bootstrap (`asset-manager:import-costs`), idempotent über `import_hash`.
    Importiert **nur** Opex (`cost_line`-Kostenarten); MS-Lizenzen und gekaufte Hardware kommen aus
    Graph-Sync bzw. Inventar.
@@ -34,7 +36,11 @@ als Entität fehlten.
 - **+** Sheet1/2 exakt reproduzierbar; eine Quelle der Wahrheit je Kostenart.
 - **+** Manuelle Pflege, Excel-Import und Graph-Sync schreiben in dasselbe Modell.
 - **+** Drucker/Internet/Laptops als `AssetItem` (Inventar + Historie) mit verknüpften `cost_line`(s).
-- **−** Modul-Dependency `phpoffice/phpspreadsheet` (Deploy: `composer update`).
+- **+** Intune-Geräte können eigene Monatskosten tragen (`aggregation_source='asset_device'`): Leasing-Rate
+  oder Kauf+AfA je Gerät-Override bzw. `asset_device_models`-Default — gated, damit nichts doppelt zählt.
+- **+** Excel-Import nutzt einen eigenen schlanken Reader (`ZipArchive` + `SimpleXML`,
+  `CostExcelImportService::readWorkbook()`) — **keine** Dependency `phpoffice/phpspreadsheet`. Liest den
+  gecachten Zellwert (`<v>`, also auch Formelergebnisse); unterstützt nur `.xlsx` (kein altes `.xls`).
 - **−** Laptop-Leasing kommt aus der Übersicht-Spalte (`lap_dock`), nicht aus dem Laptop-Sheet — Laptop-`AssetItem`
   bleibt kostenfrei (kein AfA), um Doppelzählung zu vermeiden.
 - **Offen:** FX-Kurs (ChatGPT USD→EUR) ist Stichtagswert; spätere automatische Kursquelle möglich.

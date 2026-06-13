@@ -18,7 +18,7 @@ return new class extends Migration
             $table->string('system_default')->nullable();        // HGK|Moss
             $table->string('frequency_default')->default('monthly'); // monthly|quarterly|yearly|once
             $table->boolean('is_per_employee')->default(false);
-            $table->string('aggregation_source')->default('cost_line'); // cost_line|hardware_afa|ms_license
+            $table->string('aggregation_source')->default('cost_line'); // cost_line|hardware_afa|ms_license|asset_device
             $table->boolean('allow_negative')->default(false);
             $table->timestamps();
 

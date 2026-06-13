@@ -248,11 +248,12 @@ class CostAggregationService
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * Vereinheitlichte Postenliste (monatlich, EUR) aus DREI Quellen — doppelzählungsfrei
+     * Vereinheitlichte Postenliste (monatlich, EUR) aus VIER Quellen — doppelzählungsfrei
      * gesteuert über cost_type.aggregation_source:
      *   - cost_line     → asset_cost_lines
-     *   - hardware_afa  → asset_items.monthlyCost()  (Kostenstelle via Assignee)
+     *   - hardware_afa  → asset_items.monthlyCost()      (Kostenstelle via Assignee)
      *   - ms_license    → asset_user_licenses × SKU-Preis (Kostenstelle via Assignee)
+     *   - asset_device  → asset_devices (Override → asset_device_models-Default; Kostenstelle via Geräte-Override oder UPN)
      *
      * @return Collection<int,array{cost_center_id:?int, cost_type_id:int, amount:float}>
      */

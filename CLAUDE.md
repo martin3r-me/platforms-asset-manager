@@ -20,3 +20,9 @@ Die fünf kanonischen Triage-Rollen sind auf die Board-Slots des Dev-Moduls
 ### Domain docs
 
 Single-context: ein `CONTEXT.md` + `docs/adr/` im Repo-Root. Siehe `docs/agents/domain.md`.
+
+### Logic audit
+
+Wiederverwendbarer Korrektheits-/Failure-Mode-Audit-Prompt (gegen `src/` verifiziert). Einer
+frischen Analyse-Session als Instruktions-Set übergeben → `LOGIC ANALYSIS REPORT`. Siehe
+`docs/agents/logic-audit.md`. Bei Code-Änderungen die Zeilen-Anker im Prompt nachziehen.
