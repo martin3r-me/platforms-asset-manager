@@ -157,8 +157,9 @@
                                     <div class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{{ $d->device_name }}</div>
                                     <div class="text-xs text-gray-400">{{ $d->manufacturer }} {{ $d->model }} · {{ $d->operating_system }}</div>
                                 </div>
-                                @if($d->resolvedMonthlyCost() > 0)
-                                    <span class="text-xs text-gray-500 tabular-nums mr-1">{{ number_format($d->resolvedMonthlyCost(), 2, ',', '.') }} €</span>
+                                @php $dCost = (float) ($deviceRows[$d->id]['amount'] ?? 0); @endphp
+                                @if($dCost > 0)
+                                    <span class="text-xs text-gray-500 tabular-nums mr-1">{{ number_format($dCost, 2, ',', '.') }} €</span>
                                 @endif
                                 @php $c = $d->complianceBadgeColor() @endphp
                                 <span class="px-2 py-0.5 rounded-full text-[10px] bg-{{ $c }}-500/10 text-{{ $c }}-600">{{ $d->complianceLabel() }}</span>

@@ -337,9 +337,12 @@ class CostAggregationService
      * Doppelzählung (z. B. wenn die alte Laptop-Kostenart von cost_line auf asset_device umgestellt wird,
      * fallen ihre manuellen Importzeilen automatisch aus dem cost_line-Block).
      *
-     * @return Collection<int,array{cost_center_id:?int, cost_type_id:int, amount:float, upn:?string}>
+     * Öffentlich, damit Einzelansichten (z. B. Employees/Show) dieselbe gated, N+1-freie Rechnung
+     * wiederverwenden statt resolvedMonthlyCost() im Loop aufzurufen.
+     *
+     * @return Collection<int,array{device_id:int, cost_center_id:?int, cost_type_id:int, amount:float, upn:?string}>
      */
-    protected function deviceCostRows(int $teamId): Collection
+    public function deviceCostRows(int $teamId): Collection
     {
         $deviceTypeIds = AssetCostType::where('team_id', $teamId)
             ->where('aggregation_source', 'asset_device')
@@ -372,6 +375,7 @@ class CostAggregationService
                 }
 
                 return [
+                    'device_id'      => (int) $d->id,
                     'cost_center_id' => $d->cost_center_id ?? ($ccByUpn[$d->user_principal_name] ?? null),
                     'cost_type_id'   => (int) $typeId,
                     'amount'         => (float) $amount,
@@ -382,10 +386,10 @@ class CostAggregationService
             ->values();
     }
 
-    /** Map-Key für den (Hersteller, Modell)-Abgleich Gerät ↔ Geräte-Modell (case-/whitespace-tolerant). */
+    /** Map-Key für den (Hersteller, Modell)-Abgleich Gerät ↔ Geräte-Modell — delegiert an die zentrale Normalisierung. */
     protected function deviceModelKey(?string $manufacturer, ?string $model): string
     {
-        return mb_strtolower(trim((string) $manufacturer)) . '|' . mb_strtolower(trim((string) $model));
+        return AssetDeviceModel::normalizeKey($manufacturer, $model);
     }
 
     /**

@@ -62,13 +62,19 @@ class SyncIntuneDevicesJob implements ShouldQueue
             foreach ($devices as $device) {
                 $intuneIds[] = $device['id'];
 
-                $existing = AssetDevice::where('team_id', $this->teamId)
+                // withTrashed: ein zuvor verschwundenes (soft-deleted) Gerät wird restored statt neu
+                // angelegt — so bleiben seine Kosten-Overrides (monthly_cost, cost_type_id …) erhalten.
+                $existing = AssetDevice::withTrashed()
+                    ->where('team_id', $this->teamId)
                     ->where('intune_id', $device['id'])
                     ->first();
 
                 $data = $this->mapDevice($device);
 
                 if ($existing) {
+                    if ($existing->trashed()) {
+                        $existing->restore();
+                    }
                     $existing->update($data);
                     $updated++;
                 } else {

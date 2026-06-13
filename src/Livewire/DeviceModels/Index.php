@@ -28,6 +28,17 @@ class Index extends Component
         return Auth::user()->currentTeam->id;
     }
 
+    /** owner/admin im aktiven Team? (analog Devices/Show — Preise pflegen ist eine Verwaltungsaktion) */
+    protected function canManage(): bool
+    {
+        $user = Auth::user();
+        $role = $user->teams()
+            ->where('team_id', $user->currentTeam?->id)
+            ->first()?->pivot?->role;
+
+        return in_array($role, ['owner', 'admin'], true);
+    }
+
     public function edit(int $id): void
     {
         $m = AssetDeviceModel::where('team_id', $this->teamId())->findOrFail($id);
@@ -41,6 +52,8 @@ class Index extends Component
 
     public function saveEdit(): void
     {
+        abort_unless($this->canManage(), 403);
+
         foreach (['eMonthly', 'ePurchase', 'eDep'] as $f) {
             if ($this->$f === '') $this->$f = null;
         }
@@ -64,6 +77,8 @@ class Index extends Component
 
     public function create(): void
     {
+        abort_unless($this->canManage(), 403);
+
         $this->validate(['newModel' => 'required|string|max:255']);
         AssetDeviceModel::firstOrCreate([
             'team_id'      => $this->teamId(),
@@ -76,6 +91,8 @@ class Index extends Component
 
     public function delete(int $id): void
     {
+        abort_unless($this->canManage(), 403);
+
         $m = AssetDeviceModel::where('team_id', $this->teamId())->findOrFail($id);
         $m->delete();
         if ($this->editId === $id) $this->editId = null;
@@ -103,6 +120,7 @@ class Index extends Component
             'models'    => $models,
             'costTypes' => AssetCostType::where('team_id', $teamId)->orderBy('sort_order')->orderBy('name')->get(),
             'vendors'   => AssetVendor::where('team_id', $teamId)->orderBy('name')->get(),
+            'canManage' => $this->canManage(),
         ])->layout('platform::layouts.app');
     }
 }

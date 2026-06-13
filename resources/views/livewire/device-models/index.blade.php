@@ -24,19 +24,21 @@
                 Geräte-Detailansicht überschreiben. Ohne zugeordnete Kostenart fließt der Betrag <em>nicht</em> in den Pivot.
             </p>
 
-            {{-- Anlage (für Modelle ohne Sync) --}}
-            <div class="flex items-end gap-2 rounded-xl bg-white border border-black/5 shadow-sm p-4 flex-wrap">
-                <div>
-                    <label class="block text-xs text-gray-500 mb-1">Hersteller</label>
-                    <input type="text" wire:model="newManufacturer" placeholder="z.B. Dell" class="px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white w-40">
+            {{-- Anlage (für Modelle ohne Sync) — nur owner/admin --}}
+            @if($canManage)
+                <div class="flex items-end gap-2 rounded-xl bg-white border border-black/5 shadow-sm p-4 flex-wrap">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Hersteller</label>
+                        <input type="text" wire:model="newManufacturer" placeholder="z.B. Dell" class="px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white w-40">
+                    </div>
+                    <div class="flex-1 min-w-[160px]">
+                        <label class="block text-xs text-gray-500 mb-1">Modell</label>
+                        <input type="text" wire:model="newModel" placeholder="z.B. Latitude 5420" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
+                        @error('newModel')<span class="text-[10px] text-red-500">{{ $message }}</span>@enderror
+                    </div>
+                    <button wire:click="create" class="px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">Anlegen</button>
                 </div>
-                <div class="flex-1 min-w-[160px]">
-                    <label class="block text-xs text-gray-500 mb-1">Modell</label>
-                    <input type="text" wire:model="newModel" placeholder="z.B. Latitude 5420" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
-                    @error('newModel')<span class="text-[10px] text-red-500">{{ $message }}</span>@enderror
-                </div>
-                <button wire:click="create" class="px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">Anlegen</button>
-            </div>
+            @endif
 
             <div class="rounded-xl bg-white/60 border border-black/5 shadow-sm overflow-hidden">
                 <table class="w-full text-sm">
@@ -97,10 +99,12 @@
                                     <td class="px-4 py-2.5 text-xs text-gray-500">{{ $m->costType?->name ?? '—' }}</td>
                                     <td class="px-4 py-2.5 text-xs text-gray-500">{{ $m->vendor?->name ?? '—' }}</td>
                                     <td class="px-4 py-2.5 text-right whitespace-nowrap">
-                                        <button wire:click="edit({{ $m->id }})" class="text-xs text-gray-400 hover:text-violet-600">@svg('heroicon-o-pencil-square', 'w-4 h-4 inline')</button>
-                                        <button wire:click="delete({{ $m->id }})"
-                                                wire:confirm="Modell {{ $m->manufacturer }} {{ $m->model }} wirklich löschen?{{ $m->device_count ? ' '.$m->device_count.' Geräte verlieren ihren Modell-Preis.' : '' }}"
-                                                class="text-xs text-gray-400 hover:text-red-600 ml-2">@svg('heroicon-o-trash', 'w-4 h-4 inline')</button>
+                                        @if($canManage)
+                                            <button wire:click="edit({{ $m->id }})" class="text-xs text-gray-400 hover:text-violet-600">@svg('heroicon-o-pencil-square', 'w-4 h-4 inline')</button>
+                                            <button wire:click="delete({{ $m->id }})"
+                                                    wire:confirm="Modell {{ $m->manufacturer }} {{ $m->model }} wirklich löschen?{{ $m->device_count ? ' '.$m->device_count.' Geräte verlieren ihren Modell-Preis.' : '' }}"
+                                                    class="text-xs text-gray-400 hover:text-red-600 ml-2">@svg('heroicon-o-trash', 'w-4 h-4 inline')</button>
+                                        @endif
                                     </td>
                                 @endif
                             </tr>

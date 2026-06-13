@@ -9,6 +9,7 @@ use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetUserLicense;
+use Platform\AssetManager\Services\CostAggregationService;
 
 class Show extends Component
 {
@@ -88,9 +89,14 @@ class Show extends Component
             ->get()
             ->keyBy('sku_id');
 
+        // Geräte-Kosten: gated (nur Kostenart aggregation_source='asset_device') + N+1-frei über den
+        // zentralen Aggregator — damit der Mitarbeiter-Total mit Dashboard/Pivot übereinstimmt und
+        // nicht doppelt zählt. Keyed nach device_id für den Per-Gerät-Betrag in der Liste.
+        $deviceRows = app(CostAggregationService::class)->deviceCostRows($teamId)->keyBy('device_id');
+
         // Monatliche Kosten
         $hardwareCost = $items->sum(fn($i) => $i->monthlyCost());
-        $deviceCost   = $devices->sum(fn($d) => $d->resolvedMonthlyCost());
+        $deviceCost   = $devices->sum(fn($d) => (float) ($deviceRows[$d->id]['amount'] ?? 0));
         $licenseCost  = 0.0;
         foreach ($licenses as $lic) {
             $sku = $skuMap[$lic->sku_id] ?? null;
@@ -103,6 +109,7 @@ class Show extends Component
             'employee'     => $this->employee,
             'items'        => $items,
             'devices'      => $devices,
+            'deviceRows'   => $deviceRows,
             'licenses'     => $licenses,
             'skuMap'       => $skuMap,
             'hardwareCost' => $hardwareCost,

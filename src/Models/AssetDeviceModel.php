@@ -43,4 +43,14 @@ class AssetDeviceModel extends Model
     {
         return $this->belongsTo(AssetVendor::class, 'vendor_id');
     }
+
+    /**
+     * Einheitlicher Abgleich-Schlüssel (Hersteller|Modell), case-/whitespace-tolerant.
+     * EINE Quelle der Wahrheit für Gerät ↔ Modell — von AssetDevice::deviceModel(),
+     * CostAggregationService und der Geräte-Zählung genutzt, damit alle dieselbe Zuordnung sehen.
+     */
+    public static function normalizeKey(?string $manufacturer, ?string $model): string
+    {
+        return mb_strtolower(trim((string) $manufacturer)) . '|' . mb_strtolower(trim((string) $model));
+    }
 }

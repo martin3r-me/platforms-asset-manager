@@ -3,10 +3,17 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class AssetDevice extends Model
 {
+    use SoftDeletes;
+
     protected $table = 'asset_devices';
+
+    /** Memoisiertes Modell-Resolve je Instanz (deviceModel() wird pro Render mehrfach gerufen). */
+    protected ?AssetDeviceModel $resolvedModel = null;
+    protected bool $modelResolved = false;
 
     protected $fillable = [
         'team_id',
@@ -65,13 +72,23 @@ class AssetDevice extends Model
         return $this->belongsTo(AssetEmployee::class, 'user_principal_name', 'user_principal_name');
     }
 
-    /** Passendes Geräte-Modell (Default-Kosten) per (Hersteller, Modell) auflösen. */
+    /**
+     * Passendes Geräte-Modell (Default-Kosten) per (Hersteller, Modell) auflösen — normalisiert
+     * (case-/whitespace-tolerant) über AssetDeviceModel::normalizeKey(), damit Detailansicht und
+     * Pivot/Aggregation IMMER dasselbe Modell treffen. Memoisiert je Instanz.
+     */
     public function deviceModel(): ?AssetDeviceModel
     {
-        $q = AssetDeviceModel::where('team_id', $this->team_id);
-        $this->manufacturer === null ? $q->whereNull('manufacturer') : $q->where('manufacturer', $this->manufacturer);
-        $this->model === null ? $q->whereNull('model') : $q->where('model', $this->model);
-        return $q->first();
+        if ($this->modelResolved) {
+            return $this->resolvedModel;
+        }
+        $this->modelResolved = true;
+
+        $key = AssetDeviceModel::normalizeKey($this->manufacturer, $this->model);
+        $this->resolvedModel = AssetDeviceModel::where('team_id', $this->team_id)->get()
+            ->first(fn($m) => AssetDeviceModel::normalizeKey($m->manufacturer, $m->model) === $key);
+
+        return $this->resolvedModel;
     }
 
     /**
@@ -104,7 +121,8 @@ class AssetDevice extends Model
         if ($monthly !== null && $monthly !== '') {
             return round((float) $monthly, 2);
         }
-        if ($price && $depMonths) {
+        // decimal-Casts liefern "0.00" (truthy) — daher explizit auf > 0 prüfen, nicht auf Truthiness.
+        if ($price !== null && $price !== '' && (float) $price > 0 && $depMonths) {
             if ($purchaseDate) {
                 $pd = $purchaseDate instanceof \Carbon\CarbonInterface ? $purchaseDate : \Carbon\Carbon::parse($purchaseDate);
                 if ($pd->diffInMonths(now()) >= (int) $depMonths) return 0.0;
