@@ -24,8 +24,12 @@ class CostSummaryTool implements ToolContract, ToolMetadataContract
     public function getDescription(): string
     {
         return 'GET /asset-manager/costs/summary - Monatliche Gesamtkosten des aktiven Teams: '
-            . 'hardware (Inventar-AfA + Intune-Geräte), licenses (Microsoft), costlines (sonstige '
-            . 'Kostenpositionen) und total. Doppelzählungsfrei über cost_type.aggregation_source.';
+            . 'hardware (AfA ZUGEWIESENER Inventar-Items + Intune-Geräte), licenses (zugewiesene '
+            . 'Microsoft-Lizenzen), costlines (sonstige Kostenpositionen) und total. total ist per '
+            . 'Konstruktion identisch mit dem grandTotal der Kostenstellen×Kostenart-Pivot '
+            . '(asset-manager.costs.by). Zusätzlich capacity = Bestand, der dem Pivot NICHT zugeteilt '
+            . 'wird (hardware_unassigned: AfA von Lager-/Pool-Items ohne Mitarbeiter; licenses_catalog: '
+            . 'SKU-Katalogkosten) — bewusst NICHT Teil von total.';
     }
 
     public function getSchema(): array

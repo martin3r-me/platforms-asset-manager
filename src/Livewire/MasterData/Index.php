@@ -5,6 +5,7 @@ namespace Platform\AssetManager\Livewire\MasterData;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -12,6 +13,7 @@ use Platform\AssetManager\Models\AssetCompany;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetVendor;
+use Platform\AssetManager\Services\CostAggregationService;
 use Platform\AssetManager\Services\CostBootstrapService;
 
 /**
@@ -159,7 +161,9 @@ class Index extends Component
             'cost-centers' => [
                 'form.code'       => 'required|string|max:50',
                 'form.name'       => 'nullable|string|max:255',
-                'form.company_id' => 'nullable',
+                // company_id muss zum eigenen Team gehören (kein fremder/danglender FK, der die
+                // Kostenstelle aus dem Pivot fallen lassen würde — s. costCenterByType-Auffangblock).
+                'form.company_id' => ['nullable', 'integer', Rule::exists('asset_companies', 'id')->where('team_id', $this->teamId())],
                 'form.is_active'  => 'boolean',
             ],
             'cost-types' => [
@@ -181,6 +185,12 @@ class Index extends Component
 
     public function save(): void
     {
+        // Leeren Select-Wert ('') zu null normalisieren, damit nullable|integer|exists greift
+        // (ein '' würde sonst an der integer-Regel scheitern, obwohl „keine Gesellschaft" gültig ist).
+        if (array_key_exists('company_id', $this->form) && $this->form['company_id'] === '') {
+            $this->form['company_id'] = null;
+        }
+
         $this->validate($this->rulesFor($this->active));
 
         match ($this->active) {
@@ -345,6 +355,21 @@ class Index extends Component
 
             return;
         }
+
+        // Virtuelle Quellen (hardware_afa/ms_license/asset_device) haben NIE cost_lines (cost_lines_count=0),
+        // tragen ihre Kosten aber aus Inventar-AfA / bepreisten Lizenz-Zuweisungen / Geräten. Löschen würde
+        // diese Beträge still aus dem Pivot kippen → blockieren, solange die Kostenart aktiv Kosten trägt.
+        if (in_array($t->aggregation_source, ['hardware_afa', 'ms_license', 'asset_device'], true)) {
+            $contributes = app(CostAggregationService::class)
+                ->normalizedLines($this->teamId())
+                ->contains(fn ($l) => (int) $l['cost_type_id'] === (int) $t->id && (float) $l['amount'] != 0.0);
+            if ($contributes) {
+                $this->flash = "Kostenart {$t->name} (Quelle: {$t->aggregation_source}) trägt aktuell Kosten aus Geräten/Inventar/Lizenzen — diese erst entkoppeln oder umbuchen, dann ist die Kostenart löschbar.";
+
+                return;
+            }
+        }
+
         $name = $t->name;
         $t->delete();
         if ($this->selectedId === $id) {

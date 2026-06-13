@@ -17,33 +17,65 @@ use Platform\AssetManager\Models\AssetUserLicense;
 class CostAggregationService
 {
     /**
-     * Gibt Gesamt-Monatskosten zurück (Hardware AfA + MS-Lizenzen + sonstige Kostenpositionen).
+     * Gesamt-Monatskosten (Hardware AfA + Geräte + MS-Lizenzen + sonstige Kostenpositionen).
+     *
+     * KANONISCH: leitet die Spend-Buckets aus DERSELBEN Postenliste wie der Pivot ab (normalizedLines),
+     * gruppiert nach aggregation_source → das Dashboard-`total` ist per Konstruktion identisch mit
+     * costCenterByType()['grandTotal'] (behebt die Dashboard-vs-Pivot-Divergenz). Bestand/Kapazität, die
+     * der Pivot bewusst NICHT zuteilt (unzugewiesene Hardware-AfA, SKU-Katalogkosten), wird separat unter
+     * 'capacity' ausgewiesen — nicht ins Spend-Total gemischt (sonst Doppelzählung).
      */
     public function totalMonthly(int $teamId): array
     {
-        $hardware = AssetItem::where('team_id', $teamId)
-            ->get()
-            ->sum(fn($i) => $i->monthlyCost());
+        $b     = $this->canonicalBuckets($teamId);
+        $total = $b['hardware'] + $b['licenses'] + $b['costlines'];
 
-        $licenses = AssetLicenseSku::where('team_id', $teamId)
-            ->get()
-            ->sum(fn($s) => $s->monthlyCost());
-
-        // Sonstige wiederkehrende Kostenpositionen (Opex: Mobilfunk, Leasing, Abos, Internet, Drucker …)
-        $costLines = AssetCostLine::active()
-            ->where('team_id', $teamId)
-            ->whereHas('costType', fn($q) => $q->where('aggregation_source', 'cost_line'))
-            ->sum('monthly_amount');
-
-        // Geräte-Kosten (Intune-Geräte mit asset_device-Kostenart)
-        $devices = (float) $this->deviceCostRows($teamId)->sum('amount');
+        // Kapazität (kein Spend): AfA von Items OHNE Mitarbeiter (Lager/Pool) + SKU-Katalogkosten
+        // (gekauft/konsumiert, unabhängig von realen Zuweisungen).
+        $hardwareUnassigned = (float) AssetItem::where('team_id', $teamId)
+            ->whereNull('assignee_id')->get()->sum(fn ($i) => $i->monthlyCost());
+        $licensesCatalog = (float) AssetLicenseSku::where('team_id', $teamId)
+            ->get()->sum(fn ($s) => $s->monthlyCost());
 
         return [
-            'hardware'  => round($hardware + $devices, 2),
-            'licenses'  => round($licenses, 2),
-            'costlines' => round((float) $costLines, 2),
-            'total'     => round($hardware + $devices + $licenses + (float) $costLines, 2),
+            'hardware'  => round($b['hardware'], 2),
+            'licenses'  => round($b['licenses'], 2),
+            'costlines' => round($b['costlines'], 2),
+            'total'     => round($total, 2),
+            'capacity'  => [
+                'hardware_unassigned' => round($hardwareUnassigned, 2),
+                'licenses_catalog'    => round($licensesCatalog, 2),
+            ],
         ];
+    }
+
+    /** aggregation_source → Anzeige-Bucket der Auswertungen (hardware|licenses|costlines). */
+    protected function bucketForSource(?string $source): string
+    {
+        return match ($source) {
+            'hardware_afa', 'asset_device' => 'hardware',
+            'ms_license'                   => 'licenses',
+            default                        => 'costlines', // cost_line + Fallback
+        };
+    }
+
+    /**
+     * Kanonische Monatssummen je Anzeige-Bucket aus der Pivot-Postenliste (normalizedLines).
+     * Einzige Quelle der Wahrheit für totalMonthly() und byCostCenter() → garantierte Reconciliation
+     * mit costCenterByType()['grandTotal'].
+     *
+     * @return array{hardware:float, licenses:float, costlines:float}
+     */
+    protected function canonicalBuckets(int $teamId): array
+    {
+        $types = AssetCostType::where('team_id', $teamId)->get()->keyBy('id');
+        $b     = ['hardware' => 0.0, 'licenses' => 0.0, 'costlines' => 0.0];
+
+        foreach ($this->normalizedLines($teamId) as $line) {
+            $b[$this->bucketForSource($types[$line['cost_type_id']]->aggregation_source ?? null)] += $line['amount'];
+        }
+
+        return $b;
     }
 
     /**
@@ -73,6 +105,7 @@ class CostAggregationService
 
         // Sonstige Kostenpositionen (cost_line) pro Mitarbeiter
         $costLineSums = AssetCostLine::active()
+            ->validOn(now())
             ->where('team_id', $teamId)
             ->whereNotNull('assignee_id')
             ->whereHas('costType', fn($q) => $q->where('aggregation_source', 'cost_line'))
@@ -112,12 +145,18 @@ class CostAggregationService
 
     /**
      * Kosten pro Department.
+     *
+     * Department ist eine Mitarbeiter-Eigenschaft (kein FK) → Gruppierung über den Freitext bleibt nötig
+     * und die Basis ist die Mitarbeiter-Sicht (topEmployees). Posten OHNE Mitarbeiterbezug (assignee-lose
+     * Kostenpositionen wie Internet/Drucker/BPEvent, Geräte/Lizenzen ohne passenden Mitarbeiter) tauchen
+     * dort nicht auf — damit sie nicht still verschwinden, wird der Rest gegenüber der kanonischen Summe
+     * gebildet und unter „Ohne Abteilung" gesammelt. So entspricht die Summe dem Dashboard-Total/Pivot.
      */
     public function byDepartment(int $teamId): Collection
     {
         $rows = $this->topEmployees($teamId, 9999);  // alle relevanten Mitarbeiter
 
-        return $rows
+        $byDept = $rows
             ->groupBy(fn($r) => $r['employee']->department ?: 'Ohne Abteilung')
             ->map(function ($group, $dept) {
                 return [
@@ -128,30 +167,70 @@ class CostAggregationService
                     'total'     => round($group->sum('total'), 2),
                     'count'     => $group->count(),
                 ];
-            })
-            ->sortByDesc('total')
-            ->values();
+            });
+
+        // Residual = kanonische Summe − bereits Mitarbeitern zugeordnete Summe (≥ 0, da topEmployees
+        // eine Teilmenge ist). Landet gesammelt in „Ohne Abteilung", damit nichts still wegfällt.
+        $canon = $this->canonicalBuckets($teamId);
+        $resHw = round(max(0.0, $canon['hardware']  - (float) $byDept->sum('hardware')), 2);
+        $resLi = round(max(0.0, $canon['licenses']  - (float) $byDept->sum('licenses')), 2);
+        $resCl = round(max(0.0, $canon['costlines'] - (float) $byDept->sum('costlines')), 2);
+
+        if ($resHw + $resLi + $resCl > 0.005) {
+            $cur = $byDept->get('Ohne Abteilung');
+            $byDept->put('Ohne Abteilung', [
+                'label'     => 'Ohne Abteilung',
+                'hardware'  => round(($cur['hardware']  ?? 0) + $resHw, 2),
+                'licenses'  => round(($cur['licenses']  ?? 0) + $resLi, 2),
+                'costlines' => round(($cur['costlines'] ?? 0) + $resCl, 2),
+                'total'     => round(($cur['total'] ?? 0) + $resHw + $resLi + $resCl, 2),
+                'count'     => $cur['count'] ?? 0,
+            ]);
+        }
+
+        return $byDept->sortByDesc('total')->values();
     }
 
     /**
      * Kosten pro Kostenstelle.
+     *
+     * Aus DERSELBEN Postenliste wie der Pivot (normalizedLines) gruppiert nach cost_center_id (FK, nicht
+     * Freitext-String) → reconciled mit den Pivot-Zeilensummen und enthält auch assignee-lose Posten
+     * (Internet/Drucker/BPEvent etc.), die die alte Mitarbeiter-Sicht verschluckt hat. Label via Relation.
      */
     public function byCostCenter(int $teamId): Collection
     {
-        $rows = $this->topEmployees($teamId, 9999);
+        $types     = AssetCostType::where('team_id', $teamId)->get()->keyBy('id');
+        $centers   = AssetCostCenter::where('team_id', $teamId)->get()->keyBy('id');
+        $empCounts = AssetEmployee::where('team_id', $teamId)
+            ->whereNotNull('cost_center_id')
+            ->get(['cost_center_id'])
+            ->countBy(fn ($e) => (int) $e->cost_center_id);
 
-        return $rows
-            ->groupBy(fn($r) => $r['employee']->cost_center ?: 'Ohne Kostenstelle')
-            ->map(function ($group, $cc) {
+        $acc = [];  // [cost_center_id|0 => ['hardware'=>..,'licenses'=>..,'costlines'=>..]]
+        foreach ($this->normalizedLines($teamId) as $line) {
+            $ccId   = $line['cost_center_id'] ?? 0;
+            $bucket = $this->bucketForSource($types[$line['cost_type_id']]->aggregation_source ?? null);
+            $acc[$ccId][$bucket] = ($acc[$ccId][$bucket] ?? 0.0) + $line['amount'];
+        }
+
+        return collect($acc)
+            ->map(function ($buckets, $ccId) use ($centers, $empCounts) {
+                $hardware  = round($buckets['hardware']  ?? 0, 2);
+                $licenses  = round($buckets['licenses']  ?? 0, 2);
+                $costlines = round($buckets['costlines'] ?? 0, 2);
+                $center    = $ccId ? ($centers[$ccId] ?? null) : null;
+
                 return [
-                    'label'     => $cc,
-                    'hardware'  => round($group->sum('hardware'), 2),
-                    'licenses'  => round($group->sum('licenses'), 2),
-                    'costlines' => round($group->sum('costlines'), 2),
-                    'total'     => round($group->sum('total'), 2),
-                    'count'     => $group->count(),
+                    'label'     => $center?->label ?? 'Ohne Kostenstelle',
+                    'hardware'  => $hardware,
+                    'licenses'  => $licenses,
+                    'costlines' => $costlines,
+                    'total'     => round($hardware + $licenses + $costlines, 2),
+                    'count'     => $ccId ? (int) ($empCounts[$ccId] ?? 0) : 0,
                 ];
             })
+            ->filter(fn ($r) => abs($r['total']) > 0.005)
             ->sortByDesc('total')
             ->values();
     }
@@ -266,6 +345,7 @@ class CostAggregationService
         $lineTypeIds = $types->where('aggregation_source', 'cost_line')->keys();
         if ($lineTypeIds->isNotEmpty()) {
             AssetCostLine::active()
+                ->validOn(now())
                 ->where('team_id', $teamId)
                 ->whereIn('cost_type_id', $lineTypeIds)
                 ->get(['cost_type_id', 'cost_center_id', 'monthly_amount'])
@@ -468,6 +548,27 @@ class CostAggregationService
             ];
         }
 
+        // Kostenstellen, deren company_id auf KEINE Team-Gesellschaft zeigt (fremde/danglende FK): die
+        // company-Schleife oben iteriert nur Team-Gesellschaften, der null-Block nur company_id IS NULL —
+        // ohne diesen Auffang-Block fielen solche Kostenstellen samt Beträgen still aus Pivot UND grandTotal.
+        $teamCompanyIds = $companies->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $unknownRows    = [];
+        foreach ($centersByCompany as $companyId => $group) {
+            if ($companyId === null || $companyId === '') continue;            // null-Orphans s. o.
+            if (in_array((int) $companyId, $teamCompanyIds, true)) continue;    // bereits in einem Block
+            foreach ($group->map($buildRow)->values()->all() as $r) {
+                $unknownRows[] = $r;
+            }
+        }
+        if (!empty($unknownRows)) {
+            $companyBlocks[] = [
+                'key'      => '_unknown',
+                'name'     => 'Ohne Gesellschaft / unbekannt',
+                'rows'     => $unknownRows,
+                'subtotal' => round(array_sum(array_column($unknownRows, 'rowTotal')), 2),
+            ];
+        }
+
         // Posten ganz ohne Kostenstelle (matrix[0])
         if (isset($matrix[0])) {
             $cells = [];
@@ -551,6 +652,7 @@ class CostAggregationService
     public function byVendor(int $teamId): Collection
     {
         return AssetCostLine::active()
+            ->validOn(now())
             ->where('team_id', $teamId)
             ->with('vendor')
             ->get(['vendor_id', 'monthly_amount'])
@@ -570,6 +672,7 @@ class CostAggregationService
     public function costLinesByCostCenter(int $teamId, int $costCenterId): Collection
     {
         return AssetCostLine::active()
+            ->validOn(now())
             ->where('team_id', $teamId)
             ->where('cost_center_id', $costCenterId)
             ->with(['costType', 'vendor', 'assignee'])

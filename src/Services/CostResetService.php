@@ -49,8 +49,18 @@ class CostResetService
                 ->where('user_principal_name', 'like', '%@funktion.import.local')
                 ->delete();
 
-            // 4) Sauberer Schnitt: import-gesetzte Kostenstellen aller (verbliebenen) Mitarbeiter zurücksetzen
+            // 4) Import-gesetzte Kostenstellen NUR bei import-erzeugten Konten zurücksetzen — also
+            //    synthetischen Funktionskonten (account_type='function' bzw. UPN …@funktion.import.local).
+            //    NIEMALS unbedingt alle Mitarbeiter nullen: echte Graph-/manuell gepflegte Mitarbeiter
+            //    sind die Quelle der Wahrheit für ihre Kostenstelle — würden sie hier genullt, kollabiert
+            //    der Geräte-/Lizenz-Pivot in „Ohne Kostenstelle" und manuell gepflegte Zuordnungen gehen
+            //    verloren. (Die @funktion.import.local-Konten sind in Schritt 3 bereits gelöscht; dieser
+            //    Schritt fängt zusätzlich import-markierte Funktionskonten mit abweichender UPN ab.)
             $clearedCostCenters = AssetEmployee::where('team_id', $teamId)
+                ->where(function ($q) {
+                    $q->where('account_type', 'function')
+                      ->orWhere('user_principal_name', 'like', '%@funktion.import.local');
+                })
                 ->where(fn ($q) => $q->whereNotNull('cost_center_id')->orWhereNotNull('cost_center'))
                 ->update(['cost_center_id' => null, 'cost_center' => null]);
 

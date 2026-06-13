@@ -93,6 +93,14 @@ class CreateCostLineTool implements ToolContract, ToolMetadataContract
                 return $error;
             }
 
+            // Nicht-EUR-Position OHNE gültigen fx_rate ablehnen: monthly_amount würde sonst fx=1.0
+            // annehmen und z. B. USD still 1:1 als EUR bewerten (computeMonthlyAmount, AssetCostLine).
+            $currency = strtoupper(trim((string) ($arguments['currency'] ?? 'EUR'))) ?: 'EUR';
+            $fxRate   = $arguments['fx_rate'] ?? null;
+            if ($currency !== 'EUR' && (!is_numeric($fxRate) || (float) $fxRate <= 0)) {
+                return ToolResult::error('VALIDATION_ERROR', "Nicht-EUR-Position (currency={$currency}) benötigt einen positiven fx_rate (Umrechnungskurs zu EUR) — sonst würde der Betrag still 1:1 als EUR gewertet.");
+            }
+
             $line = AssetCostLine::create([
                 'team_id'        => $teamId,
                 'cost_type_id'   => $costType->id,

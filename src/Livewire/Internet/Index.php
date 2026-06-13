@@ -45,7 +45,7 @@ class Index extends Component
             : collect();
 
         // Cost-Lines je Anschluss (mit Kostenstelle) → Aufschlüsselung, Summe, KSt-Code.
-        $linesByItem = AssetCostLine::active()->where('team_id', $teamId)
+        $linesByItem = AssetCostLine::active()->validOn(now())->where('team_id', $teamId)
             ->whereIn('asset_item_id', $all->pluck('id'))
             ->with('costCenter')
             ->get()

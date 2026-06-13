@@ -113,7 +113,7 @@ class GetEmployeeTool implements ToolContract, ToolMetadataContract
             ])->values()->all();
 
             // Kostenpositionen
-            $costLines = $emp->costLines()->active()->with(['costType', 'vendor'])->get()->map(fn ($c) => [
+            $costLines = $emp->costLines()->active()->validOn(now())->with(['costType', 'vendor'])->get()->map(fn ($c) => [
                 'id'             => $c->id,
                 'label'          => $c->label,
                 'cost_type'      => $c->costType?->name,
@@ -129,7 +129,7 @@ class GetEmployeeTool implements ToolContract, ToolMetadataContract
                 ->where('upn', $emp->user_principal_name)->sum('amount');
             $skuPrices  = AssetLicenseSku::where('team_id', $teamId)->whereNotNull('unit_price')->pluck('unit_price', 'sku_id');
             $licCost    = $emp->licenses()->get()->sum(fn ($l) => (float) ($skuPrices[$l->sku_id] ?? 0));
-            $clCost     = (float) AssetCostLine::active()->where('team_id', $teamId)
+            $clCost     = (float) AssetCostLine::active()->validOn(now())->where('team_id', $teamId)
                 ->where('assignee_id', $emp->id)
                 ->whereHas('costType', fn ($q) => $q->where('aggregation_source', 'cost_line'))
                 ->sum('monthly_amount');

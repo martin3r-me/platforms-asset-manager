@@ -80,6 +80,22 @@ class AssetCostLine extends Model
         return $query->where('active', true);
     }
 
+    /**
+     * Zeitliches Gating: nur Positionen, die am Stichtag gültig sind. valid_from/valid_to NULL = unbegrenzt.
+     * $on = null → heute. So fallen abgelaufene (valid_to < Stichtag) und zukünftige (valid_from > Stichtag)
+     * Positionen aus jeder Aggregation, statt voll im Pivot/Total mitzuzählen. Immer ZUSÄTZLICH zu active()
+     * anhängen: ->active()->validOn(now()).
+     */
+    public function scopeValidOn(Builder $query, $on = null): Builder
+    {
+        $date = $on instanceof \Carbon\CarbonInterface ? $on : \Illuminate\Support\Carbon::parse($on ?? 'now');
+        $day  = $date->toDateString();
+
+        return $query
+            ->where(fn (Builder $q) => $q->whereNull('valid_from')->orWhereDate('valid_from', '<=', $day))
+            ->where(fn (Builder $q) => $q->whereNull('valid_to')->orWhereDate('valid_to', '>=', $day));
+    }
+
     public function team()
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);

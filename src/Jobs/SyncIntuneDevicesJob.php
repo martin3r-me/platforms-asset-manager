@@ -13,6 +13,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class SyncIntuneDevicesJob implements ShouldQueue
@@ -107,39 +108,42 @@ class SyncIntuneDevicesJob implements ShouldQueue
                 }
             }
 
-            // Schutz: Eine leere — aber erfolgreiche (HTTP 200, value=[]) — Graph-Antwort darf NIE die
-            // ganze Flotte löschen. $devices === null ist oben bereits als Fehler abgefangen; ein leeres
-            // Array ist syntaktisch valide, würde aber whereNotIn('intune_id', []) zu „alle Zeilen"
-            // machen → Totalverlust beim ersten Tenant-Glitch. Dann nichts entfernen (removed=0).
-            if (empty($intuneIds)) {
-                $removed = 0;
-            } else {
-                $removed = AssetDevice::where('team_id', $this->teamId)
-                    ->whereNotIn('intune_id', $intuneIds)
-                    ->count();
-
-                AssetDevice::where('team_id', $this->teamId)
-                    ->whereNotIn('intune_id', $intuneIds)
-                    ->delete();
-            }
-
             $durationMs = (int) ($startedAt->diffInMilliseconds(now()));
+            $removed    = 0;
 
-            $log->update([
-                'status'          => 'success',
-                'devices_synced'  => count($devices),
-                'devices_added'   => $added,
-                'devices_updated' => $updated,
-                'devices_removed' => $removed,
-                'duration_ms'     => $durationMs,
-                'completed_at'    => now(),
-            ]);
+            // Reconcile-Delete + Status-Schreiben atomar: kein halb-bereinigter Stand und kein ewig
+            // hängendes 'running', falls zwischen Delete und Status-Update etwas schiefgeht.
+            DB::transaction(function () use ($intuneIds, $devices, $added, $updated, $durationMs, $log, $config, &$removed) {
+                // Schutz: Eine leere — aber erfolgreiche (HTTP 200, value=[]) — Graph-Antwort darf NIE die
+                // ganze Flotte löschen. $devices === null ist oben bereits als Fehler abgefangen; ein leeres
+                // Array ist syntaktisch valide, würde aber whereNotIn('intune_id', []) zu „alle Zeilen"
+                // machen → Totalverlust beim ersten Tenant-Glitch. Dann nichts entfernen (removed=0).
+                if (!empty($intuneIds)) {
+                    $removed = AssetDevice::where('team_id', $this->teamId)
+                        ->whereNotIn('intune_id', $intuneIds)
+                        ->count();
 
-            $config->update([
-                'sync_status'  => 'success',
-                'sync_error'   => null,
-                'last_sync_at' => now(),
-            ]);
+                    AssetDevice::where('team_id', $this->teamId)
+                        ->whereNotIn('intune_id', $intuneIds)
+                        ->delete();
+                }
+
+                $log->update([
+                    'status'          => 'success',
+                    'devices_synced'  => count($devices),
+                    'devices_added'   => $added,
+                    'devices_updated' => $updated,
+                    'devices_removed' => $removed,
+                    'duration_ms'     => $durationMs,
+                    'completed_at'    => now(),
+                ]);
+
+                $config->update([
+                    'sync_status'  => 'success',
+                    'sync_error'   => null,
+                    'last_sync_at' => now(),
+                ]);
+            });
 
             // Safety-Net: nochmal alle UPNs einsammeln (fängt Bestandsdaten vor Phase 3 ab)
             $employeeService->backfillForTeam($this->teamId);
@@ -197,5 +201,29 @@ class SyncIntuneDevicesJob implements ShouldQueue
             'sync_status' => 'error',
             'sync_error'  => $message,
         ]);
+    }
+
+    /**
+     * Wird von Laravel bei terminalem Scheitern (Timeout/Kill/uncaught) aufgerufen — der try/catch in
+     * handle() greift dort NICHT. Räumt hängengebliebene 'running'/'started'-Zustände des Teams auf,
+     * damit Connector-Status und Sync-Log nicht ewig „läuft" zeigen. Darf selbst nie werfen.
+     */
+    public function failed(\Throwable $e): void
+    {
+        try {
+            AssetConnectorConfig::where('team_id', $this->teamId)
+                ->where('sync_status', 'running')
+                ->update(['sync_status' => 'error', 'sync_error' => $e->getMessage()]);
+
+            AssetDeviceSyncLog::where('team_id', $this->teamId)
+                ->where('status', 'started')
+                ->update([
+                    'status'        => 'error',
+                    'error_message' => $e->getMessage(),
+                    'completed_at'  => now(),
+                ]);
+        } catch (\Throwable $ignored) {
+            // failed() muss schweigend bleiben
+        }
     }
 }

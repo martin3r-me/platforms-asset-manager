@@ -9,18 +9,26 @@ use Platform\AssetManager\Models\AssetUserLicense;
 use Platform\AssetManager\Services\EmployeeService;
 use Platform\AssetManager\Services\IntuneGraphService;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-class SyncLicensesJob implements ShouldQueue
+class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $timeout = 300;
     public int $tries   = 1;
+
+    /** Serialisiert parallele Lizenz-Syncs desselben Teams (verhindert Duplikat-Races vor dem Unique-Index). */
+    public function uniqueId(): string
+    {
+        return (string) $this->teamId;
+    }
 
     protected array $skuNames = [
         'O365_BUSINESS_ESSENTIALS' => 'Microsoft 365 Business Basic',
@@ -155,34 +163,38 @@ class SyncLicensesJob implements ShouldQueue
                 }
             }
 
-            // Schutz analog zu SyncIntuneDevicesJob: Ist KEINE einzige Lizenzzuweisung erhalten geblieben
-            // (leere Graph-Antwort oder alle User ohne Lizenzen), nichts löschen — whereNotIn('id', [])
-            // würde sonst sämtliche Zuweisungen des Teams entfernen. $users === null ist oben als Fehler
-            // abgefangen; ein leeres $keptIds wird hier konservativ als „nichts entfernen" behandelt.
-            if (empty($keptIds)) {
-                $removed = 0;
-            } else {
-                $removed = AssetUserLicense::where('team_id', $this->teamId)
-                    ->whereNotIn('id', $keptIds)
-                    ->count();
-
-                AssetUserLicense::where('team_id', $this->teamId)
-                    ->whereNotIn('id', $keptIds)
-                    ->delete();
-            }
-
-            $totalAssignments = AssetUserLicense::where('team_id', $this->teamId)->count();
             $durationMs       = (int) ($startedAt->diffInMilliseconds(now()));
+            $removed          = 0;
+            $totalAssignments = 0;
 
-            $log->update([
-                'status'              => 'success',
-                'skus_synced'         => count($skus),
-                'assignments_synced'  => $totalAssignments,
-                'assignments_added'   => $added,
-                'assignments_removed' => $removed,
-                'duration_ms'         => $durationMs,
-                'completed_at'        => now(),
-            ]);
+            // Reconcile-Delete + Status-Schreiben atomar: kein halb-bereinigter Stand und kein ewig
+            // hängendes 'started', falls zwischen Delete und Log-Update etwas schiefgeht.
+            DB::transaction(function () use ($keptIds, $log, $skus, $added, $durationMs, &$removed, &$totalAssignments) {
+                // Schutz analog zu SyncIntuneDevicesJob: Ist KEINE einzige Lizenzzuweisung erhalten geblieben
+                // (leere Graph-Antwort oder alle User ohne Lizenzen), nichts löschen — whereNotIn('id', [])
+                // würde sonst sämtliche Zuweisungen des Teams entfernen.
+                if (!empty($keptIds)) {
+                    $removed = AssetUserLicense::where('team_id', $this->teamId)
+                        ->whereNotIn('id', $keptIds)
+                        ->count();
+
+                    AssetUserLicense::where('team_id', $this->teamId)
+                        ->whereNotIn('id', $keptIds)
+                        ->delete();
+                }
+
+                $totalAssignments = AssetUserLicense::where('team_id', $this->teamId)->count();
+
+                $log->update([
+                    'status'              => 'success',
+                    'skus_synced'         => count($skus),
+                    'assignments_synced'  => $totalAssignments,
+                    'assignments_added'   => $added,
+                    'assignments_removed' => $removed,
+                    'duration_ms'         => $durationMs,
+                    'completed_at'        => now(),
+                ]);
+            });
 
             // Safety-Net: alle UPNs aus Bestandsdaten nachziehen
             $employeeService->backfillForTeam($this->teamId);
@@ -213,5 +225,25 @@ class SyncLicensesJob implements ShouldQueue
             'duration_ms'   => (int) ($startedAt->diffInMilliseconds(now())),
             'completed_at'  => now(),
         ]);
+    }
+
+    /**
+     * Wird von Laravel bei terminalem Scheitern (Timeout/Kill/uncaught) aufgerufen — der try/catch in
+     * handle() greift dort NICHT. Räumt hängengebliebene 'started'-Logs des Teams auf, damit die UI nicht
+     * ewig „läuft" zeigt. Darf selbst nie werfen.
+     */
+    public function failed(\Throwable $e): void
+    {
+        try {
+            AssetLicenseSyncLog::where('team_id', $this->teamId)
+                ->where('status', 'started')
+                ->update([
+                    'status'        => 'error',
+                    'error_message' => $e->getMessage(),
+                    'completed_at'  => now(),
+                ]);
+        } catch (\Throwable $ignored) {
+            // failed() muss schweigend bleiben
+        }
     }
 }

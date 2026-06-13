@@ -114,6 +114,13 @@ class UpdateCostLineTool implements ToolContract, ToolMetadataContract
                 $line->active = (bool) $arguments['active'];
             }
 
+            // Effektive Währung/Kurs prüfen (nach Anwenden der Argumente): Nicht-EUR ohne positiven
+            // fx_rate ablehnen, sonst bewertet computeMonthlyAmount den Betrag still 1:1 als EUR.
+            $effCurrency = strtoupper(trim((string) $line->currency)) ?: 'EUR';
+            if ($effCurrency !== 'EUR' && (!is_numeric($line->fx_rate) || (float) $line->fx_rate <= 0)) {
+                return ToolResult::error('VALIDATION_ERROR', "Nicht-EUR-Position (currency={$effCurrency}) benötigt einen positiven fx_rate (Umrechnungskurs zu EUR) — sonst würde der Betrag still 1:1 als EUR gewertet.");
+            }
+
             $line->save();
 
             return ToolResult::success([

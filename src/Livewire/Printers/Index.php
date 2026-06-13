@@ -46,7 +46,7 @@ class Index extends Component
 
         // Cost-Lines je Drucker (mit Kostenstelle) → Aufschlüsselung, Summe, KSt-Code.
         // Die KSt liegt an der Cost-Line, NICHT am Asset (raw_data hat keine kostenstelle).
-        $linesByItem = AssetCostLine::active()->where('team_id', $teamId)
+        $linesByItem = AssetCostLine::active()->validOn(now())->where('team_id', $teamId)
             ->whereIn('asset_item_id', $all->pluck('id'))
             ->with('costCenter')
             ->get()
