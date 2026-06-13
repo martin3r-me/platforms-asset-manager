@@ -26,9 +26,69 @@
         </x-ui-page-actionbar>
     </x-slot>
 
-    {{-- LINKS: Nutzer der aufgeklappten Lizenz --}}
+    {{-- LINKS: Filter --}}
     <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Lizenz-Nutzer" icon="heroicon-o-users" width="w-80" :defaultOpen="false">
+        <x-ui-page-sidebar title="Filter" icon="heroicon-o-funnel" width="w-72" :defaultOpen="true">
+            <div class="p-4 space-y-4 bg-[var(--ui-muted-5)]">
+                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Suche</h3>
+                    <div class="px-3 pb-3">
+                        <input type="text" wire:model.live.debounce.300ms="search" placeholder="SKU suchen..."
+                            class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40 focus:outline-none focus:ring-2 focus:ring-violet-500/30" />
+                    </div>
+                </section>
+
+                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Auslastung</h3>
+                    <div class="px-3 pb-3">
+                        <select wire:model.live="filterUsage" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40">
+                            <option value="">Alle</option>
+                            <option value="unused">Ungenutzt (freie Plätze)</option>
+                            <option value="full">Voll / überbucht (≥100%)</option>
+                        </select>
+                    </div>
+                </section>
+
+                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Preis</h3>
+                    <div class="px-3 pb-3">
+                        <select wire:model.live="filterPrice" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40">
+                            <option value="">Alle</option>
+                            <option value="priced">Mit Preis</option>
+                            <option value="unpriced">Ohne Preis</option>
+                        </select>
+                    </div>
+                </section>
+
+                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Anzeige</h3>
+                    <div class="px-3 pb-2 text-[11px]">
+                        <div class="flex items-center justify-between py-1.5">
+                            <span class="text-[var(--ui-muted)]">Pro Seite</span>
+                            <select wire:model.live="perPage" class="px-2 py-1 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40">
+                                <option value="15">15</option>
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                    </div>
+                </section>
+
+                @if($search || $filterUsage || $filterPrice)
+                    <button wire:click="$set('search', ''); $set('filterUsage', ''); $set('filterPrice', '')"
+                            class="w-full px-3 py-2 text-[11px] font-medium text-red-500 bg-red-500/5 border border-red-500/20 rounded-lg hover:bg-red-500/10">
+                        @svg('heroicon-o-x-circle', 'w-3.5 h-3.5 inline -mt-0.5 mr-1')
+                        Filter zurücksetzen
+                    </button>
+                @endif
+            </div>
+        </x-ui-page-sidebar>
+    </x-slot>
+
+    {{-- RECHTS: Nutzer der aufgeklappten Lizenz --}}
+    <x-slot name="activity">
+        <x-ui-page-sidebar title="Lizenz-Nutzer" icon="heroicon-o-users" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
             <div class="p-4 space-y-3 bg-[var(--ui-muted-5)]">
                 @if($selectedSku)
                     <div class="flex items-center justify-between pb-2 border-b border-[var(--ui-border)]/30">
@@ -159,19 +219,6 @@
                 </div>
             </div>
 
-            {{-- Suche --}}
-            <div class="relative max-w-sm">
-                <div class="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                    @svg('heroicon-o-magnifying-glass', 'w-4 h-4 text-gray-400')
-                </div>
-                <input
-                    type="text"
-                    wire:model.live.debounce.300ms="search"
-                    placeholder="SKU suchen..."
-                    class="w-full pl-9 pr-3 py-2 text-sm rounded-lg bg-black/[0.03] dark:bg-white/[0.04] border border-black/10 dark:border-white/10 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/30 transition-all"
-                />
-            </div>
-
             {{-- Tabelle --}}
             <div class="relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm">
                 <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/30 to-transparent"></div>
@@ -180,8 +227,8 @@
                     <div class="flex flex-col items-center justify-center py-16 text-center">
                         @svg('heroicon-o-key', 'w-10 h-10 text-gray-300 dark:text-gray-600 mb-3')
                         <p class="text-sm text-gray-400">
-                            @if($search)
-                                Keine Lizenzen gefunden.
+                            @if($search || $filterUsage || $filterPrice)
+                                Keine Lizenzen für diese Suche/Filter.
                             @else
                                 Noch keine Lizenzen synchronisiert.
                                 @if($canSync)
@@ -277,7 +324,7 @@
                                     <td class="px-5 py-3 text-right">
                                         <button type="button"
                                                 wire:click="selectSku({{ $sku->id }})"
-                                                @click="$store.ui?.mSet('page_sidebar', 'open', true)"
+                                                @click="$store.ui?.mSet('activity', 'open', true)"
                                                 class="inline-flex items-center gap-1 text-xs text-violet-600 dark:text-violet-400 hover:underline">
                                             Nutzer
                                             @svg('heroicon-o-chevron-right', 'w-3 h-3')

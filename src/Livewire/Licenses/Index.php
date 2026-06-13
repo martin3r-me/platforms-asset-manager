@@ -25,13 +25,22 @@ class Index extends Component
     // Inline-Preis-Bearbeitung
     public array $editingPrices = [];
 
-    // Master-Detail: in der linken Sidebar aufgeklappte Lizenz
+    // Master-Detail: rechts aufgeklappte Lizenz (Nutzer)
     public ?int $selectedSkuId = null;
+
+    // Filter (linke Sidebar)
+    public string $filterUsage = '';   // '' | 'unused' | 'full'
+    public string $filterPrice = '';   // '' | 'priced' | 'unpriced'
+    public int    $perPage     = 25;
 
     public function updatingSearch(): void
     {
         $this->resetPage();
     }
+
+    public function updatedFilterUsage(): void { $this->resetPage(); }
+    public function updatedFilterPrice(): void { $this->resetPage(); }
+    public function updatedPerPage(): void { $this->resetPage(); }
 
     public function sortBy(string $field): void
     {
@@ -95,6 +104,18 @@ class Index extends Component
             });
         }
 
+        if ($this->filterUsage === 'unused') {
+            $query->where('available_units', '>', 0);
+        } elseif ($this->filterUsage === 'full') {
+            $query->where('available_units', '<=', 0)->where('purchased_units', '>', 0);
+        }
+
+        if ($this->filterPrice === 'priced') {
+            $query->whereNotNull('unit_price');
+        } elseif ($this->filterPrice === 'unpriced') {
+            $query->whereNull('unit_price');
+        }
+
         $dir = $this->sortDirection === 'desc' ? 'desc' : 'asc';
 
         if ($this->sortField === 'monthly_cost') {
@@ -106,7 +127,7 @@ class Index extends Component
             $query->orderBy($field, $dir);
         }
 
-        $skus = $query->paginate(25);
+        $skus = $query->paginate($this->perPage);
 
         $allSkus          = AssetLicenseSku::where('team_id', $team->id)->get();
         $totalMonthlyCost = $allSkus->sum(fn($s) => $s->monthlyCost());
