@@ -211,7 +211,9 @@ class CostExcelImportService
             $wartung = $this->num($row['F'] ?? null);
             $leasing = $this->num($row['G'] ?? null);
             if ($wartung != 0.0) {
-                $this->upsertLine('druckerwartung', ['cost_center_id' => $ccId, 'asset_item_id' => $item?->id, 'amount' => $wartung, 'label' => "Wartung {$name}"]);
+                // Excel-Druckerwerte werden wie bisher monatlich behandelt (druckerwartung-Default ist quarterly,
+                // Basis der Excel-Spalte aber unbestätigt) → kein stiller 3×-Effekt durch den Default.
+                $this->upsertLine('druckerwartung', ['cost_center_id' => $ccId, 'asset_item_id' => $item?->id, 'amount' => $wartung, 'label' => "Wartung {$name}", 'frequency' => 'monthly']);
                 $count++;
             }
             if ($leasing != 0.0) {
@@ -241,6 +243,7 @@ class CostExcelImportService
                 'cost_center_id'    => $this->bootstrap->resolveCostCenter($this->teamId, $code)?->id,
                 'amount'            => $amount,
                 'label'             => "BPEvent {$code}",
+                'frequency'         => 'monthly', // Spalte G ist bereits Monatsbasis (s. o.), trotz quarterly-Default
                 'gl_contra_account' => $this->str($row['K'] ?? null),
                 'gl_account'        => $this->str($row['L'] ?? null),
                 'debit_credit'      => $this->str($row['M'] ?? null),
@@ -270,6 +273,7 @@ class CostExcelImportService
                 'cost_center_id'      => $this->bootstrap->resolveCostCenter($this->teamId, $code)?->id,
                 'amount'              => $amount,
                 'label'               => $label !== '' ? $label : strtoupper($typeKey),
+                'frequency'           => 'monthly', // Spalte B ist „Kosten mtl." (s. o.), trotz quarterly-Default bei necta
                 'distribution_factor' => $withFactor ? $this->num($row['D'] ?? null) : null,
             ]);
             $count++;
@@ -319,10 +323,16 @@ class CostExcelImportService
         $vendorId = $vendorId ?? $type->vendor_default_id;
 
         $amount = (float) ($attrs['amount'] ?? 0);
+
+        // Frequenz: expliziter Wert vom Aufrufer (Sheets mit Monatsbasis) > frequency_default der Kostenart
+        // > 'monthly'. Behebt die 12×-Überzählung jährlicher Posten (z. B. FirstInVision = yearly). Muss in
+        // den Hash, sonst kollidieren monatlich/jährlich derselben Position.
+        $frequency = $attrs['frequency'] ?? $type->frequency_default ?? 'monthly';
+
         $hash = sha1(implode('|', [
             $this->teamId, $typeKey,
             $attrs['cost_center_id'] ?? '', $attrs['assignee_id'] ?? '', $attrs['asset_item_id'] ?? '',
-            $attrs['label'] ?? '', number_format($amount, 4, '.', ''), 'monthly',
+            $attrs['label'] ?? '', number_format($amount, 4, '.', ''), $frequency,
         ]));
 
         AssetCostLine::updateOrCreate(
@@ -336,7 +346,7 @@ class CostExcelImportService
                 'label'               => $attrs['label'] ?? $type->name,
                 'amount'              => $amount,
                 'currency'            => 'EUR',
-                'frequency'           => 'monthly',
+                'frequency'           => $frequency,
                 'gl_account'          => $attrs['gl_account'] ?? null,
                 'gl_contra_account'   => $attrs['gl_contra_account'] ?? null,
                 'debit_credit'        => $attrs['debit_credit'] ?? null,

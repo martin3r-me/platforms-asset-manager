@@ -35,10 +35,13 @@ class CostBootstrapService
         }
 
         // 3. Kostenarten (mit Vendor-Default-Verknüpfung)
+        // firstOrCreate (NICHT updateOrCreate): legt nur fehlende Kostenarten an. Bestehende bleiben
+        // unangetastet, damit UI-Pflege (Name, frequency_default, aggregation_source …) jeden weiteren
+        // Seed-/Import-Lauf überlebt. Die Konstanten sind ab hier reine Erst-Defaults, nicht die Wahrheit.
         $vendorIds = AssetVendor::where('team_id', $teamId)->pluck('id', 'name');
         $sort = 0;
         foreach (CostBootstrap::COST_TYPES as $type) {
-            AssetCostType::updateOrCreate(
+            AssetCostType::firstOrCreate(
                 ['team_id' => $teamId, 'key' => $type['key']],
                 [
                     'name'               => $type['name'],
