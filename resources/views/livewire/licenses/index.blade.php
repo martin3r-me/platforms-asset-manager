@@ -26,8 +26,68 @@
         </x-ui-page-actionbar>
     </x-slot>
 
-    <x-ui-page-container>
-        <div class="space-y-5">
+    {{-- LINKS: Nutzer der aufgeklappten Lizenz --}}
+    <x-slot name="sidebar">
+        <x-ui-page-sidebar title="Lizenz-Nutzer" icon="heroicon-o-users" width="w-80" :defaultOpen="false">
+            <div class="p-4 space-y-3 bg-[var(--ui-muted-5)]">
+                @if($selectedSku)
+                    <div class="flex items-center justify-between pb-2 border-b border-[var(--ui-border)]/30">
+                        <span class="text-[10px] uppercase tracking-wider text-[var(--ui-muted)]">Auswahl</span>
+                        <button wire:click="clearSku" class="text-[10px] text-[var(--ui-muted)] hover:text-red-500">
+                            @svg('heroicon-o-x-mark', 'w-3 h-3 inline -mt-0.5')
+                            Schließen
+                        </button>
+                    </div>
+
+                    <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm p-3">
+                        <div class="flex items-start gap-2">
+                            @svg('heroicon-o-key', 'w-5 h-5 text-violet-500 flex-shrink-0')
+                            <div class="min-w-0">
+                                <div class="text-sm font-semibold text-[var(--ui-secondary)] truncate">{{ $selectedSku->display_name ?? $selectedSku->sku_part_number }}</div>
+                                <div class="text-[11px] text-[var(--ui-muted)] truncate">{{ $selectedSku->sku_part_number }}</div>
+                            </div>
+                        </div>
+                        @php $pct = $selectedSku->utilizationPercent(); $c = $pct >= 95 ? 'red' : ($pct >= 80 ? 'amber' : 'emerald'); @endphp
+                        <div class="mt-2 flex items-center justify-between text-[11px]">
+                            <span class="text-{{ $c }}-600 dark:text-{{ $c }}-400 font-medium">{{ $pct }}% genutzt</span>
+                            <span class="text-[var(--ui-muted)] tabular-nums">{{ $selectedSku->consumed_units }}/{{ $selectedSku->purchased_units }}</span>
+                        </div>
+                    </section>
+
+                    <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                        <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Nutzer ({{ $selectedSku->consumed_units }})</h3>
+                        @if($assignments->isEmpty())
+                            <div class="px-3 pb-3 text-[11px] text-[var(--ui-muted)]">Keine Lizenzzuweisungen gefunden.</div>
+                        @else
+                            <ul class="divide-y divide-[var(--ui-border)]/30">
+                                @foreach($assignments as $a)
+                                    <li class="px-3 py-2">
+                                        <div class="text-[11px] font-medium text-[var(--ui-secondary)] truncate">{{ $a->display_name ?? '—' }}</div>
+                                        <div class="text-[10px] text-[var(--ui-muted)] truncate">{{ $a->user_principal_name }}</div>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @endif
+                    </section>
+
+                    <a href="{{ route('asset-manager.licenses.show', $selectedSku) }}" wire:navigate
+                       class="block px-3 py-2 text-xs text-center font-medium text-white bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg hover:from-violet-600 hover:to-indigo-700 transition-all">
+                        @svg('heroicon-o-arrow-top-right-on-square', 'w-3.5 h-3.5 inline -mt-0.5')
+                        Vollständige Detailseite
+                    </a>
+                @else
+                    <div class="flex flex-col items-center justify-center py-8 text-center">
+                        @svg('heroicon-o-cursor-arrow-rays', 'w-8 h-8 text-gray-300 mb-3')
+                        <p class="text-[11px] text-[var(--ui-muted)]">Klicke bei einer Lizenz auf „Nutzer", um die Zuweisungen hier zu sehen.</p>
+                    </div>
+                @endif
+            </div>
+        </x-ui-page-sidebar>
+    </x-slot>
+
+    <div class="flex-1 flex flex-col min-h-0 min-w-0">
+        <div class="flex-1 overflow-y-auto p-6">
+            <div class="space-y-5">
 
             {{-- Sync-Feedback --}}
             @if($syncResult)
@@ -63,7 +123,11 @@
                     <div class="text-2xl font-semibold text-gray-900 dark:text-gray-100">
                         {{ $totalMonthlyCost > 0 ? number_format($totalMonthlyCost, 2, ',', '.') . ' €' : '—' }}
                     </div>
-                    <div class="text-xs text-gray-400 mt-0.5">Basierend auf gepflegten Preisen</div>
+                    <div class="text-xs text-gray-400 mt-0.5">
+                        {{ $totalMonthlyCost > 0
+                            ? '≈ ' . number_format($totalMonthlyCost * 12, 2, ',', '.') . ' € / Jahr'
+                            : 'Basierend auf gepflegten Preisen' }}
+                    </div>
                 </div>
 
                 <div class="relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-4">
@@ -144,11 +208,12 @@
                                 </th>
                                 <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Preis/Monat</th>
                                 <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">
-                                    <button wire:click="sortBy('available_units')" class="flex items-center gap-1 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-                                        Gesamtkosten
-                                        @if($sortField === 'available_units') @svg($sortDirection === 'asc' ? 'heroicon-o-chevron-up' : 'heroicon-o-chevron-down', 'w-3 h-3') @endif
+                                    <button wire:click="sortBy('monthly_cost')" class="flex items-center gap-1 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                                        Kosten/Monat
+                                        @if($sortField === 'monthly_cost') @svg($sortDirection === 'asc' ? 'heroicon-o-chevron-up' : 'heroicon-o-chevron-down', 'w-3 h-3') @endif
                                     </button>
                                 </th>
+                                <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Kosten/Jahr</th>
                                 <th class="px-5 py-3"></th>
                             </tr>
                         </thead>
@@ -158,7 +223,7 @@
                                     $pct   = $sku->utilizationPercent();
                                     $color = $pct >= 95 ? 'red' : ($pct >= 80 ? 'amber' : 'emerald');
                                 @endphp
-                                <tr class="hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors">
+                                <tr wire:key="sku-{{ $sku->id }}" class="transition-colors {{ $selectedSkuId === $sku->id ? 'bg-violet-500/10' : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]' }}">
                                     <td class="px-5 py-3">
                                         <div class="font-medium text-gray-900 dark:text-gray-100">
                                             {{ $sku->display_name ?? $sku->sku_part_number }}
@@ -204,12 +269,19 @@
                                             {{ $sku->monthlyCost() > 0 ? '€ ' . number_format($sku->monthlyCost(), 2, ',', '.') : '—' }}
                                         </span>
                                     </td>
+                                    <td class="px-5 py-3">
+                                        <span class="text-sm text-gray-500 dark:text-gray-400">
+                                            {{ $sku->monthlyCost() > 0 ? '€ ' . number_format($sku->annualCost(), 2, ',', '.') : '—' }}
+                                        </span>
+                                    </td>
                                     <td class="px-5 py-3 text-right">
-                                        <a href="{{ route('asset-manager.licenses.show', $sku) }}" wire:navigate
-                                           class="inline-flex items-center gap-1 text-xs text-violet-600 dark:text-violet-400 hover:underline">
+                                        <button type="button"
+                                                wire:click="selectSku({{ $sku->id }})"
+                                                @click="$store.ui?.mSet('page_sidebar', 'open', true)"
+                                                class="inline-flex items-center gap-1 text-xs text-violet-600 dark:text-violet-400 hover:underline">
                                             Nutzer
                                             @svg('heroicon-o-chevron-right', 'w-3 h-3')
-                                        </a>
+                                        </button>
                                     </td>
                                 </tr>
                             @endforeach
@@ -226,6 +298,7 @@
 
             @endif {{-- Ende: Connector konfiguriert --}}
 
+            </div>
         </div>
-    </x-ui-page-container>
+    </div>
 </x-ui-page>

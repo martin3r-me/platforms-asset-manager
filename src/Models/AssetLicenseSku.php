@@ -40,6 +40,11 @@ class AssetLicenseSku extends Model
         return (float) $this->unit_price * $this->consumed_units;
     }
 
+    public function annualCost(): float
+    {
+        return $this->monthlyCost() * 12;
+    }
+
     public function utilizationPercent(): int
     {
         if ($this->purchased_units === 0) {

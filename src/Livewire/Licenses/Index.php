@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Jobs\SyncLicensesJob;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetLicenseSku;
+use Platform\AssetManager\Models\AssetUserLicense;
 use Platform\AssetManager\Models\AssetLicenseSyncLog;
 use Platform\AssetManager\Models\AssetConnectorConfig;
 
@@ -23,6 +24,9 @@ class Index extends Component
 
     // Inline-Preis-Bearbeitung
     public array $editingPrices = [];
+
+    // Master-Detail: in der linken Sidebar aufgeklappte Lizenz
+    public ?int $selectedSkuId = null;
 
     public function updatingSearch(): void
     {
@@ -63,6 +67,22 @@ class Index extends Component
         unset($this->editingPrices[$skuId]);
     }
 
+    public function selectSku(int $skuId): void
+    {
+        $team = Auth::user()->currentTeam;
+
+        $this->selectedSkuId = AssetLicenseSku::where('team_id', $team->id)
+            ->whereKey($skuId)
+            ->exists()
+            ? $skuId
+            : null;
+    }
+
+    public function clearSku(): void
+    {
+        $this->selectedSkuId = null;
+    }
+
     public function render()
     {
         $team  = Auth::user()->currentTeam;
@@ -75,9 +95,18 @@ class Index extends Component
             });
         }
 
-        $skus = $query
-            ->orderBy($this->sortField, $this->sortDirection)
-            ->paginate(25);
+        $dir = $this->sortDirection === 'desc' ? 'desc' : 'asc';
+
+        if ($this->sortField === 'monthly_cost') {
+            $query->orderByRaw('COALESCE(unit_price, 0) * consumed_units ' . $dir);
+        } else {
+            $field = in_array($this->sortField, ['display_name', 'consumed_units'], true)
+                ? $this->sortField
+                : 'display_name';
+            $query->orderBy($field, $dir);
+        }
+
+        $skus = $query->paginate(25);
 
         $allSkus          = AssetLicenseSku::where('team_id', $team->id)->get();
         $totalMonthlyCost = $allSkus->sum(fn($s) => $s->monthlyCost());
@@ -90,6 +119,25 @@ class Index extends Component
         $config   = AssetConnectorConfig::where('team_id', $team->id)->first();
         $canSync  = Gate::allows('manageConnector', AssetDevice::class);
 
+        // Aufgeklappte Lizenz + ihre Nutzer-Zuweisungen (für die linke Sidebar)
+        $selectedSku = null;
+        $assignments = collect();
+
+        if ($this->selectedSkuId) {
+            $selectedSku = AssetLicenseSku::where('team_id', $team->id)
+                ->find($this->selectedSkuId);
+
+            if ($selectedSku) {
+                $assignments = AssetUserLicense::where('team_id', $team->id)
+                    ->where('sku_id', $selectedSku->sku_id)
+                    ->orderBy('display_name')
+                    ->limit(200)
+                    ->get();
+            } else {
+                $this->selectedSkuId = null;
+            }
+        }
+
         return view('asset-manager::livewire.licenses.index', [
             'skus'             => $skus,
             'totalMonthlyCost' => $totalMonthlyCost,
@@ -97,6 +145,8 @@ class Index extends Component
             'lastLog'          => $lastLog,
             'canSync'          => $canSync,
             'config'           => $config,
+            'selectedSku'      => $selectedSku,
+            'assignments'      => $assignments,
         ])->layout('platform::layouts.app');
     }
 }
