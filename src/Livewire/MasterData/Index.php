@@ -95,7 +95,7 @@ class Index extends Component
     {
         $this->resetValidation();
         $model = $this->findInActiveArea($id);
-        $this->form       = $this->hydrateForm($model);
+        $this->form       = $this->formFromModel($model);
         $this->selectedId = $id;
         $this->creating   = false;
         $this->dispatch('open-activity');
@@ -137,7 +137,7 @@ class Index extends Component
         };
     }
 
-    protected function hydrateForm(Model $m): array
+    protected function formFromModel(Model $m): array
     {
         return match ($this->active) {
             'companies'    => ['name' => $m->name, 'sort_order' => $m->sort_order],
