@@ -48,12 +48,23 @@
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="border-b border-black/5 text-xs uppercase tracking-wider text-gray-400">
-                            <th class="text-left px-4 py-3">Kostenart</th>
+                            <th class="px-2 py-3 text-center w-12">
+                                <button wire:click="sortBy('sort_order')" title="Manuelle Reihenfolge" class="hover:text-violet-600 {{ $manualOrder ? 'text-violet-500' : '' }}">↕</button>
+                            </th>
+                            <th class="text-left px-4 py-3">
+                                <button wire:click="sortBy('name')" class="inline-flex items-center gap-1 hover:text-violet-600">Kostenart @if($sortField==='name')<span class="text-violet-500">{{ $sortDir==='asc' ? '▲' : '▼' }}</span>@endif</button>
+                            </th>
                             <th class="text-left px-4 py-3">Kreditor (Standard)</th>
                             <th class="text-left px-4 py-3">System</th>
-                            <th class="text-left px-4 py-3">Frequenz</th>
-                            <th class="text-left px-4 py-3">Quelle</th>
-                            <th class="text-right px-4 py-3">Pos.</th>
+                            <th class="text-left px-4 py-3">
+                                <button wire:click="sortBy('frequency_default')" class="inline-flex items-center gap-1 hover:text-violet-600">Frequenz @if($sortField==='frequency_default')<span class="text-violet-500">{{ $sortDir==='asc' ? '▲' : '▼' }}</span>@endif</button>
+                            </th>
+                            <th class="text-left px-4 py-3">
+                                <button wire:click="sortBy('aggregation_source')" class="inline-flex items-center gap-1 hover:text-violet-600">Quelle @if($sortField==='aggregation_source')<span class="text-violet-500">{{ $sortDir==='asc' ? '▲' : '▼' }}</span>@endif</button>
+                            </th>
+                            <th class="text-right px-4 py-3">
+                                <button wire:click="sortBy('cost_lines_count')" class="inline-flex items-center gap-1 hover:text-violet-600">Pos. @if($sortField==='cost_lines_count')<span class="text-violet-500">{{ $sortDir==='asc' ? '▲' : '▼' }}</span>@endif</button>
+                            </th>
                             <th class="px-4 py-3"></th>
                         </tr>
                     </thead>
@@ -61,6 +72,7 @@
                         @foreach($types as $t)
                             <tr class="hover:bg-black/[0.02]">
                                 @if($editId === $t->id)
+                                    <td class="px-2 py-2"></td>
                                     <td class="px-4 py-2"><input type="text" wire:model="eName" class="px-2 py-1 text-sm rounded border border-[var(--ui-border)] bg-white w-full"></td>
                                     <td class="px-4 py-2">
                                         <select wire:model="eVendor" class="px-2 py-1 text-xs rounded border border-[var(--ui-border)] bg-white">
@@ -94,6 +106,14 @@
                                         <button wire:click="$set('editId', null)" class="text-xs text-gray-400 ml-1">Abbr.</button>
                                     </td>
                                 @else
+                                    <td class="px-2 py-2.5 text-center whitespace-nowrap">
+                                        @if($manualOrder)
+                                            <button wire:click="moveUp({{ $t->id }})" class="text-gray-300 hover:text-violet-600">@svg('heroicon-o-chevron-up', 'w-3.5 h-3.5 inline')</button>
+                                            <button wire:click="moveDown({{ $t->id }})" class="text-gray-300 hover:text-violet-600">@svg('heroicon-o-chevron-down', 'w-3.5 h-3.5 inline')</button>
+                                        @else
+                                            <span class="text-gray-200">–</span>
+                                        @endif
+                                    </td>
                                     <td class="px-4 py-2.5 font-medium text-gray-800">{{ $t->name }} <span class="text-[10px] text-gray-300 font-mono">{{ $t->key }}</span></td>
                                     <td class="px-4 py-2.5 text-xs text-gray-500">{{ $t->vendorDefault?->name ?? '—' }}</td>
                                     <td class="px-4 py-2.5 text-xs text-gray-500">{{ $t->system_default ?? '—' }}</td>
@@ -102,8 +122,11 @@
                                         <span class="inline-block px-2 py-0.5 text-[10px] rounded-full {{ $t->aggregation_source === 'cost_line' ? 'bg-violet-500/10 text-violet-600' : 'bg-gray-500/10 text-gray-500' }}">{{ $sourceLabels[$t->aggregation_source] ?? $t->aggregation_source }}</span>
                                     </td>
                                     <td class="px-4 py-2.5 text-right text-xs text-gray-400">{{ $t->cost_lines_count }}</td>
-                                    <td class="px-4 py-2.5 text-right">
+                                    <td class="px-4 py-2.5 text-right whitespace-nowrap">
                                         <button wire:click="edit({{ $t->id }})" class="text-xs text-gray-400 hover:text-violet-600">@svg('heroicon-o-pencil-square', 'w-4 h-4 inline')</button>
+                                        <button wire:click="delete({{ $t->id }})"
+                                                @if($t->cost_lines_count == 0) wire:confirm="Kostenart {{ $t->name }} wirklich löschen?" @endif
+                                                class="text-xs text-gray-400 hover:text-red-600 ml-2">@svg('heroicon-o-trash', 'w-4 h-4 inline')</button>
                                     </td>
                                 @endif
                             </tr>

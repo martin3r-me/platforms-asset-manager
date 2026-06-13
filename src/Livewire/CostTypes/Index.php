@@ -23,11 +23,29 @@ class Index extends Component
     public string $newFrequency = 'monthly';
     public string $newAggSource = 'cost_line';
 
+    // Ansicht-Sortierung
+    public string $sortField = 'sort_order';
+    public string $sortDir   = 'asc';
+
     public ?string $flash       = null;
+
+    /** Whitelist erlaubter Sortierspalten (Schutz vor beliebigem orderBy). */
+    protected const SORTABLE = ['sort_order', 'name', 'frequency_default', 'aggregation_source', 'cost_lines_count'];
 
     protected function teamId(): int
     {
         return Auth::user()->currentTeam->id;
+    }
+
+    public function sortBy(string $field): void
+    {
+        if (!in_array($field, self::SORTABLE, true)) return;
+        if ($this->sortField === $field) {
+            $this->sortDir = $this->sortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+            $this->sortField = $field;
+            $this->sortDir   = 'asc';
+        }
     }
 
     public function create(): void
@@ -84,6 +102,50 @@ class Index extends Component
         $this->flash  = 'Kostenart gespeichert.';
     }
 
+    /** Löschen nur, wenn keine Positionen dranhängen — cost_type_id ist cascadeOnDelete (sonst stiller Datenverlust). */
+    public function delete(int $id): void
+    {
+        $t = AssetCostType::where('team_id', $this->teamId())->withCount('costLines')->findOrFail($id);
+        if ($t->cost_lines_count > 0) {
+            $this->flash = "Kostenart {$t->name} hat {$t->cost_lines_count} Position(en) — erst dort umbuchen oder löschen, dann ist die Kostenart löschbar.";
+            return;
+        }
+        $name = $t->name;
+        $t->delete();
+        if ($this->editId === $id) $this->editId = null;
+        $this->flash = "Kostenart {$name} gelöscht.";
+    }
+
+    public function moveUp(int $id): void
+    {
+        $this->move($id, -1);
+    }
+
+    public function moveDown(int $id): void
+    {
+        $this->move($id, +1);
+    }
+
+    /** Verschiebt eine Kostenart in der manuellen Reihenfolge und renummeriert sort_order sauber (10,20,30…). */
+    protected function move(int $id, int $dir): void
+    {
+        $teamId = $this->teamId();
+        $ids = AssetCostType::where('team_id', $teamId)
+            ->orderBy('sort_order')->orderBy('id')
+            ->pluck('id')->all();
+
+        $pos = array_search($id, $ids, true);
+        if ($pos === false) return;
+        $new = $pos + $dir;
+        if ($new < 0 || $new >= count($ids)) return;
+
+        [$ids[$pos], $ids[$new]] = [$ids[$new], $ids[$pos]];
+        foreach ($ids as $i => $tid) {
+            AssetCostType::where('id', $tid)->update(['sort_order' => ($i + 1) * 10]);
+        }
+        $this->flash = 'Reihenfolge aktualisiert.';
+    }
+
     /** Eindeutigen Slug-Key je Team aus dem Namen ableiten (key ist intern, NOT NULL). */
     protected function uniqueKey(int $teamId, string $name): string
     {
@@ -100,9 +162,16 @@ class Index extends Component
     {
         $teamId = $this->teamId();
 
+        $types = AssetCostType::where('team_id', $teamId)
+            ->withCount('costLines')
+            ->orderBy($this->sortField, $this->sortDir)
+            ->orderBy('id')
+            ->get();
+
         return view('asset-manager::livewire.cost-types.index', [
-            'types'   => AssetCostType::where('team_id', $teamId)->withCount('costLines')->orderBy('sort_order')->get(),
-            'vendors' => AssetVendor::where('team_id', $teamId)->orderBy('name')->get(),
+            'types'       => $types,
+            'vendors'     => AssetVendor::where('team_id', $teamId)->orderBy('name')->get(),
+            'manualOrder' => $this->sortField === 'sort_order' && $this->sortDir === 'asc',
         ])->layout('platform::layouts.app');
     }
 }
