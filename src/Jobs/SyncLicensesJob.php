@@ -155,13 +155,21 @@ class SyncLicensesJob implements ShouldQueue
                 }
             }
 
-            $removed = AssetUserLicense::where('team_id', $this->teamId)
-                ->whereNotIn('id', $keptIds)
-                ->count();
+            // Schutz analog zu SyncIntuneDevicesJob: Ist KEINE einzige Lizenzzuweisung erhalten geblieben
+            // (leere Graph-Antwort oder alle User ohne Lizenzen), nichts löschen — whereNotIn('id', [])
+            // würde sonst sämtliche Zuweisungen des Teams entfernen. $users === null ist oben als Fehler
+            // abgefangen; ein leeres $keptIds wird hier konservativ als „nichts entfernen" behandelt.
+            if (empty($keptIds)) {
+                $removed = 0;
+            } else {
+                $removed = AssetUserLicense::where('team_id', $this->teamId)
+                    ->whereNotIn('id', $keptIds)
+                    ->count();
 
-            AssetUserLicense::where('team_id', $this->teamId)
-                ->whereNotIn('id', $keptIds)
-                ->delete();
+                AssetUserLicense::where('team_id', $this->teamId)
+                    ->whereNotIn('id', $keptIds)
+                    ->delete();
+            }
 
             $totalAssignments = AssetUserLicense::where('team_id', $this->teamId)->count();
             $durationMs       = (int) ($startedAt->diffInMilliseconds(now()));

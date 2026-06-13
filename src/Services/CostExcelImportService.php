@@ -34,6 +34,9 @@ class CostExcelImportService
 
     protected array $stats = [];
 
+    /** import_hash jeder in DIESEM Lauf geschriebenen (angelegten/aktualisierten) Cost-Line — Basis des Prune. */
+    protected array $writtenHashes = [];
+
     /** Herkunft der aktuell verarbeiteten Zeile — wird in raw_data der Cost-Line geschrieben. */
     protected ?string $sheetLabel = null;
     protected ?int    $sheetRow   = null;
@@ -47,10 +50,11 @@ class CostExcelImportService
      */
     public function import(int $teamId, string $path, string $batchId = 'excel-bootstrap', bool $dryRun = false): array
     {
-        $this->teamId  = $teamId;
-        $this->batchId = $batchId;
-        $this->dryRun  = $dryRun;
-        $this->stats   = [];
+        $this->teamId        = $teamId;
+        $this->batchId       = $batchId;
+        $this->dryRun        = $dryRun;
+        $this->stats         = [];
+        $this->writtenHashes = [];
 
         // Stammdaten sicherstellen — der BROICH-Excel-Import braucht das BROICH-Set (feste
         // Kostenart-Keys), sonst würden Positionen mit unbekanntem Key übersprungen.
@@ -76,6 +80,10 @@ class CostExcelImportService
             // bereits korrekt den Mitarbeitern zugeordnet. Ihre Kosten stecken in der Übersicht (lap_dock).
             $this->importSeatSheet($this->findSheet($sheets, ['chatgpt']), 'chatgpt', 'E'); // Kosten in Euro
             $this->importSeatSheet($this->findSheet($sheets, ['canva']), 'canva', 'D');
+
+            // Idempotenz: verwaiste Import-Zeilen (z. B. geänderter Betrag → neuer Hash → die alte Zeile
+            // ist jetzt verwaist) innerhalb DERSELBEN Transaktion entfernen, bevor wir committen/rollen.
+            $this->pruneStaleLines();
 
             if ($this->dryRun) {
                 DB::rollBack();
@@ -336,32 +344,77 @@ class CostExcelImportService
             $attrs['label'] ?? '', number_format($amount, 4, '.', ''), $frequency,
         ]));
 
-        AssetCostLine::updateOrCreate(
-            ['team_id' => $this->teamId, 'import_hash' => $hash],
-            [
-                'cost_type_id'        => $type->id,
-                'vendor_id'           => $vendorId,
-                'cost_center_id'      => $attrs['cost_center_id'] ?? null,
-                'assignee_id'         => $attrs['assignee_id'] ?? null,
-                'asset_item_id'       => $attrs['asset_item_id'] ?? null,
-                'label'               => $attrs['label'] ?? $type->name,
-                'amount'              => $amount,
-                'currency'            => 'EUR',
-                'frequency'           => $frequency,
-                'gl_account'          => $attrs['gl_account'] ?? null,
-                'gl_contra_account'   => $attrs['gl_contra_account'] ?? null,
-                'debit_credit'        => $attrs['debit_credit'] ?? null,
-                'accounting_system'   => $type->system_default,
-                'distribution_factor' => $attrs['distribution_factor'] ?? null,
-                'source'              => 'excel_import',
-                'active'              => true,
-                'import_batch_id'     => $this->batchId,
-                'raw_data'            => array_filter([
-                    'sheet' => $this->sheetLabel,
-                    'row'   => $this->sheetRow,
-                ], fn($v) => $v !== null) ?: null,
-            ]
-        );
+        $values = [
+            'cost_type_id'        => $type->id,
+            'vendor_id'           => $vendorId,
+            'cost_center_id'      => $attrs['cost_center_id'] ?? null,
+            'assignee_id'         => $attrs['assignee_id'] ?? null,
+            'asset_item_id'       => $attrs['asset_item_id'] ?? null,
+            'label'               => $attrs['label'] ?? $type->name,
+            'amount'              => $amount,
+            'currency'            => 'EUR',
+            'frequency'           => $frequency,
+            'gl_account'          => $attrs['gl_account'] ?? null,
+            'gl_contra_account'   => $attrs['gl_contra_account'] ?? null,
+            'debit_credit'        => $attrs['debit_credit'] ?? null,
+            'accounting_system'   => $type->system_default,
+            'distribution_factor' => $attrs['distribution_factor'] ?? null,
+            'source'              => 'excel_import',
+            'active'              => true,
+            'import_batch_id'     => $this->batchId,
+            'raw_data'            => array_filter([
+                'sheet' => $this->sheetLabel,
+                'row'   => $this->sheetRow,
+            ], fn($v) => $v !== null) ?: null,
+        ];
+
+        // Bestehende Zeile inkl. soft-deleted suchen.
+        // Policy (restore-or-refuse → refuse): Eine manuell im UI gelöschte Import-Zeile wird beim
+        // Re-Import NICHT wiederbelebt — die bewusste Löschung gewinnt. Ihr Hash landet NICHT in
+        // writtenHashes, deshalb räumt pruneStaleLines() die soft-gelöschte Zeile anschließend hart
+        // weg. Soll sie zurückkommen, vor dem Re-Import restoren (dann greift der update-Zweig).
+        $existing = AssetCostLine::withTrashed()
+            ->where('team_id', $this->teamId)
+            ->where('import_hash', $hash)
+            ->first();
+
+        if ($existing && $existing->trashed()) {
+            return;
+        }
+
+        if ($existing) {
+            $existing->update($values);
+        } else {
+            AssetCostLine::create(array_merge($values, [
+                'team_id'     => $this->teamId,
+                'import_hash' => $hash,
+            ]));
+        }
+
+        $this->writtenHashes[] = $hash;
+    }
+
+    /**
+     * Entfernt alle Import-Zeilen (source='excel_import') des Teams, deren Hash in DIESEM Lauf nicht
+     * geschrieben wurde — macht den Re-Import idempotent: eine geänderte Betrags-/Frequenz-Position
+     * erzeugt einen neuen Hash, die alte (jetzt verwaiste) Zeile wird hier endgültig entfernt statt als
+     * aktive Dublette stehen zu bleiben (kein 84,90 statt 45,00). withTrashed(): auch bereits manuell
+     * soft-gelöschte Import-Zwillinge werden hart bereinigt. Läuft INNERHALB der Import-Transaktion,
+     * ein Dry-Run rollt das also mit zurück.
+     */
+    protected function pruneStaleLines(): void
+    {
+        // Schutz: Hat dieser Lauf KEINE einzige Zeile geschrieben (leere/falsche Datei), nichts löschen —
+        // sonst würde whereNotIn('import_hash', []) sämtliche Import-Zeilen des Teams entfernen.
+        if (empty($this->writtenHashes)) {
+            return;
+        }
+
+        AssetCostLine::withTrashed()
+            ->where('team_id', $this->teamId)
+            ->where('source', 'excel_import')
+            ->whereNotIn('import_hash', array_values(array_unique($this->writtenHashes)))
+            ->forceDelete();
     }
 
     protected function upsertItem(int $categoryId, string $name, array $attrs = []): ?AssetItem

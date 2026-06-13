@@ -107,13 +107,21 @@ class SyncIntuneDevicesJob implements ShouldQueue
                 }
             }
 
-            $removed = AssetDevice::where('team_id', $this->teamId)
-                ->whereNotIn('intune_id', $intuneIds)
-                ->count();
+            // Schutz: Eine leere — aber erfolgreiche (HTTP 200, value=[]) — Graph-Antwort darf NIE die
+            // ganze Flotte löschen. $devices === null ist oben bereits als Fehler abgefangen; ein leeres
+            // Array ist syntaktisch valide, würde aber whereNotIn('intune_id', []) zu „alle Zeilen"
+            // machen → Totalverlust beim ersten Tenant-Glitch. Dann nichts entfernen (removed=0).
+            if (empty($intuneIds)) {
+                $removed = 0;
+            } else {
+                $removed = AssetDevice::where('team_id', $this->teamId)
+                    ->whereNotIn('intune_id', $intuneIds)
+                    ->count();
 
-            AssetDevice::where('team_id', $this->teamId)
-                ->whereNotIn('intune_id', $intuneIds)
-                ->delete();
+                AssetDevice::where('team_id', $this->teamId)
+                    ->whereNotIn('intune_id', $intuneIds)
+                    ->delete();
+            }
 
             $durationMs = (int) ($startedAt->diffInMilliseconds(now()));
 
