@@ -141,6 +141,11 @@ return [
             'group' => 'Einstellungen',
             'items' => [
                 [
+                    'label' => 'Gesellschaften',
+                    'route' => 'asset-manager.companies.index',
+                    'icon'  => 'heroicon-o-building-office-2',
+                ],
+                [
                     'label' => 'Kostenstellen',
                     'route' => 'asset-manager.cost-centers.index',
                     'icon'  => 'heroicon-o-clipboard-document-list',
