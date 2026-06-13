@@ -18,44 +18,85 @@
         </x-ui-page-actionbar>
     </x-slot>
 
-    <div class="flex-1 flex flex-col min-h-0 min-w-0">
-        <div class="flex-1 overflow-y-auto p-6 space-y-4">
+    {{-- LINKS: Filter --}}
+    <x-slot name="sidebar">
+        <x-ui-page-sidebar title="Filter" icon="heroicon-o-funnel" width="w-72" :defaultOpen="true">
+            <div class="p-4 space-y-4 bg-[var(--ui-muted-5)]">
+                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Suche</h3>
+                    <div class="px-3 pb-3">
+                        <input type="text" wire:model.live.debounce.300ms="search" placeholder="Bezeichnung…"
+                               class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40 focus:outline-none focus:ring-2 focus:ring-violet-500/30" />
+                    </div>
+                </section>
 
-            @if($flash)
-                <div class="px-4 py-2 text-xs font-medium text-emerald-700 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">{{ $flash }}</div>
-            @endif
+                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Kostenart</h3>
+                    <div class="px-3 pb-3">
+                        <select wire:model.live="filterType" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40">
+                            <option value="">Alle</option>
+                            @foreach($costTypes as $t)<option value="{{ $t->id }}">{{ $t->name }}</option>@endforeach
+                        </select>
+                    </div>
+                </section>
 
-            {{-- Filter --}}
-            <div class="flex flex-wrap items-center gap-2">
-                <input type="text" wire:model.live.debounce.300ms="search" placeholder="Suche Bezeichnung…"
-                       class="px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white min-w-[200px]">
-                <select wire:model.live="filterType" class="px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
-                    <option value="">Alle Kostenarten</option>
-                    @foreach($costTypes as $t)<option value="{{ $t->id }}">{{ $t->name }}</option>@endforeach
-                </select>
-                <select wire:model.live="filterCenter" class="px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
-                    <option value="">Alle Kostenstellen</option>
-                    @foreach($costCenters as $c)<option value="{{ $c->id }}">{{ $c->code }}</option>@endforeach
-                </select>
-                <select wire:model.live="filterVendor" class="px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
-                    <option value="">Alle Kreditoren</option>
-                    @foreach($vendors as $v)<option value="{{ $v->id }}">{{ $v->name }}</option>@endforeach
-                </select>
-                <select wire:model.live="filterActive" class="px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
-                    <option value="">Alle</option>
-                    <option value="1">Aktiv</option>
-                    <option value="0">Inaktiv</option>
-                </select>
-                <span class="ml-auto text-sm text-[var(--ui-secondary)]">
-                    Summe (gefiltert): <strong class="text-violet-700 tabular-nums">{{ number_format($monthlySum, 2, ',', '.') }} € / Monat</strong>
-                </span>
+                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Kostenstelle</h3>
+                    <div class="px-3 pb-3">
+                        <select wire:model.live="filterCenter" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40">
+                            <option value="">Alle</option>
+                            @foreach($costCenters as $c)<option value="{{ $c->id }}">{{ $c->code }}</option>@endforeach
+                        </select>
+                    </div>
+                </section>
+
+                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Kreditor</h3>
+                    <div class="px-3 pb-3">
+                        <select wire:model.live="filterVendor" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40">
+                            <option value="">Alle</option>
+                            @foreach($vendors as $v)<option value="{{ $v->id }}">{{ $v->name }}</option>@endforeach
+                        </select>
+                    </div>
+                </section>
+
+                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Status</h3>
+                    <div class="px-3 pb-3">
+                        <select wire:model.live="filterActive" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40">
+                            <option value="">Alle</option>
+                            <option value="1">Aktiv</option>
+                            <option value="0">Inaktiv</option>
+                        </select>
+                    </div>
+                </section>
+
+                @if($search || $filterType || $filterCenter || $filterVendor || $filterActive !== '')
+                    <button wire:click="resetFilters"
+                            class="w-full px-3 py-2 text-[11px] font-medium text-red-500 bg-red-500/5 border border-red-500/20 rounded-lg hover:bg-red-500/10">
+                        @svg('heroicon-o-x-circle', 'w-3.5 h-3.5 inline -mt-0.5 mr-1')
+                        Filter zurücksetzen
+                    </button>
+                @endif
             </div>
+        </x-ui-page-sidebar>
+    </x-slot>
 
-            {{-- Editor --}}
-            @if($showEditor)
-                <div class="rounded-xl bg-white border border-violet-500/30 shadow-sm p-5 space-y-4">
-                    <h3 class="text-sm font-semibold text-[var(--ui-secondary)]">{{ $editId ? 'Position bearbeiten' : 'Neue Kostenposition' }}</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+    {{-- RECHTS: Anlegen / Bearbeiten --}}
+    <x-slot name="activity">
+        <x-ui-page-sidebar :title="$editId ? 'Position bearbeiten' : 'Neue Position'" icon="heroicon-o-pencil-square"
+                           width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
+            <div class="p-4 space-y-3 bg-[var(--ui-muted-5)]">
+                @if($showEditor)
+                    <div class="flex items-center justify-between pb-2 border-b border-[var(--ui-border)]/30">
+                        <span class="text-[10px] uppercase tracking-wider text-[var(--ui-muted)]">{{ $editId ? 'Bearbeiten' : 'Neu anlegen' }}</span>
+                        <button wire:click="cancelEdit" class="text-[10px] text-[var(--ui-muted)] hover:text-red-500">
+                            @svg('heroicon-o-x-mark', 'w-3 h-3 inline -mt-0.5')
+                            Schließen
+                        </button>
+                    </div>
+
+                    <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm p-3 space-y-3">
                         <div>
                             <label class="block text-xs text-gray-500 mb-1">Kostenart *</label>
                             <select wire:model="fCostType" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
@@ -63,6 +104,11 @@
                                 @foreach($costTypes as $t)<option value="{{ $t->id }}">{{ $t->name }}</option>@endforeach
                             </select>
                             @error('fCostType')<span class="text-[10px] text-red-500">{{ $message }}</span>@enderror
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Bezeichnung *</label>
+                            <input type="text" wire:model="fLabel" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
+                            @error('fLabel')<span class="text-[10px] text-red-500">{{ $message }}</span>@enderror
                         </div>
                         <div>
                             <label class="block text-xs text-gray-500 mb-1">Kostenstelle (Code)</label>
@@ -76,38 +122,70 @@
                                 @foreach($vendors as $v)<option value="{{ $v->id }}">{{ $v->name }}</option>@endforeach
                             </select>
                         </div>
-                        <div class="md:col-span-2">
-                            <label class="block text-xs text-gray-500 mb-1">Bezeichnung *</label>
-                            <input type="text" wire:model="fLabel" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
-                            @error('fLabel')<span class="text-[10px] text-red-500">{{ $message }}</span>@enderror
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">Betrag (€) *</label>
+                                <input type="number" step="0.01" wire:model="fAmount" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
+                                @error('fAmount')<span class="text-[10px] text-red-500">{{ $message }}</span>@enderror
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">Frequenz</label>
+                                <select wire:model="fFrequency" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
+                                    <option value="monthly">Monatlich</option>
+                                    <option value="quarterly">Quartal</option>
+                                    <option value="yearly">Jährlich</option>
+                                    <option value="once">Einmalig</option>
+                                </select>
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-xs text-gray-500 mb-1">Betrag (€) *</label>
-                            <input type="number" step="0.01" wire:model="fAmount" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
-                            @error('fAmount')<span class="text-[10px] text-red-500">{{ $message }}</span>@enderror
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-500 mb-1">Frequenz</label>
-                            <select wire:model="fFrequency" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
-                                <option value="monthly">Monatlich</option>
-                                <option value="quarterly">Quartal</option>
-                                <option value="yearly">Jährlich</option>
-                                <option value="once">Einmalig</option>
-                            </select>
-                        </div>
-                        <label class="flex items-center gap-2 text-sm text-gray-600 mt-5">
+                        <label class="flex items-center gap-2 text-sm text-gray-600">
                             <input type="checkbox" wire:model="fActive" class="rounded"> Aktiv
                         </label>
+
+                        <div class="flex items-center gap-2 pt-3 mt-1 border-t border-[var(--ui-border)]/30">
+                            <button wire:click="save" class="flex-1 px-3 py-2 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">
+                                {{ $editId ? 'Speichern' : 'Anlegen' }}
+                            </button>
+                            <button wire:click="cancelEdit" class="px-3 py-2 text-xs font-medium text-gray-500 bg-black/[0.04] rounded-lg hover:bg-black/[0.07]">Abbrechen</button>
+                            @if($editId)
+                                <button wire:click="delete({{ $editId }})" wire:confirm="Position löschen?"
+                                        class="px-3 py-2 text-xs font-medium text-red-500 bg-red-500/5 border border-red-500/20 rounded-lg hover:bg-red-500/10" title="Löschen">
+                                    @svg('heroicon-o-trash', 'w-3.5 h-3.5')
+                                </button>
+                            @endif
+                        </div>
+                    </section>
+                @else
+                    <div class="flex flex-col items-center justify-center py-10 text-center">
+                        @svg('heroicon-o-cursor-arrow-rays', 'w-8 h-8 text-gray-300 mb-3')
+                        <p class="text-[11px] text-[var(--ui-muted)]">Eine Zeile anklicken zum Bearbeiten — oder oben „Neue Position“.</p>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <button wire:click="save" class="px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">Speichern</button>
-                        <button wire:click="$set('showEditor', false)" class="px-3 py-1.5 text-xs font-medium text-gray-600 bg-black/[0.04] rounded-lg hover:bg-black/[0.07]">Abbrechen</button>
-                    </div>
-                </div>
+                @endif
+            </div>
+        </x-ui-page-sidebar>
+    </x-slot>
+
+    {{-- Öffnet das rechte Panel bei „Neu“ oder Zeilenklick. --}}
+    <div x-data x-on:open-activity.window="$store.ui && $store.ui.mSet('activity', 'open', true)"></div>
+
+    {{-- HAUPT --}}
+    <div class="flex-1 flex flex-col min-h-0 min-w-0">
+        <div class="flex-1 overflow-y-auto p-6 space-y-4">
+
+            @if($flash)
+                <div class="px-4 py-2 text-xs font-medium text-emerald-700 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">{{ $flash }}</div>
             @endif
 
-            {{-- Tabelle --}}
-            <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
+            <div class="flex items-center gap-2">
+                @svg('heroicon-o-banknotes', 'w-5 h-5 text-[var(--ui-secondary)]')
+                <h2 class="text-lg font-semibold text-[var(--ui-secondary)] m-0">Kostenpositionen</h2>
+                <span class="flex-1"></span>
+                <span class="text-sm text-[var(--ui-secondary)]">
+                    Summe (gefiltert): <strong class="text-violet-700 tabular-nums">{{ number_format($monthlySum, 2, ',', '.') }} € / Monat</strong>
+                </span>
+            </div>
+
+            <div class="rounded-xl bg-white/60 border border-black/5 shadow-sm overflow-hidden">
                 @if($lines->isEmpty())
                     <div class="p-8 text-center text-sm text-gray-400">Keine Kostenpositionen gefunden.</div>
                 @else
@@ -131,7 +209,8 @@
                         </thead>
                         <tbody class="divide-y divide-black/[0.03]">
                             @foreach($lines as $line)
-                                <tr class="hover:bg-black/[0.02] {{ $line->active ? '' : 'opacity-50' }}">
+                                <tr wire:key="cl-{{ $line->id }}" wire:click="edit({{ $line->id }})"
+                                    class="cursor-pointer hover:bg-black/[0.02] {{ $editId === $line->id ? 'bg-violet-500/10' : '' }} {{ $line->active ? '' : 'opacity-50' }}">
                                     <td class="px-4 py-2.5 font-medium text-gray-800">{{ $line->label }}</td>
                                     <td class="px-4 py-2.5 text-xs text-gray-500">{{ $line->costType?->name }}</td>
                                     <td class="px-4 py-2.5 text-xs text-gray-500">{{ $line->costCenter?->code ?? '—' }}</td>
@@ -140,9 +219,7 @@
                                     <td class="px-4 py-2.5 text-xs text-gray-500">{{ ['monthly'=>'mtl.','quarterly'=>'qrtl.','yearly'=>'jähr.','once'=>'einm.'][$line->frequency] ?? $line->frequency }}</td>
                                     <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-violet-700">{{ number_format((float)$line->monthly_amount, 2, ',', '.') }} €</td>
                                     <td class="px-4 py-2.5 text-right whitespace-nowrap">
-                                        <button wire:click="toggleActive({{ $line->id }})" class="text-xs text-gray-400 hover:text-amber-600" title="Aktiv/Inaktiv">@svg('heroicon-o-power', 'w-4 h-4 inline')</button>
-                                        <button wire:click="edit({{ $line->id }})" class="text-xs text-gray-400 hover:text-violet-600 ml-1" title="Bearbeiten">@svg('heroicon-o-pencil-square', 'w-4 h-4 inline')</button>
-                                        <button wire:click="delete({{ $line->id }})" wire:confirm="Position löschen?" class="text-xs text-gray-400 hover:text-red-600 ml-1" title="Löschen">@svg('heroicon-o-trash', 'w-4 h-4 inline')</button>
+                                        <button wire:click.stop="toggleActive({{ $line->id }})" class="text-xs text-gray-400 hover:text-amber-600" title="Aktiv/Inaktiv">@svg('heroicon-o-power', 'w-4 h-4 inline')</button>
                                     </td>
                                 </tr>
                             @endforeach

@@ -91,10 +91,18 @@ class Index extends Component
         };
     }
 
+    /** Filter zurücksetzen (linke Sidebar). */
+    public function resetFilters(): void
+    {
+        $this->reset(['search', 'filterType', 'filterCenter', 'filterVendor', 'filterActive']);
+        $this->resetPage();
+    }
+
     public function newLine(): void
     {
         $this->resetEditor();
         $this->showEditor = true;
+        $this->dispatch('open-activity');
     }
 
     public function edit(int $id): void
@@ -109,6 +117,7 @@ class Index extends Component
         $this->fFrequency  = $line->frequency;
         $this->fActive     = (bool) $line->active;
         $this->showEditor  = true;
+        $this->dispatch('open-activity');
     }
 
     public function save(CostBootstrapService $bootstrap): void
@@ -156,6 +165,11 @@ class Index extends Component
     {
         $line = AssetCostLine::where('team_id', $this->teamId())->findOrFail($id);
         $line->delete();
+        // Wird gerade diese Zeile im rechten Panel bearbeitet → Editor schließen.
+        if ($this->editId === $id) {
+            $this->resetEditor();
+            $this->showEditor = false;
+        }
         $this->flash = 'Kostenposition gelöscht.';
     }
 
@@ -163,6 +177,14 @@ class Index extends Component
     {
         $line = AssetCostLine::where('team_id', $this->teamId())->findOrFail($id);
         $line->update(['active' => !$line->active]);
+    }
+
+    /** Editor (rechtes Panel) schließen und Auswahl/Highlight lösen. */
+    public function cancelEdit(): void
+    {
+        $this->resetEditor();
+        $this->showEditor = false;
+        $this->resetValidation();
     }
 
     protected function resetEditor(): void
