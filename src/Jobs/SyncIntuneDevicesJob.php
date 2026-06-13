@@ -4,6 +4,7 @@ namespace Platform\AssetManager\Jobs;
 
 use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Models\AssetDevice;
+use Platform\AssetManager\Models\AssetDeviceModel;
 use Platform\AssetManager\Models\AssetDeviceSyncLog;
 use Platform\AssetManager\Services\EmployeeService;
 use Platform\AssetManager\Services\IntuneGraphService;
@@ -78,6 +79,15 @@ class SyncIntuneDevicesJob implements ShouldQueue
                         'source'    => 'intune',
                     ]));
                     $added++;
+                }
+
+                // Geräte-Modell-Katalog pflegen (Preise ergänzt der User im UI). Nur bei bekanntem Modell/Hersteller.
+                if (!empty($data['manufacturer']) || !empty($data['model'])) {
+                    AssetDeviceModel::firstOrCreate([
+                        'team_id'      => $this->teamId,
+                        'manufacturer' => $data['manufacturer'],
+                        'model'        => $data['model'],
+                    ]);
                 }
 
                 // Employee aus UPN ableiten (Intune liefert userPrincipalName)

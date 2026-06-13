@@ -7,6 +7,8 @@ use Platform\AssetManager\Models\AssetCompany;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetCostType;
+use Platform\AssetManager\Models\AssetDevice;
+use Platform\AssetManager\Models\AssetDeviceModel;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetLicenseSku;
@@ -33,11 +35,14 @@ class CostAggregationService
             ->whereHas('costType', fn($q) => $q->where('aggregation_source', 'cost_line'))
             ->sum('monthly_amount');
 
+        // Geräte-Kosten (Intune-Geräte mit asset_device-Kostenart)
+        $devices = (float) $this->deviceCostRows($teamId)->sum('amount');
+
         return [
-            'hardware'  => round($hardware, 2),
+            'hardware'  => round($hardware + $devices, 2),
             'licenses'  => round($licenses, 2),
             'costlines' => round((float) $costLines, 2),
-            'total'     => round($hardware + $licenses + (float) $costLines, 2),
+            'total'     => round($hardware + $devices + $licenses + (float) $costLines, 2),
         ];
     }
 
@@ -75,8 +80,14 @@ class CostAggregationService
             ->groupBy('assignee_id')
             ->map(fn($g) => (float) $g->sum('monthly_amount'));
 
-        $results = $employees->map(function ($emp) use ($items, $licenseAssignments, $skuPrices, $costLineSums) {
-            $hardware = ($items[$emp->id] ?? collect())->sum(fn($i) => $i->monthlyCost());
+        // Geräte-Kosten pro Mitarbeiter (via UPN) — werden zur Hardware-Summe gezählt
+        $deviceSums = $this->deviceCostRows($teamId)
+            ->groupBy('upn')
+            ->map(fn($g) => (float) $g->sum('amount'));
+
+        $results = $employees->map(function ($emp) use ($items, $licenseAssignments, $skuPrices, $costLineSums, $deviceSums) {
+            $hardware = ($items[$emp->id] ?? collect())->sum(fn($i) => $i->monthlyCost())
+                + (float) ($deviceSums[$emp->user_principal_name] ?? 0);
 
             $licenses = ($licenseAssignments[$emp->user_principal_name] ?? collect())
                 ->sum(fn($lic) => (float) ($skuPrices[$lic->sku_id] ?? 0));
@@ -309,7 +320,72 @@ class CostAggregationService
             }
         }
 
+        // 4) asset_device — Intune-Geräte, deren (aufgelöste) Kostenart aggregation_source='asset_device' ist
+        $this->deviceCostRows($teamId)->each(fn ($r) => $rows->push([
+            'cost_center_id' => $r['cost_center_id'],
+            'cost_type_id'   => $r['cost_type_id'],
+            'amount'         => $r['amount'],
+        ]));
+
         return $rows;
+    }
+
+    /**
+     * Geräte-Kostenposten (virtuell): pro Intune-Gerät der aufgelöste Monatsbetrag (Override → Modell-Default),
+     * die aufgelöste Kostenart (Override → Modell) und die Kostenstelle (Geräte-Override → Mitarbeiter via UPN).
+     * Gezählt werden nur Geräte, deren Kostenart aggregation_source='asset_device' hat — das verhindert
+     * Doppelzählung (z. B. wenn die alte Laptop-Kostenart von cost_line auf asset_device umgestellt wird,
+     * fallen ihre manuellen Importzeilen automatisch aus dem cost_line-Block).
+     *
+     * @return Collection<int,array{cost_center_id:?int, cost_type_id:int, amount:float, upn:?string}>
+     */
+    protected function deviceCostRows(int $teamId): Collection
+    {
+        $deviceTypeIds = AssetCostType::where('team_id', $teamId)
+            ->where('aggregation_source', 'asset_device')
+            ->pluck('id')
+            ->map(fn($id) => (int) $id);
+
+        if ($deviceTypeIds->isEmpty()) {
+            return collect();
+        }
+
+        $ccByUpn = AssetEmployee::where('team_id', $teamId)->pluck('cost_center_id', 'user_principal_name');
+
+        $models = AssetDeviceModel::where('team_id', $teamId)->get()
+            ->keyBy(fn($m) => $this->deviceModelKey($m->manufacturer, $m->model));
+
+        return AssetDevice::where('team_id', $teamId)->get()
+            ->map(function ($d) use ($deviceTypeIds, $models, $ccByUpn) {
+                $model  = $models[$this->deviceModelKey($d->manufacturer, $d->model)] ?? null;
+                $typeId = $d->cost_type_id ?? $model?->cost_type_id;
+                if (!$typeId || !$deviceTypeIds->contains((int) $typeId)) {
+                    return null;
+                }
+
+                $amount = AssetDevice::computeMonthlyFrom($d->monthly_cost, $d->purchase_price, $d->depreciation_months, $d->purchase_date);
+                if ($amount === null && $model) {
+                    $amount = AssetDevice::computeMonthlyFrom($model->monthly_cost, $model->purchase_price, $model->depreciation_months, null);
+                }
+                if (!$amount || $amount <= 0) {
+                    return null;
+                }
+
+                return [
+                    'cost_center_id' => $d->cost_center_id ?? ($ccByUpn[$d->user_principal_name] ?? null),
+                    'cost_type_id'   => (int) $typeId,
+                    'amount'         => (float) $amount,
+                    'upn'            => $d->user_principal_name,
+                ];
+            })
+            ->filter()
+            ->values();
+    }
+
+    /** Map-Key für den (Hersteller, Modell)-Abgleich Gerät ↔ Geräte-Modell (case-/whitespace-tolerant). */
+    protected function deviceModelKey(?string $manufacturer, ?string $model): string
+    {
+        return mb_strtolower(trim((string) $manufacturer)) . '|' . mb_strtolower(trim((string) $model));
     }
 
     /**

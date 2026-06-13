@@ -217,6 +217,81 @@
                     </div>
                 @endif
 
+                {{-- Kosten --}}
+                <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
+                    <div class="px-4 py-3 border-b border-black/5 dark:border-white/5 flex items-center justify-between">
+                        <h2 class="text-xs font-medium uppercase tracking-wider text-gray-400">Kosten</h2>
+                        @if($canManage && !$editingCost)
+                            <button wire:click="editCost" class="text-xs text-violet-600 hover:underline">Bearbeiten</button>
+                        @endif
+                    </div>
+
+                    @if($flash)
+                        <div class="px-4 pt-3 text-[11px] text-emerald-600">{{ $flash }}</div>
+                    @endif
+
+                    @if(!$editingCost)
+                        <div class="p-4 space-y-2">
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-lg font-semibold text-gray-800 dark:text-gray-100 tabular-nums">{{ $resolvedCost > 0 ? number_format($resolvedCost, 2, ',', '.') . ' €' : '—' }}</span>
+                                <span class="text-xs text-gray-400">/ Monat</span>
+                            </div>
+                            <div class="text-[11px] text-gray-400">
+                                @if($device->monthly_cost || ($device->purchase_price && $device->depreciation_months))
+                                    Override am Gerät
+                                @elseif($deviceModel && ($deviceModel->monthly_cost || ($deviceModel->purchase_price && $deviceModel->depreciation_months)))
+                                    Modell-Default ({{ trim(($device->manufacturer ?? '') . ' ' . ($device->model ?? '')) ?: 'Modell' }})
+                                @else
+                                    kein Preis hinterlegt — am Geräte-Modell oder hier pflegen
+                                @endif
+                            </div>
+                            <dl class="text-[11px] divide-y divide-black/[0.04] pt-1">
+                                <div class="flex justify-between py-1"><dt class="text-gray-400">Kostenart</dt><dd class="text-gray-600">{{ optional($costTypes->firstWhere('id', $resolvedCostTypeId))->name ?? '— (zählt nicht im Pivot)' }}</dd></div>
+                                <div class="flex justify-between py-1"><dt class="text-gray-400">Kostenstelle</dt><dd class="text-gray-600">{{ $device->cost_center_id ? (optional($costCenters->firstWhere('id', $device->cost_center_id))->code ?? '—') : 'über Nutzer' }}</dd></div>
+                            </dl>
+                        </div>
+                    @else
+                        <div class="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">Leasing / Monat (€)</label>
+                                <input type="number" step="0.01" min="0" wire:model="oMonthly" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
+                                @error('oMonthly')<span class="text-[10px] text-red-500">{{ $message }}</span>@enderror
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">Kaufpreis (€) / AfA-Monate</label>
+                                <div class="flex gap-2">
+                                    <input type="number" step="0.01" min="0" wire:model="oPurchase" placeholder="Preis" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
+                                    <input type="number" step="1" min="1" wire:model="oDep" placeholder="Mon." class="w-24 px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
+                                </div>
+                                @error('oPurchase')<span class="text-[10px] text-red-500">{{ $message }}</span>@enderror
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">Kaufdatum (optional)</label>
+                                <input type="date" wire:model="oPurchaseDate" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">Kostenart</label>
+                                <select wire:model="oCostType" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
+                                    <option value="">– vom Modell –</option>
+                                    @foreach($costTypes as $ct)<option value="{{ $ct->id }}">{{ $ct->name }}</option>@endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">Kostenstelle (Override)</label>
+                                <select wire:model="oCostCenter" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
+                                    <option value="">– über Nutzer –</option>
+                                    @foreach($costCenters as $cc)<option value="{{ $cc->id }}">{{ $cc->name ? $cc->code . ' — ' . $cc->name : $cc->code }}</option>@endforeach
+                                </select>
+                            </div>
+                            <div class="sm:col-span-2 flex flex-wrap items-center gap-2">
+                                <button wire:click="saveCost" class="px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">Speichern</button>
+                                <button wire:click="cancelCost" class="px-3 py-1.5 text-xs font-medium text-gray-600 bg-black/[0.04] rounded-lg hover:bg-black/[0.07]">Abbrechen</button>
+                                <span class="text-[11px] text-gray-400">Leasing-Rate <em>oder</em> Kaufpreis + AfA-Monate. Leer = Modell-Default.</span>
+                            </div>
+                        </div>
+                    @endif
+                </div>
+
             </div>
         </div>
 

@@ -1,0 +1,46 @@
+<?php
+
+namespace Platform\AssetManager\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+/**
+ * Default-Kosten je Geräte-Modell (Hersteller + Modell). Der Intune-Sync legt die real
+ * existierenden Modelle automatisch an; Preise werden im UI gepflegt. Geräte erben diese
+ * Defaults, ein einzelnes Gerät kann sie überschreiben (Felder direkt an AssetDevice).
+ */
+class AssetDeviceModel extends Model
+{
+    protected $table = 'asset_device_models';
+
+    protected $fillable = [
+        'team_id',
+        'manufacturer',
+        'model',
+        'monthly_cost',
+        'purchase_price',
+        'depreciation_months',
+        'cost_type_id',
+        'vendor_id',
+    ];
+
+    protected $casts = [
+        'monthly_cost'   => 'decimal:2',
+        'purchase_price' => 'decimal:2',
+    ];
+
+    public function team()
+    {
+        return $this->belongsTo(\Platform\Core\Models\Team::class);
+    }
+
+    public function costType()
+    {
+        return $this->belongsTo(AssetCostType::class, 'cost_type_id');
+    }
+
+    public function vendor()
+    {
+        return $this->belongsTo(AssetVendor::class, 'vendor_id');
+    }
+}

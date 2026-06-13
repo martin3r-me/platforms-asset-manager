@@ -72,6 +72,10 @@
             @svg('heroicon-o-tag', 'w-4 h-4 text-[var(--ui-secondary)]')
             <span class="ml-2 text-sm">Kostenarten</span>
         </x-ui-sidebar-item>
+        <x-ui-sidebar-item :href="route('asset-manager.device-models.index')">
+            @svg('heroicon-o-cpu-chip', 'w-4 h-4 text-[var(--ui-secondary)]')
+            <span class="ml-2 text-sm">Geräte-Modelle</span>
+        </x-ui-sidebar-item>
         <x-ui-sidebar-item :href="route('asset-manager.costs.import')">
             @svg('heroicon-o-arrow-up-tray', 'w-4 h-4 text-[var(--ui-secondary)]')
             <span class="ml-2 text-sm">Kosten-Import</span>
@@ -130,6 +134,9 @@
             </a>
             <a href="{{ route('asset-manager.cost-types.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
                 @svg('heroicon-o-tag', 'w-5 h-5')
+            </a>
+            <a href="{{ route('asset-manager.device-models.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
+                @svg('heroicon-o-cpu-chip', 'w-5 h-5')
             </a>
             <a href="{{ route('asset-manager.costs.import') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
                 @svg('heroicon-o-arrow-up-tray', 'w-5 h-5')

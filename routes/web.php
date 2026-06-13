@@ -20,6 +20,7 @@ use Platform\AssetManager\Livewire\CostCenters\Index as CostCentersIndex;
 use Platform\AssetManager\Livewire\Companies\Index as CompaniesIndex;
 use Platform\AssetManager\Livewire\Vendors\Index as VendorsIndex;
 use Platform\AssetManager\Livewire\CostTypes\Index as CostTypesIndex;
+use Platform\AssetManager\Livewire\DeviceModels\Index as DeviceModelsIndex;
 use Platform\AssetManager\Livewire\Printers\Index as PrintersIndex;
 use Platform\AssetManager\Livewire\Internet\Index as InternetIndex;
 
@@ -51,5 +52,6 @@ Route::get('/companies', CompaniesIndex::class)->name('asset-manager.companies.i
 Route::get('/cost-centers', CostCentersIndex::class)->name('asset-manager.cost-centers.index');
 Route::get('/vendors', VendorsIndex::class)->name('asset-manager.vendors.index');
 Route::get('/cost-types', CostTypesIndex::class)->name('asset-manager.cost-types.index');
+Route::get('/device-models', DeviceModelsIndex::class)->name('asset-manager.device-models.index');
 
 Route::get('/setup', ConnectorSetup::class)->name('asset-manager.setup');
