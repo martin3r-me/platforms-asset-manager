@@ -68,9 +68,9 @@
                             <th class="px-4 py-3"></th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-black/[0.03]">
+                    <tbody class="divide-y divide-black/[0.03]" @if($manualOrder) wire:sortable="reorder" @endif>
                         @foreach($types as $t)
-                            <tr class="hover:bg-black/[0.02]">
+                            <tr class="hover:bg-black/[0.02]" wire:key="ct-{{ $t->id }}" @if($manualOrder) wire:sortable.item="{{ $t->id }}" @endif>
                                 @if($editId === $t->id)
                                     <td class="px-2 py-2"></td>
                                     <td class="px-4 py-2"><input type="text" wire:model="eName" class="px-2 py-1 text-sm rounded border border-[var(--ui-border)] bg-white w-full"></td>
@@ -108,8 +108,7 @@
                                 @else
                                     <td class="px-2 py-2.5 text-center whitespace-nowrap">
                                         @if($manualOrder)
-                                            <button wire:click="moveUp({{ $t->id }})" class="text-gray-300 hover:text-violet-600">@svg('heroicon-o-chevron-up', 'w-3.5 h-3.5 inline')</button>
-                                            <button wire:click="moveDown({{ $t->id }})" class="text-gray-300 hover:text-violet-600">@svg('heroicon-o-chevron-down', 'w-3.5 h-3.5 inline')</button>
+                                            <button wire:sortable.handle type="button" title="Ziehen zum Sortieren" class="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing">@svg('heroicon-o-bars-3', 'w-4 h-4 inline')</button>
                                         @else
                                             <span class="text-gray-200">–</span>
                                         @endif

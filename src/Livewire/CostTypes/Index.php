@@ -116,34 +116,23 @@ class Index extends Component
         $this->flash = "Kostenart {$name} gelöscht.";
     }
 
-    public function moveUp(int $id): void
-    {
-        $this->move($id, -1);
-    }
-
-    public function moveDown(int $id): void
-    {
-        $this->move($id, +1);
-    }
-
-    /** Verschiebt eine Kostenart in der manuellen Reihenfolge und renummeriert sort_order sauber (10,20,30…). */
-    protected function move(int $id, int $dir): void
+    /** Drag&Drop-Reihenfolge (wotz/livewire-sortablejs). Renummeriert sort_order sauber (10,20,30…). */
+    public function reorder(array $order): void
     {
         $teamId = $this->teamId();
-        $ids = AssetCostType::where('team_id', $teamId)
-            ->orderBy('sort_order')->orderBy('id')
-            ->pluck('id')->all();
-
-        $pos = array_search($id, $ids, true);
-        if ($pos === false) return;
-        $new = $pos + $dir;
-        if ($new < 0 || $new >= count($ids)) return;
-
-        [$ids[$pos], $ids[$new]] = [$ids[$new], $ids[$pos]];
-        foreach ($ids as $i => $tid) {
-            AssetCostType::where('id', $tid)->update(['sort_order' => ($i + 1) * 10]);
+        $pos = 0;
+        foreach ($this->flattenOrder($order) as $id) {
+            AssetCostType::where('team_id', $teamId)->where('id', (int) $id)
+                ->update(['sort_order' => (++$pos) * 10]);
         }
         $this->flash = 'Reihenfolge aktualisiert.';
+    }
+
+    /** wotz/livewire-sortablejs liefert ggf. [['order'=>0,'value'=>'5'], …] oder flach. */
+    protected function flattenOrder(array $order): array
+    {
+        $flat = array_map(fn ($i) => is_array($i) ? ($i['value'] ?? null) : $i, $order);
+        return array_values(array_filter($flat, fn ($v) => $v !== null && $v !== ''));
     }
 
     /** Eindeutigen Slug-Key je Team aus dem Namen ableiten (key ist intern, NOT NULL). */
