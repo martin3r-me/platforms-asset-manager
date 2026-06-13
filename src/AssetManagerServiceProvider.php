@@ -73,10 +73,71 @@ class AssetManagerServiceProvider extends ServiceProvider
 
         $this->registerLivewireComponents();
 
+        $this->registerTools();
+
         $this->callAfterResolving(Schedule::class, function (Schedule $schedule) {
             $schedule->command('asset-manager:sync-intune')->hourly();
             $schedule->command('asset-manager:sync-licenses')->dailyAt('02:00');
         });
+    }
+
+    /**
+     * Registriert die MCP/LLM-Tools des Moduls beim zentralen ToolRegistry.
+     *
+     * Explizite Registrierung (keine Auto-Discovery) — analog Planner. In try/catch, damit ein
+     * fehlendes ToolRegistry (z. B. im Setup/Console-Boot) das Modul nicht lahmlegt.
+     */
+    protected function registerTools(): void
+    {
+        try {
+            $registry = resolve(\Platform\Core\Tools\ToolRegistry::class);
+
+            // Anker
+            $registry->register(new \Platform\AssetManager\Tools\OverviewTool());
+
+            // Mitarbeiter
+            $registry->register(new \Platform\AssetManager\Tools\Employees\ListEmployeesTool());
+            $registry->register(new \Platform\AssetManager\Tools\Employees\GetEmployeeTool());
+            $registry->register(new \Platform\AssetManager\Tools\Employees\UpdateEmployeeTool());
+            $registry->register(new \Platform\AssetManager\Tools\Employees\BulkAssignCostCenterTool());
+
+            // Geräte + Modelle
+            $registry->register(new \Platform\AssetManager\Tools\Devices\ListDevicesTool());
+            $registry->register(new \Platform\AssetManager\Tools\Devices\GetDeviceTool());
+            $registry->register(new \Platform\AssetManager\Tools\Devices\UpdateDeviceTool());
+            $registry->register(new \Platform\AssetManager\Tools\Devices\BulkUpdateDeviceCostTool());
+            $registry->register(new \Platform\AssetManager\Tools\Devices\ListDeviceModelsTool());
+            $registry->register(new \Platform\AssetManager\Tools\Devices\UpsertDeviceModelTool());
+
+            // Lizenzen
+            $registry->register(new \Platform\AssetManager\Tools\Licenses\ListLicensesTool());
+
+            // Kosten-Auswertungen (read-only)
+            $registry->register(new \Platform\AssetManager\Tools\Costs\CostSummaryTool());
+            $registry->register(new \Platform\AssetManager\Tools\Costs\CostByDimensionTool());
+            $registry->register(new \Platform\AssetManager\Tools\Costs\TopEmployeesByCostTool());
+            $registry->register(new \Platform\AssetManager\Tools\Costs\CostAllocationTool());
+            $registry->register(new \Platform\AssetManager\Tools\Costs\CostAnomaliesTool());
+
+            // Kostenpositionen
+            $registry->register(new \Platform\AssetManager\Tools\CostLines\ListCostLinesTool());
+            $registry->register(new \Platform\AssetManager\Tools\CostLines\CreateCostLineTool());
+            $registry->register(new \Platform\AssetManager\Tools\CostLines\UpdateCostLineTool());
+            $registry->register(new \Platform\AssetManager\Tools\CostLines\BulkReassignCostLineCenterTool());
+
+            // Stammdaten
+            $registry->register(new \Platform\AssetManager\Tools\MasterData\ListCostCentersTool());
+            $registry->register(new \Platform\AssetManager\Tools\MasterData\CreateCostCenterTool());
+            $registry->register(new \Platform\AssetManager\Tools\MasterData\ListCompaniesTool());
+            $registry->register(new \Platform\AssetManager\Tools\MasterData\ListCostTypesTool());
+            $registry->register(new \Platform\AssetManager\Tools\MasterData\ListVendorsTool());
+
+            // Sync
+            $registry->register(new \Platform\AssetManager\Tools\Sync\SyncStatusTool());
+            $registry->register(new \Platform\AssetManager\Tools\Sync\TriggerSyncTool());
+        } catch (\Throwable $e) {
+            \Log::warning('AssetManager: Tool-Registrierung fehlgeschlagen', ['error' => $e->getMessage()]);
+        }
     }
 
     protected function registerLivewireComponents(): void
