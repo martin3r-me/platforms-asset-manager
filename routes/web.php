@@ -48,12 +48,12 @@ Route::get('/costs/import-log', CostsImportLog::class)->name('asset-manager.cost
 // Stammdaten: alle vier Bereiche auf EINER Seite
 Route::get('/master-data', MasterDataIndex::class)->name('asset-manager.master-data.index');
 
-// Alte Einzel-Routen → Weiterleitung auf die kombinierte Seite (Anker zum passenden Abschnitt).
+// Alte Einzel-Routen → Weiterleitung auf die kombinierte Seite (öffnet den passenden Bereich via ?bereich=).
 // Namen bleiben erhalten, damit bestehende route()-Aufrufe/Bookmarks weiter funktionieren.
-Route::get('/companies',    fn () => redirect(route('asset-manager.master-data.index') . '#gesellschaften'))->name('asset-manager.companies.index');
-Route::get('/cost-centers', fn () => redirect(route('asset-manager.master-data.index') . '#kostenstellen'))->name('asset-manager.cost-centers.index');
-Route::get('/cost-types',   fn () => redirect(route('asset-manager.master-data.index') . '#kostenarten'))->name('asset-manager.cost-types.index');
-Route::get('/vendors',      fn () => redirect(route('asset-manager.master-data.index') . '#kreditoren'))->name('asset-manager.vendors.index');
+Route::get('/companies',    fn () => redirect(route('asset-manager.master-data.index', ['bereich' => 'companies'])))->name('asset-manager.companies.index');
+Route::get('/cost-centers', fn () => redirect(route('asset-manager.master-data.index', ['bereich' => 'cost-centers'])))->name('asset-manager.cost-centers.index');
+Route::get('/cost-types',   fn () => redirect(route('asset-manager.master-data.index', ['bereich' => 'cost-types'])))->name('asset-manager.cost-types.index');
+Route::get('/vendors',      fn () => redirect(route('asset-manager.master-data.index', ['bereich' => 'vendors'])))->name('asset-manager.vendors.index');
 
 Route::get('/device-models', DeviceModelsIndex::class)->name('asset-manager.device-models.index');
 
