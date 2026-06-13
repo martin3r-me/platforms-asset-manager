@@ -17,7 +17,32 @@
                 <div class="px-4 py-2 text-xs font-medium text-emerald-700 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">{{ $flash }}</div>
             @endif
 
-            @php $sourceLabels = ['cost_line' => 'Kostenposition', 'hardware_afa' => 'Hardware-AfA', 'ms_license' => 'MS-Lizenz (Graph)']; @endphp
+            @php $sourceLabels = ['cost_line' => 'Kostenposition', 'hardware_afa' => 'Hardware-AfA', 'ms_license' => 'MS-Lizenz (Graph)', 'asset_device' => 'Geräte-Kosten']; @endphp
+
+            {{-- Anlage --}}
+            <div class="flex items-end gap-2 rounded-xl bg-white border border-black/5 shadow-sm p-4 flex-wrap">
+                <div class="flex-1 min-w-[200px]">
+                    <label class="block text-xs text-gray-500 mb-1">Neue Kostenart</label>
+                    <input type="text" wire:model="newName" placeholder="z.B. Microsoft 365 Business Premium" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
+                    @error('newName')<span class="text-[10px] text-red-500">{{ $message }}</span>@enderror
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Frequenz</label>
+                    <select wire:model="newFrequency" class="px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
+                        <option value="monthly">mtl.</option><option value="quarterly">qrtl.</option><option value="yearly">jähr.</option><option value="once">einm.</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Quelle</label>
+                    <select wire:model="newAggSource" class="px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
+                        <option value="cost_line">Kostenposition</option>
+                        <option value="hardware_afa">Hardware-AfA</option>
+                        <option value="ms_license">MS-Lizenz (Graph)</option>
+                        <option value="asset_device">Geräte-Kosten</option>
+                    </select>
+                </div>
+                <button wire:click="create" class="px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">Anlegen</button>
+            </div>
 
             <div class="rounded-xl bg-white/60 border border-black/5 shadow-sm overflow-hidden">
                 <table class="w-full text-sm">
@@ -53,7 +78,14 @@
                                             <option value="monthly">mtl.</option><option value="quarterly">qrtl.</option><option value="yearly">jähr.</option><option value="once">einm.</option>
                                         </select>
                                     </td>
-                                    <td class="px-4 py-2 text-xs text-gray-400">{{ $sourceLabels[$t->aggregation_source] ?? $t->aggregation_source }}</td>
+                                    <td class="px-4 py-2">
+                                        <select wire:model="eAggSource" class="px-2 py-1 text-xs rounded border border-[var(--ui-border)] bg-white">
+                                            <option value="cost_line">Kostenposition</option>
+                                            <option value="hardware_afa">Hardware-AfA</option>
+                                            <option value="ms_license">MS-Lizenz (Graph)</option>
+                                            <option value="asset_device">Geräte-Kosten</option>
+                                        </select>
+                                    </td>
                                     <td class="px-4 py-2 text-right">
                                         <label class="text-[10px] text-gray-500"><input type="checkbox" wire:model="ePerEmployee"> /MA</label>
                                     </td>

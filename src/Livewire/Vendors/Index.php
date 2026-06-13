@@ -44,6 +44,17 @@ class Index extends Component
         $this->flash  = 'Kreditor gespeichert.';
     }
 
+    public function delete(int $id): void
+    {
+        $v = AssetVendor::where('team_id', $this->teamId())->findOrFail($id);
+        $name = $v->name;
+        // vendor_id (Kostenpositionen) und vendor_default_id (Kostenarten) sind nullOnDelete →
+        // Zuordnungen werden entfernt, Positionen/Kostenarten bleiben erhalten.
+        $v->delete();
+        if ($this->editId === $id) $this->editId = null;
+        $this->flash = "Kreditor {$name} gelöscht (Zuordnungen wurden entfernt).";
+    }
+
     public function render()
     {
         $vendors = AssetVendor::where('team_id', $this->teamId())
