@@ -25,6 +25,7 @@ class Index extends Component
         AssetVendor::firstOrCreate(['team_id' => $this->teamId(), 'name' => trim($this->newName)]);
         $this->reset('newName');
         $this->flash = 'Kreditor angelegt.';
+        $this->dispatch('vendors-changed');
     }
 
     public function edit(int $id): void
@@ -42,6 +43,7 @@ class Index extends Component
         $v->update(['name' => trim($this->eName), 'creditor_no' => $this->eCreditor ?: null]);
         $this->editId = null;
         $this->flash  = 'Kreditor gespeichert.';
+        $this->dispatch('vendors-changed');
     }
 
     public function delete(int $id): void
@@ -53,6 +55,7 @@ class Index extends Component
         $v->delete();
         if ($this->editId === $id) $this->editId = null;
         $this->flash = "Kreditor {$name} gelöscht (Zuordnungen wurden entfernt).";
+        $this->dispatch('vendors-changed');
     }
 
     public function render()

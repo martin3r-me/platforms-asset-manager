@@ -141,24 +141,9 @@ return [
             'group' => 'Einstellungen',
             'items' => [
                 [
-                    'label' => 'Gesellschaften',
-                    'route' => 'asset-manager.companies.index',
-                    'icon'  => 'heroicon-o-building-office-2',
-                ],
-                [
-                    'label' => 'Kostenstellen',
-                    'route' => 'asset-manager.cost-centers.index',
-                    'icon'  => 'heroicon-o-clipboard-document-list',
-                ],
-                [
-                    'label' => 'Kreditoren',
-                    'route' => 'asset-manager.vendors.index',
-                    'icon'  => 'heroicon-o-building-storefront',
-                ],
-                [
-                    'label' => 'Kostenarten',
-                    'route' => 'asset-manager.cost-types.index',
-                    'icon'  => 'heroicon-o-tag',
+                    'label' => 'Stammdaten',
+                    'route' => 'asset-manager.master-data.index',
+                    'icon'  => 'heroicon-o-rectangle-stack',
                 ],
                 [
                     'label' => 'Kosten-Import',

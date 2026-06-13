@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Livewire\CostCenters;
 
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Platform\AssetManager\Models\AssetCompany;
 use Platform\AssetManager\Models\AssetCostCenter;
@@ -23,6 +24,12 @@ class Index extends Component
     protected function teamId(): int
     {
         return Auth::user()->currentTeam->id;
+    }
+
+    /** Nachbar-Komponente hat eine Gesellschaft geändert → neu rendern, damit das Dropdown frisch ist. */
+    #[On('companies-changed')]
+    public function refreshCompanies(): void
+    {
     }
 
     public function edit(int $id): void

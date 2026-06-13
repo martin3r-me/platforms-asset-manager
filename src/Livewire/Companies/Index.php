@@ -40,6 +40,7 @@ class Index extends Component
         ]);
         $this->editId = null;
         $this->flash  = 'Gesellschaft gespeichert.';
+        $this->dispatch('companies-changed');
     }
 
     public function delete(int $id): void
@@ -50,6 +51,7 @@ class Index extends Component
         $co->delete();
         if ($this->editId === $id) $this->editId = null;
         $this->flash = "Gesellschaft {$name} gelöscht (Kostenstellen-Zuordnungen entfernt).";
+        $this->dispatch('companies-changed');
     }
 
     public function create(): void
@@ -65,6 +67,7 @@ class Index extends Component
         ]);
         $this->reset(['newName']);
         $this->flash = 'Gesellschaft angelegt.';
+        $this->dispatch('companies-changed');
     }
 
     /** Eindeutigen Slug-Key je Team aus dem Namen ableiten (key ist intern, NOT NULL). */

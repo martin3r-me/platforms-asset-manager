@@ -16,10 +16,7 @@ use Platform\AssetManager\Livewire\Costs\Allocation as CostsAllocation;
 use Platform\AssetManager\Livewire\Costs\Import as CostsImport;
 use Platform\AssetManager\Livewire\Costs\ImportLog as CostsImportLog;
 use Platform\AssetManager\Livewire\CostLines\Index as CostLinesIndex;
-use Platform\AssetManager\Livewire\CostCenters\Index as CostCentersIndex;
-use Platform\AssetManager\Livewire\Companies\Index as CompaniesIndex;
-use Platform\AssetManager\Livewire\Vendors\Index as VendorsIndex;
-use Platform\AssetManager\Livewire\CostTypes\Index as CostTypesIndex;
+use Platform\AssetManager\Livewire\MasterData\Index as MasterDataIndex;
 use Platform\AssetManager\Livewire\DeviceModels\Index as DeviceModelsIndex;
 use Platform\AssetManager\Livewire\Printers\Index as PrintersIndex;
 use Platform\AssetManager\Livewire\Internet\Index as InternetIndex;
@@ -48,10 +45,16 @@ Route::get('/cost-lines', CostLinesIndex::class)->name('asset-manager.cost-lines
 Route::get('/costs/import', CostsImport::class)->name('asset-manager.costs.import');
 Route::get('/costs/import-log', CostsImportLog::class)->name('asset-manager.costs.import-log');
 
-Route::get('/companies', CompaniesIndex::class)->name('asset-manager.companies.index');
-Route::get('/cost-centers', CostCentersIndex::class)->name('asset-manager.cost-centers.index');
-Route::get('/vendors', VendorsIndex::class)->name('asset-manager.vendors.index');
-Route::get('/cost-types', CostTypesIndex::class)->name('asset-manager.cost-types.index');
+// Stammdaten: alle vier Bereiche auf EINER Seite
+Route::get('/master-data', MasterDataIndex::class)->name('asset-manager.master-data.index');
+
+// Alte Einzel-Routen → Weiterleitung auf die kombinierte Seite (Anker zum passenden Abschnitt).
+// Namen bleiben erhalten, damit bestehende route()-Aufrufe/Bookmarks weiter funktionieren.
+Route::get('/companies',    fn () => redirect(route('asset-manager.master-data.index') . '#gesellschaften'))->name('asset-manager.companies.index');
+Route::get('/cost-centers', fn () => redirect(route('asset-manager.master-data.index') . '#kostenstellen'))->name('asset-manager.cost-centers.index');
+Route::get('/cost-types',   fn () => redirect(route('asset-manager.master-data.index') . '#kostenarten'))->name('asset-manager.cost-types.index');
+Route::get('/vendors',      fn () => redirect(route('asset-manager.master-data.index') . '#kreditoren'))->name('asset-manager.vendors.index');
+
 Route::get('/device-models', DeviceModelsIndex::class)->name('asset-manager.device-models.index');
 
 Route::get('/setup', ConnectorSetup::class)->name('asset-manager.setup');

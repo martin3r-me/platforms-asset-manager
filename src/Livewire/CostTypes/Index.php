@@ -4,6 +4,7 @@ namespace Platform\AssetManager\Livewire\CostTypes;
 
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetVendor;
@@ -36,6 +37,12 @@ class Index extends Component
     protected function teamId(): int
     {
         return Auth::user()->currentTeam->id;
+    }
+
+    /** Nachbar-Komponente hat einen Kreditor geändert → neu rendern, damit das Dropdown frisch ist. */
+    #[On('vendors-changed')]
+    public function refreshVendors(): void
+    {
     }
 
     public function sortBy(string $field): void

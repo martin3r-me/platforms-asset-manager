@@ -56,21 +56,9 @@
     </x-ui-sidebar-list>
 
     <x-ui-sidebar-list label="Einstellungen">
-        <x-ui-sidebar-item :href="route('asset-manager.companies.index')">
-            @svg('heroicon-o-building-office-2', 'w-4 h-4 text-[var(--ui-secondary)]')
-            <span class="ml-2 text-sm">Gesellschaften</span>
-        </x-ui-sidebar-item>
-        <x-ui-sidebar-item :href="route('asset-manager.cost-centers.index')">
-            @svg('heroicon-o-clipboard-document-list', 'w-4 h-4 text-[var(--ui-secondary)]')
-            <span class="ml-2 text-sm">Kostenstellen</span>
-        </x-ui-sidebar-item>
-        <x-ui-sidebar-item :href="route('asset-manager.vendors.index')">
-            @svg('heroicon-o-building-storefront', 'w-4 h-4 text-[var(--ui-secondary)]')
-            <span class="ml-2 text-sm">Kreditoren</span>
-        </x-ui-sidebar-item>
-        <x-ui-sidebar-item :href="route('asset-manager.cost-types.index')">
-            @svg('heroicon-o-tag', 'w-4 h-4 text-[var(--ui-secondary)]')
-            <span class="ml-2 text-sm">Kostenarten</span>
+        <x-ui-sidebar-item :href="route('asset-manager.master-data.index')">
+            @svg('heroicon-o-rectangle-stack', 'w-4 h-4 text-[var(--ui-secondary)]')
+            <span class="ml-2 text-sm">Stammdaten</span>
         </x-ui-sidebar-item>
         <x-ui-sidebar-item :href="route('asset-manager.device-models.index')">
             @svg('heroicon-o-cpu-chip', 'w-4 h-4 text-[var(--ui-secondary)]')
@@ -123,17 +111,8 @@
             <a href="{{ route('asset-manager.costs') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
                 @svg('heroicon-o-banknotes', 'w-5 h-5')
             </a>
-            <a href="{{ route('asset-manager.companies.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
-                @svg('heroicon-o-building-office-2', 'w-5 h-5')
-            </a>
-            <a href="{{ route('asset-manager.cost-centers.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
-                @svg('heroicon-o-clipboard-document-list', 'w-5 h-5')
-            </a>
-            <a href="{{ route('asset-manager.vendors.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
-                @svg('heroicon-o-building-storefront', 'w-5 h-5')
-            </a>
-            <a href="{{ route('asset-manager.cost-types.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
-                @svg('heroicon-o-tag', 'w-5 h-5')
+            <a href="{{ route('asset-manager.master-data.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
+                @svg('heroicon-o-rectangle-stack', 'w-5 h-5')
             </a>
             <a href="{{ route('asset-manager.device-models.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
                 @svg('heroicon-o-cpu-chip', 'w-5 h-5')
