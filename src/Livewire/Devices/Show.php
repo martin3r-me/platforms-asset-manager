@@ -4,11 +4,14 @@ namespace Platform\AssetManager\Livewire\Devices;
 
 use Livewire\Component;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Platform\AssetManager\Concerns\AuthorizesTeamRole;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetDevice;
+use Platform\AssetManager\Models\AssetDeviceEvent;
 use Platform\AssetManager\Models\AssetDeviceSyncLog;
+use Platform\AssetManager\Models\AssetVendor;
 
 class Show extends Component
 {
@@ -27,6 +30,22 @@ class Show extends Component
     public ?int    $oCostCenter   = null;
     public ?string $flash         = null;
 
+    // Freitext-Notiz am Gerät (operative Annotation, owner/admin)
+    public bool    $editingNotes  = false;
+    public ?string $oNotes        = null;
+    public ?string $notesFlash    = null;
+
+    // Lifecycle / Beschaffung (owner/admin)
+    public bool    $editingLifecycle = false;
+    public ?string $lStatus        = null;
+    public ?string $lWarranty      = null;
+    public ?string $lLease         = null;
+    public ?int    $lVendor        = null;
+    public ?string $lOrderNo       = null;
+    public ?string $lOrderDate     = null;
+    public ?string $lLocation      = null;
+    public ?string $lifecycleFlash = null;
+
     public function mount(AssetDevice $device): void
     {
         abort_unless(
@@ -36,6 +55,19 @@ class Show extends Component
 
         $this->device = $device;
         $this->fillCostForm();
+        $this->oNotes = $this->device->notes;
+        $this->fillLifecycleForm();
+    }
+
+    protected function fillLifecycleForm(): void
+    {
+        $this->lStatus    = $this->device->lifecycle_status;
+        $this->lWarranty  = $this->device->warranty_until?->format('Y-m-d');
+        $this->lLease     = $this->device->lease_until?->format('Y-m-d');
+        $this->lVendor    = $this->device->vendor_id;
+        $this->lOrderNo   = $this->device->order_no;
+        $this->lOrderDate = $this->device->order_date?->format('Y-m-d');
+        $this->lLocation  = $this->device->location;
     }
 
     protected function fillCostForm(): void
@@ -98,6 +130,70 @@ class Show extends Component
         $this->flash = 'Geräte-Kosten gespeichert.';
     }
 
+    public function editNotes(): void
+    {
+        $this->oNotes = $this->device->notes;
+        $this->editingNotes = true;
+    }
+
+    public function cancelNotes(): void
+    {
+        $this->editingNotes = false;
+        $this->oNotes = $this->device->notes;
+    }
+
+    public function saveNotes(): void
+    {
+        abort_unless($this->canManage(), 403);
+
+        $this->validate(['oNotes' => 'nullable|string|max:2000']);
+
+        $this->device->update(['notes' => ($this->oNotes !== null && $this->oNotes !== '') ? $this->oNotes : null]);
+        $this->device->refresh();
+        $this->editingNotes = false;
+        $this->notesFlash = 'Notiz gespeichert.';
+    }
+
+    public function editLifecycle(): void
+    {
+        $this->fillLifecycleForm();
+        $this->editingLifecycle = true;
+    }
+
+    public function cancelLifecycle(): void
+    {
+        $this->editingLifecycle = false;
+        $this->fillLifecycleForm();
+    }
+
+    public function saveLifecycle(): void
+    {
+        abort_unless($this->canManage(), 403);
+
+        $this->validate([
+            'lStatus'    => ['nullable', Rule::in(AssetDevice::LIFECYCLE_STATUSES)],
+            'lWarranty'  => 'nullable|date',
+            'lLease'     => 'nullable|date',
+            'lVendor'    => ['nullable', 'integer', Rule::exists('asset_vendors', 'id')->where('team_id', $this->device->team_id)],
+            'lOrderNo'   => 'nullable|string|max:255',
+            'lOrderDate' => 'nullable|date',
+            'lLocation'  => 'nullable|string|max:255',
+        ]);
+
+        $this->device->update([
+            'lifecycle_status' => $this->lStatus ?: null,
+            'warranty_until'   => $this->lWarranty ?: null,
+            'lease_until'      => $this->lLease ?: null,
+            'vendor_id'        => $this->lVendor ?: null,
+            'order_no'         => $this->lOrderNo ?: null,
+            'order_date'       => $this->lOrderDate ?: null,
+            'location'         => $this->lLocation ?: null,
+        ]);
+        $this->device->refresh();
+        $this->editingLifecycle = false;
+        $this->lifecycleFlash = 'Lifecycle gespeichert.';
+    }
+
     public function render()
     {
         $teamId = $this->device->team_id;
@@ -107,15 +203,22 @@ class Show extends Component
             ->limit(10)
             ->get();
 
+        $events = AssetDeviceEvent::where('asset_device_id', $this->device->id)
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get();
+
         return view('asset-manager::livewire.devices.show', [
             'device'             => $this->device,
             'activities'         => $activities,
+            'events'             => $events,
             'canManage'          => $this->canManage(),
             'resolvedCost'       => $this->device->resolvedMonthlyCost(),
             'resolvedCostTypeId' => $this->device->resolvedCostTypeId(),
             'deviceModel'        => $this->device->deviceModel(),
             'costTypes'          => AssetCostType::where('team_id', $teamId)->orderBy('sort_order')->orderBy('name')->get(),
             'costCenters'        => AssetCostCenter::where('team_id', $teamId)->orderBy('code')->get(),
+            'vendors'            => AssetVendor::where('team_id', $teamId)->orderBy('name')->get(),
         ])->layout('platform::layouts.app');
     }
 }

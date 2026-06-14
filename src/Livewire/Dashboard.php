@@ -25,7 +25,11 @@ class Dashboard extends Component
             'compliant'    => 0,
             'noncompliant' => 0,
             'unknown'      => 0,
+            'inactive'     => 0,
+            'no_user'      => 0,
+            'expiring'     => 0,
         ];
+        $complianceQuote = 0;
         $recentDevices   = collect();
         $lastLog         = null;
         $licenseCost     = 0.0;
@@ -38,7 +42,22 @@ class Dashboard extends Component
                 'compliant'    => AssetDevice::where('team_id', $team->id)->where('compliance_state', 'compliant')->count(),
                 'noncompliant' => AssetDevice::where('team_id', $team->id)->where('compliance_state', 'noncompliant')->count(),
                 'unknown'      => AssetDevice::where('team_id', $team->id)->whereIn('compliance_state', ['unknown', 'error', 'conflict'])->count(),
+                'inactive'     => AssetDevice::where('team_id', $team->id)
+                                    ->where(function ($q) {
+                                        $q->whereNull('last_check_in_at')
+                                          ->orWhere('last_check_in_at', '<', now()->subDays(\Platform\AssetManager\Livewire\Devices\Index::INACTIVE_DAYS));
+                                    })->count(),
+                'no_user'      => AssetDevice::where('team_id', $team->id)
+                                    ->where(function ($q) { $q->whereNull('user_principal_name')->orWhere('user_principal_name', ''); })
+                                    ->count(),
+                'expiring'     => AssetDevice::where('team_id', $team->id)
+                                    ->where(function ($q) {
+                                        $t = now()->addDays(AssetDevice::EXPIRY_SOON_DAYS);
+                                        $q->where(function ($w) use ($t) { $w->whereNotNull('warranty_until')->where('warranty_until', '<=', $t); })
+                                          ->orWhere(function ($w) use ($t) { $w->whereNotNull('lease_until')->where('lease_until', '<=', $t); });
+                                    })->count(),
             ];
+            $complianceQuote = $stats['total'] > 0 ? (int) round($stats['compliant'] / $stats['total'] * 100) : 0;
 
             $recentDevices = AssetDevice::where('team_id', $team->id)
                 ->orderBy('updated_at', 'desc')
@@ -74,6 +93,7 @@ class Dashboard extends Component
         return view('asset-manager::livewire.dashboard', [
             'config'          => $config,
             'stats'           => $stats,
+            'complianceQuote' => $complianceQuote,
             'recentDevices'   => $recentDevices,
             'lastLog'         => $lastLog,
             'licenseCost'     => $licenseCost,

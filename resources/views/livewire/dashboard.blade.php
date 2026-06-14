@@ -106,9 +106,10 @@
                 </div>
             </div>
 
-            {{-- Intune-Geräte Stats --}}
+            {{-- Intune-Geräte Stats (klickbar → gefilterte Geräteliste) --}}
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+                <a href="{{ route('asset-manager.devices.index') }}" wire:navigate
+                    class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
                     <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent"></div>
                     <div class="flex items-center justify-between mb-3">
                         <span class="text-xs font-medium uppercase tracking-wider text-gray-400">Gesamt</span>
@@ -118,9 +119,10 @@
                     </div>
                     <div class="text-3xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">{{ $stats['total'] }}</div>
                     <div class="text-xs text-gray-400 mt-1">Geräte</div>
-                </div>
+                </a>
 
-                <div class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+                <a href="{{ route('asset-manager.devices.index', ['filterCompliance' => 'compliant']) }}" wire:navigate
+                    class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
                     <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent"></div>
                     <div class="flex items-center justify-between mb-3">
                         <span class="text-xs font-medium uppercase tracking-wider text-gray-400">Konform</span>
@@ -129,10 +131,11 @@
                         </div>
                     </div>
                     <div class="text-3xl font-semibold tracking-tight text-emerald-600 dark:text-emerald-400">{{ $stats['compliant'] }}</div>
-                    <div class="text-xs text-gray-400 mt-1">Compliant</div>
-                </div>
+                    <div class="text-xs text-gray-400 mt-1">{{ $complianceQuote }}% der Flotte</div>
+                </a>
 
-                <div class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+                <a href="{{ route('asset-manager.devices.index', ['preset' => 'noncompliant']) }}" wire:navigate
+                    class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
                     <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-500/50 to-transparent"></div>
                     <div class="flex items-center justify-between mb-3">
                         <span class="text-xs font-medium uppercase tracking-wider text-gray-400">Nicht konform</span>
@@ -142,9 +145,10 @@
                     </div>
                     <div class="text-3xl font-semibold tracking-tight text-red-600 dark:text-red-400">{{ $stats['noncompliant'] }}</div>
                     <div class="text-xs text-gray-400 mt-1">Non-Compliant</div>
-                </div>
+                </a>
 
-                <div class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+                <a href="{{ route('asset-manager.devices.index', ['filterCompliance' => 'unknown']) }}" wire:navigate
+                    class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
                     <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-gray-400/50 to-transparent"></div>
                     <div class="flex items-center justify-between mb-3">
                         <span class="text-xs font-medium uppercase tracking-wider text-gray-400">Unbekannt</span>
@@ -154,7 +158,49 @@
                     </div>
                     <div class="text-3xl font-semibold tracking-tight text-gray-500 dark:text-gray-400">{{ $stats['unknown'] }}</div>
                     <div class="text-xs text-gray-400 mt-1">Unknown / Error</div>
-                </div>
+                </a>
+            </div>
+
+            {{-- ITAM-Handlungslisten --}}
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <a href="{{ route('asset-manager.devices.index', ['preset' => 'inactive']) }}" wire:navigate
+                   class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+                    <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-500/50 to-transparent"></div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-medium uppercase tracking-wider text-gray-400">Inaktive Geräte</span>
+                        <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-500/10">
+                            @svg('heroicon-o-clock', 'w-4 h-4 text-amber-500')
+                        </div>
+                    </div>
+                    <div class="text-3xl font-semibold tracking-tight {{ $stats['inactive'] > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-gray-100' }}">{{ $stats['inactive'] }}</div>
+                    <div class="text-xs text-gray-400 mt-1">Kein Check-In seit über 30 Tagen</div>
+                </a>
+
+                <a href="{{ route('asset-manager.devices.index', ['preset' => 'no_user']) }}" wire:navigate
+                   class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+                    <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent"></div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-medium uppercase tracking-wider text-gray-400">Ohne Nutzer</span>
+                        <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-500/10">
+                            @svg('heroicon-o-user-minus', 'w-4 h-4 text-indigo-500')
+                        </div>
+                    </div>
+                    <div class="text-3xl font-semibold tracking-tight {{ $stats['no_user'] > 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-900 dark:text-gray-100' }}">{{ $stats['no_user'] }}</div>
+                    <div class="text-xs text-gray-400 mt-1">Keine Nutzer-Zuordnung</div>
+                </a>
+
+                <a href="{{ route('asset-manager.devices.index', ['preset' => 'expiring']) }}" wire:navigate
+                   class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+                    <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-500/50 to-transparent"></div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-medium uppercase tracking-wider text-gray-400">Garantie/Leasing läuft ab</span>
+                        <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-red-500/10">
+                            @svg('heroicon-o-shield-exclamation', 'w-4 h-4 text-red-500')
+                        </div>
+                    </div>
+                    <div class="text-3xl font-semibold tracking-tight {{ $stats['expiring'] > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100' }}">{{ $stats['expiring'] }}</div>
+                    <div class="text-xs text-gray-400 mt-1">Innerhalb der nächsten 90 Tage</div>
+                </a>
             </div>
 
             {{-- Lizenz-Kacheln --}}

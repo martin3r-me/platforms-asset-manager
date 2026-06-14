@@ -132,6 +132,8 @@ class Index extends Component
         $allSkus          = AssetLicenseSku::where('team_id', $team->id)->get();
         $totalMonthlyCost = $allSkus->sum(fn($s) => $s->monthlyCost());
         $unusedLicenses   = $allSkus->where('available_units', '>', 0)->count();
+        // Kostenrelevante Lücke: genutzte SKUs ohne hinterlegten Preis → fehlen in der Kostenrechnung.
+        $unpricedCount    = $allSkus->filter(fn($s) => $s->unit_price === null && (int) $s->consumed_units > 0)->count();
 
         $lastLog  = AssetLicenseSyncLog::where('team_id', $team->id)
             ->orderBy('started_at', 'desc')
@@ -163,6 +165,7 @@ class Index extends Component
             'skus'             => $skus,
             'totalMonthlyCost' => $totalMonthlyCost,
             'unusedLicenses'   => $unusedLicenses,
+            'unpricedCount'    => $unpricedCount,
             'lastLog'          => $lastLog,
             'canSync'          => $canSync,
             'config'           => $config,

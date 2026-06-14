@@ -219,6 +219,19 @@
                 </div>
             </div>
 
+            {{-- Hinweis: genutzte Lizenzen ohne hinterlegten Preis --}}
+            @if($unpricedCount > 0)
+                <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                    @svg('heroicon-o-exclamation-triangle', 'w-4 h-4 text-amber-500 flex-shrink-0')
+                    <p class="text-sm text-amber-700 dark:text-amber-400 flex-1">
+                        <strong>{{ $unpricedCount }}</strong> genutzte {{ $unpricedCount === 1 ? 'Lizenz hat' : 'Lizenzen haben' }} keinen hinterlegten Preis — sie fehlen in der Kostenrechnung.
+                    </p>
+                    @if($filterPrice !== 'unpriced')
+                        <button wire:click="$set('filterPrice', 'unpriced')" class="text-xs font-medium text-amber-700 dark:text-amber-400 hover:underline flex-shrink-0 whitespace-nowrap">Anzeigen</button>
+                    @endif
+                </div>
+            @endif
+
             {{-- Tabelle --}}
             <div class="relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm">
                 <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/30 to-transparent"></div>
@@ -309,6 +322,12 @@
                                             <span class="text-sm text-gray-700 dark:text-gray-300">
                                                 {{ $sku->unit_price !== null ? '€ ' . number_format((float)$sku->unit_price, 2, ',', '.') : '—' }}
                                             </span>
+                                        @endif
+                                        @if($sku->unit_price === null && $sku->consumed_units > 0)
+                                            <div class="text-[10px] text-amber-500 mt-1 whitespace-nowrap">
+                                                @svg('heroicon-o-exclamation-triangle', 'w-3 h-3 inline -mt-0.5')
+                                                Preis fehlt
+                                            </div>
                                         @endif
                                     </td>
                                     <td class="px-5 py-3">

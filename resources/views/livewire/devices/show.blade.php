@@ -109,7 +109,24 @@
     <x-slot name="activity">
         <x-ui-page-sidebar title="Aktivitäten" icon="heroicon-o-bolt" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
             <div class="p-4 space-y-3 bg-[var(--ui-muted-5)]">
-                <div class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-1">Letzte Synchronisierungen</div>
+                <div class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-1">Verlauf</div>
+                @forelse($events as $ev)
+                    @php $ec = $ev->eventColor(); @endphp
+                    <div class="p-2.5 rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm">
+                        <div class="flex items-center gap-1.5 mb-0.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-{{ $ec }}-500 flex-shrink-0"></span>
+                            <span class="text-[11px] font-medium text-[var(--ui-secondary)]">{{ $ev->eventLabel() }}</span>
+                        </div>
+                        @if($ev->old_value !== null || $ev->new_value !== null)
+                            <div class="text-[10px] text-[var(--ui-muted)] break-words pl-3">{{ $ev->old_value ?: '—' }} → {{ $ev->new_value ?: '—' }}</div>
+                        @endif
+                        <div class="text-[10px] text-[var(--ui-muted)] pl-3 mt-0.5">{{ $ev->created_at?->diffForHumans() }}</div>
+                    </div>
+                @empty
+                    <div class="p-3 text-center text-[11px] text-[var(--ui-muted)]">Noch keine Änderungen erfasst.</div>
+                @endforelse
+
+                <div class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-1 pt-2">Letzte Synchronisierungen</div>
                 @forelse($activities as $activity)
                     <div class="p-3 rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm">
                         <div class="flex items-start justify-between gap-2 mb-1.5">
@@ -217,6 +234,94 @@
                     </div>
                 @endif
 
+                {{-- Zuweisung & Lifecycle --}}
+                <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
+                    <div class="px-4 py-3 border-b border-black/5 dark:border-white/5 flex items-center justify-between">
+                        <h2 class="text-xs font-medium uppercase tracking-wider text-gray-400">Zuweisung & Lifecycle</h2>
+                        @if($canManage && !$editingLifecycle)
+                            <button wire:click="editLifecycle" class="text-xs text-violet-600 hover:underline">Bearbeiten</button>
+                        @endif
+                    </div>
+
+                    @if($lifecycleFlash)
+                        <div class="px-4 pt-3 text-[11px] text-emerald-600">{{ $lifecycleFlash }}</div>
+                    @endif
+
+                    @if(!$editingLifecycle)
+                        <div class="p-4 space-y-3">
+                            <div class="flex flex-wrap items-center gap-2">
+                                @php $lc = $device->lifecycleBadgeColor(); @endphp
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-{{ $lc }}-500/10 text-{{ $lc }}-600 dark:text-{{ $lc }}-400">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-{{ $lc }}-500"></span>
+                                    {{ $device->lifecycleLabel() }}
+                                </span>
+                                @if($device->isExpiringSoon())
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                                        @svg('heroicon-o-exclamation-triangle', 'w-3 h-3')
+                                        Läuft ab {{ $device->earliestExpiry()?->format('d.m.Y') }}
+                                    </span>
+                                @endif
+                            </div>
+
+                            <dl class="text-[11px] divide-y divide-black/[0.04]">
+                                <div class="flex justify-between py-1.5"><dt class="text-gray-400">Standort</dt><dd class="text-gray-600 dark:text-gray-300">{{ $device->location ?: '—' }}</dd></div>
+                                <div class="flex justify-between py-1.5"><dt class="text-gray-400">Garantie bis</dt><dd class="text-gray-600 dark:text-gray-300 tabular-nums">{{ $device->warranty_until?->format('d.m.Y') ?? '—' }}</dd></div>
+                                <div class="flex justify-between py-1.5"><dt class="text-gray-400">Leasing bis</dt><dd class="text-gray-600 dark:text-gray-300 tabular-nums">{{ $device->lease_until?->format('d.m.Y') ?? '—' }}</dd></div>
+                                <div class="flex justify-between py-1.5"><dt class="text-gray-400">Lieferant</dt><dd class="text-gray-600 dark:text-gray-300">{{ optional($device->vendor)->name ?? '—' }}</dd></div>
+                                <div class="flex justify-between py-1.5"><dt class="text-gray-400">Bestell-Nr.</dt><dd class="text-gray-600 dark:text-gray-300">{{ $device->order_no ?: '—' }}</dd></div>
+                                <div class="flex justify-between py-1.5"><dt class="text-gray-400">Bestelldatum</dt><dd class="text-gray-600 dark:text-gray-300 tabular-nums">{{ $device->order_date?->format('d.m.Y') ?? '—' }}</dd></div>
+                            </dl>
+                        </div>
+                    @else
+                        <div class="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">Status</label>
+                                <select wire:model="lStatus" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
+                                    <option value="">– kein Status –</option>
+                                    <option value="in_use">In Betrieb</option>
+                                    <option value="spare">Reserve / Lager</option>
+                                    <option value="repair">In Reparatur</option>
+                                    <option value="retired">Ausgemustert</option>
+                                    <option value="lost">Verloren / Gestohlen</option>
+                                </select>
+                                @error('lStatus')<span class="text-[10px] text-red-500">{{ $message }}</span>@enderror
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">Standort</label>
+                                <input type="text" wire:model="lLocation" maxlength="255" placeholder="z. B. Büro Bonn, Lager" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">Garantie bis</label>
+                                <input type="date" wire:model="lWarranty" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
+                                @error('lWarranty')<span class="text-[10px] text-red-500">{{ $message }}</span>@enderror
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">Leasing bis</label>
+                                <input type="date" wire:model="lLease" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">Lieferant</label>
+                                <select wire:model="lVendor" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
+                                    <option value="">– kein Lieferant –</option>
+                                    @foreach($vendors as $v)<option value="{{ $v->id }}">{{ $v->name }}</option>@endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">Bestell-Nr.</label>
+                                <input type="text" wire:model="lOrderNo" maxlength="255" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">Bestelldatum</label>
+                                <input type="date" wire:model="lOrderDate" class="w-full px-3 py-1.5 text-sm rounded-lg border border-[var(--ui-border)] bg-white">
+                            </div>
+                            <div class="sm:col-span-2 flex items-center gap-2">
+                                <button wire:click="saveLifecycle" class="px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">Speichern</button>
+                                <button wire:click="cancelLifecycle" class="px-3 py-1.5 text-xs font-medium text-gray-600 bg-black/[0.04] rounded-lg hover:bg-black/[0.07]">Abbrechen</button>
+                            </div>
+                        </div>
+                    @endif
+                </div>
+
                 {{-- Kosten --}}
                 <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
                     <div class="px-4 py-3 border-b border-black/5 dark:border-white/5 flex items-center justify-between">
@@ -287,6 +392,41 @@
                                 <button wire:click="saveCost" class="px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">Speichern</button>
                                 <button wire:click="cancelCost" class="px-3 py-1.5 text-xs font-medium text-gray-600 bg-black/[0.04] rounded-lg hover:bg-black/[0.07]">Abbrechen</button>
                                 <span class="text-[11px] text-gray-400">Leasing-Rate <em>oder</em> Kaufpreis + AfA-Monate. Leer = Modell-Default.</span>
+                            </div>
+                        </div>
+                    @endif
+                </div>
+
+                {{-- Notiz --}}
+                <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
+                    <div class="px-4 py-3 border-b border-black/5 dark:border-white/5 flex items-center justify-between">
+                        <h2 class="text-xs font-medium uppercase tracking-wider text-gray-400">Notiz</h2>
+                        @if($canManage && !$editingNotes)
+                            <button wire:click="editNotes" class="text-xs text-violet-600 hover:underline">Bearbeiten</button>
+                        @endif
+                    </div>
+
+                    @if($notesFlash)
+                        <div class="px-4 pt-3 text-[11px] text-emerald-600">{{ $notesFlash }}</div>
+                    @endif
+
+                    @if(!$editingNotes)
+                        <div class="p-4">
+                            @if($device->notes)
+                                <p class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{{ $device->notes }}</p>
+                            @else
+                                <p class="text-[11px] text-gray-400">Keine Notiz hinterlegt.</p>
+                            @endif
+                        </div>
+                    @else
+                        <div class="p-4 space-y-2">
+                            <textarea wire:model="oNotes" rows="4" maxlength="2000"
+                                placeholder="z. B. Leihgerät, wartet auf Rückgabe, Display-Schaden gemeldet …"
+                                class="w-full px-3 py-2 text-sm rounded-lg border border-[var(--ui-border)] bg-white"></textarea>
+                            @error('oNotes')<span class="text-[10px] text-red-500">{{ $message }}</span>@enderror
+                            <div class="flex items-center gap-2">
+                                <button wire:click="saveNotes" class="px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">Speichern</button>
+                                <button wire:click="cancelNotes" class="px-3 py-1.5 text-xs font-medium text-gray-600 bg-black/[0.04] rounded-lg hover:bg-black/[0.07]">Abbrechen</button>
                             </div>
                         </div>
                     @endif

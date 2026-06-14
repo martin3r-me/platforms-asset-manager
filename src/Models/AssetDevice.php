@@ -37,6 +37,14 @@ class AssetDevice extends Model
         'purchase_date',
         'cost_type_id',
         'cost_center_id',
+        'notes',
+        'lifecycle_status',
+        'warranty_until',
+        'lease_until',
+        'vendor_id',
+        'order_no',
+        'order_date',
+        'location',
         'enrolled_at',
         'last_check_in_at',
         'raw_data',
@@ -49,7 +57,16 @@ class AssetDevice extends Model
         'monthly_cost'     => 'decimal:2',
         'purchase_price'   => 'decimal:2',
         'purchase_date'    => 'date',
+        'warranty_until'   => 'date',
+        'lease_until'      => 'date',
+        'order_date'       => 'date',
     ];
+
+    /** Tage-Schwelle, ab der Garantie/Leasing als „läuft bald ab" gilt (inkl. bereits abgelaufen). */
+    public const EXPIRY_SOON_DAYS = 90;
+
+    /** Erlaubte Lifecycle-Status (Reihenfolge = UI-Reihenfolge). */
+    public const LIFECYCLE_STATUSES = ['in_use', 'spare', 'repair', 'retired', 'lost'];
 
     public function team()
     {
@@ -64,6 +81,11 @@ class AssetDevice extends Model
     public function costCenter()
     {
         return $this->belongsTo(AssetCostCenter::class, 'cost_center_id');
+    }
+
+    public function vendor()
+    {
+        return $this->belongsTo(AssetVendor::class, 'vendor_id');
     }
 
     /** Mitarbeiter über die UPN (Geräte tragen nur die UPN als String, keine echte FK). */
@@ -161,5 +183,46 @@ class AssetDevice extends Model
             'conflict'       => 'Konflikt',
             default          => 'Unbekannt',
         };
+    }
+
+    public function lifecycleLabel(): string
+    {
+        return match($this->lifecycle_status) {
+            'in_use'  => 'In Betrieb',
+            'spare'   => 'Reserve / Lager',
+            'repair'  => 'In Reparatur',
+            'retired' => 'Ausgemustert',
+            'lost'    => 'Verloren / Gestohlen',
+            default   => '—',
+        };
+    }
+
+    /** Nur Farbfamilien verwenden, die im Modul bereits als Klassen vorkommen (Tailwind-Build). */
+    public function lifecycleBadgeColor(): string
+    {
+        return match($this->lifecycle_status) {
+            'in_use'  => 'emerald',
+            'spare'   => 'indigo',
+            'repair'  => 'amber',
+            'retired' => 'gray',
+            'lost'    => 'red',
+            default   => 'gray',
+        };
+    }
+
+    /** Frühestes Ablaufdatum aus Garantie/Leasing (oder null, wenn beides leer). */
+    public function earliestExpiry(): ?\Carbon\CarbonInterface
+    {
+        $w = $this->warranty_until;
+        $l = $this->lease_until;
+        if ($w && $l) return $w->lte($l) ? $w : $l;
+        return $w ?: $l;
+    }
+
+    /** Garantie/Leasing läuft innerhalb der Schwelle ab (oder ist bereits abgelaufen). */
+    public function isExpiringSoon(): bool
+    {
+        $e = $this->earliestExpiry();
+        return $e !== null && $e->lte(now()->addDays(self::EXPIRY_SOON_DAYS));
     }
 }

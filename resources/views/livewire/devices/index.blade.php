@@ -15,6 +15,13 @@
                         Letzter Sync {{ $config->last_sync_at->diffForHumans() }}
                     </span>
                 @endif
+                @if($config && $config->isConfigured() && $stats['total'] > 0)
+                    <button wire:click="exportCsv" wire:loading.attr="disabled" wire:target="exportCsv"
+                       class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-black/[0.04] dark:bg-white/[0.06] rounded-lg hover:bg-black/[0.07] transition-all disabled:opacity-60">
+                        @svg('heroicon-o-arrow-down-tray', 'w-3.5 h-3.5')
+                        Export CSV
+                    </button>
+                @endif
                 <a href="{{ route('asset-manager.setup') }}" wire:navigate
                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-black/[0.04] dark:bg-white/[0.06] rounded-lg hover:bg-black/[0.07] transition-all">
                     @svg('heroicon-o-wrench-screwdriver', 'w-3.5 h-3.5')
@@ -28,6 +35,26 @@
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Filter" icon="heroicon-o-funnel" width="w-72" :defaultOpen="true">
             <div class="p-4 space-y-4 bg-[var(--ui-muted-5)]">
+                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Schnellfilter</h3>
+                    <div class="px-2 pb-2 space-y-0.5">
+                        @foreach([
+                            ['all',          'Alle Geräte'],
+                            ['no_user',      'Ohne Nutzer'],
+                            ['inactive',     'Inaktiv (>30 T.)'],
+                            ['noncompliant', 'Nicht konform'],
+                            ['issues',       'Fehler / Konflikt'],
+                            ['expiring',     'Läuft ab (90 T.)'],
+                        ] as [$key, $label])
+                            <button wire:click="setPreset('{{ $key }}')"
+                                class="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-[11px] rounded-md transition-colors {{ $preset === $key ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300 font-medium' : 'text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]' }}">
+                                <span>{{ $label }}</span>
+                                <span class="tabular-nums px-1.5 py-0.5 rounded-full text-[10px] {{ $preset === $key ? 'bg-violet-500/20 text-violet-700 dark:text-violet-300' : 'bg-[var(--ui-muted-10)] text-[var(--ui-muted)]' }}">{{ $presetCounts[$key] ?? 0 }}</span>
+                            </button>
+                        @endforeach
+                    </div>
+                </section>
+
                 <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
                     <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Suche</h3>
                     <div class="px-3 pb-3">
@@ -63,6 +90,20 @@
                 @endif
 
                 <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Lifecycle</h3>
+                    <div class="px-3 pb-3">
+                        <select wire:model.live="filterLifecycle" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40">
+                            <option value="">Alle</option>
+                            <option value="in_use">In Betrieb</option>
+                            <option value="spare">Reserve / Lager</option>
+                            <option value="repair">In Reparatur</option>
+                            <option value="retired">Ausgemustert</option>
+                            <option value="lost">Verloren / Gestohlen</option>
+                        </select>
+                    </div>
+                </section>
+
+                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
                     <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Anzeige</h3>
                     <div class="px-3 pb-2 text-[11px]">
                         <div class="flex items-center justify-between py-1.5">
@@ -81,8 +122,8 @@
                     </button>
                 </section>
 
-                @if($search || $filterCompliance || $filterOs)
-                    <button wire:click="$set('search', ''); $set('filterCompliance', ''); $set('filterOs', '')"
+                @if($search || $filterCompliance || $filterOs || $filterLifecycle || $preset !== 'all')
+                    <button wire:click="$set('search', ''); $set('filterCompliance', ''); $set('filterOs', ''); $set('filterLifecycle', ''); setPreset('all')"
                             class="w-full px-3 py-2 text-[11px] font-medium text-red-500 bg-red-500/5 border border-red-500/20 rounded-lg hover:bg-red-500/10">
                         @svg('heroicon-o-x-circle', 'w-3.5 h-3.5 inline -mt-0.5 mr-1')
                         Filter zurücksetzen
@@ -300,12 +341,18 @@
             </div>
 
             {{-- Aktive Filter --}}
-            @if($search || $filterCompliance || $filterOs)
+            @if($search || $filterCompliance || $filterOs || $filterLifecycle || $preset !== 'all')
+                @php
+                    $presetLabels = ['no_user' => 'Ohne Nutzer', 'inactive' => 'Inaktiv (>30 T.)', 'noncompliant' => 'Nicht konform', 'issues' => 'Fehler / Konflikt', 'expiring' => 'Läuft ab (90 T.)'];
+                    $lifecycleLabels = ['in_use' => 'In Betrieb', 'spare' => 'Reserve / Lager', 'repair' => 'In Reparatur', 'retired' => 'Ausgemustert', 'lost' => 'Verloren / Gestohlen'];
+                @endphp
                 <div class="flex flex-wrap items-center gap-2 text-xs">
                     <span class="text-gray-400">Aktive Filter:</span>
+                    @if($preset !== 'all')<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/10 text-violet-600">{{ $presetLabels[$preset] ?? $preset }} <button wire:click="setPreset('all')">×</button></span>@endif
                     @if($search)<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/10 text-violet-600">Suche: "{{ Str::limit($search, 30) }}" <button wire:click="$set('search', '')">×</button></span>@endif
                     @if($filterCompliance)<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/10 text-violet-600">{{ $filterCompliance }} <button wire:click="$set('filterCompliance', '')">×</button></span>@endif
                     @if($filterOs)<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/10 text-violet-600">{{ $filterOs }} <button wire:click="$set('filterOs', '')">×</button></span>@endif
+                    @if($filterLifecycle)<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/10 text-violet-600">{{ $lifecycleLabels[$filterLifecycle] ?? $filterLifecycle }} <button wire:click="$set('filterLifecycle', '')">×</button></span>@endif
                 </div>
             @endif
 
@@ -325,7 +372,7 @@
                     <div class="flex flex-col items-center justify-center py-16 text-center">
                         @svg('heroicon-o-computer-desktop', 'w-10 h-10 text-gray-300 dark:text-gray-600 mb-3')
                         <p class="text-sm text-gray-400">
-                            @if($search || $filterCompliance || $filterOs) Keine Geräte für diese Filter.
+                            @if($search || $filterCompliance || $filterOs || $filterLifecycle || $preset !== 'all') Keine Geräte für diese Filter.
                             @else Noch keine Geräte synchronisiert. @endif
                         </p>
                     </div>
@@ -368,6 +415,17 @@
                                                     <div class="font-medium text-gray-900 dark:text-gray-100">{{ $device->device_name ?? '—' }}</div>
                                                     @if($device->model)
                                                         <div class="text-xs text-gray-400">{{ $device->manufacturer }} {{ $device->model }}</div>
+                                                    @endif
+                                                    @if($device->lifecycle_status || $device->isExpiringSoon())
+                                                        <div class="flex flex-wrap items-center gap-1 mt-1">
+                                                            @if($device->lifecycle_status)
+                                                                @php $lc = $device->lifecycleBadgeColor(); @endphp
+                                                                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-{{ $lc }}-500/10 text-{{ $lc }}-600">{{ $device->lifecycleLabel() }}</span>
+                                                            @endif
+                                                            @if($device->isExpiringSoon())
+                                                                <span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-amber-500/10 text-amber-600">@svg('heroicon-o-exclamation-triangle', 'w-2.5 h-2.5') läuft ab</span>
+                                                            @endif
+                                                        </div>
                                                     @endif
                                                 </td>
                                             @break

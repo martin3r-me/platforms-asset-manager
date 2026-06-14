@@ -4,6 +4,7 @@ namespace Platform\AssetManager\Jobs;
 
 use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Models\AssetDevice;
+use Platform\AssetManager\Models\AssetDeviceEvent;
 use Platform\AssetManager\Models\AssetDeviceModel;
 use Platform\AssetManager\Models\AssetDeviceSyncLog;
 use Platform\AssetManager\Concerns\RunsTeamSync;
@@ -86,15 +87,18 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                     if ($existing->trashed()) {
                         $existing->restore();
                     }
+                    // VOR dem update(): $existing trägt noch die alten Werte → Verlaufs-Diff möglich.
+                    $this->recordChangeEvents($existing, $data);
                     $existing->update($data);
                     $updated++;
                 } else {
-                    AssetDevice::create(array_merge($data, [
+                    $created = AssetDevice::create(array_merge($data, [
                         'team_id'   => $this->teamId,
                         'tenant_id' => $config->tenant_id,
                         'intune_id' => $device['id'],
                         'source'    => 'intune',
                     ]));
+                    $this->recordEvent($created, 'created', 'Gerät erstmals aus Intune erfasst');
                     $added++;
                 }
 
@@ -190,6 +194,47 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
             'last_check_in_at'    => isset($d['lastSyncDateTime']) ? \Carbon\Carbon::parse($d['lastSyncDateTime']) : null,
             'raw_data'            => $d,
         ];
+    }
+
+    /**
+     * Schreibt Verlaufs-Events bei Wechsel von Besitzer/Compliance/OS — VOR dem update() aufrufen,
+     * solange $device noch die alten DB-Werte trägt. Historie ist Beiwerk: Fehler dürfen den Sync
+     * nie scheitern lassen (try/catch in recordEvent).
+     */
+    protected function recordChangeEvents(AssetDevice $device, array $data): void
+    {
+        $checks = [
+            'user_principal_name' => ['owner_changed',      'Besitzer geändert'],
+            'compliance_state'    => ['compliance_changed', 'Compliance geändert'],
+            'os_version'          => ['os_changed',         'OS aktualisiert'],
+        ];
+
+        foreach ($checks as $field => [$type, $label]) {
+            $old = (string) ($device->{$field} ?? '');
+            $new = (string) ($data[$field] ?? '');
+            if ($old !== $new) {
+                $this->recordEvent($device, $type, $label, $old !== '' ? $old : null, $new !== '' ? $new : null);
+            }
+        }
+    }
+
+    protected function recordEvent(AssetDevice $device, string $type, string $description, ?string $old = null, ?string $new = null): void
+    {
+        try {
+            AssetDeviceEvent::create([
+                'team_id'         => $this->teamId,
+                'asset_device_id' => $device->id,
+                'event_type'      => $type,
+                'description'     => $description,
+                'old_value'       => $old,
+                'new_value'       => $new,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('AssetManager: Geräte-Event nicht geschrieben', [
+                'team_id' => $this->teamId,
+                'error'   => $e->getMessage(),
+            ]);
+        }
     }
 
     protected function markFailed(AssetConnectorConfig $config, AssetDeviceSyncLog $log, \Carbon\Carbon $startedAt, string $message): void
