@@ -182,6 +182,11 @@
                 <span class="flex-1"></span>
                 <span class="text-sm text-[var(--ui-secondary)]">
                     Summe (gefiltert): <strong class="text-violet-700 tabular-nums">{{ number_format($monthlySum, 2, ',', '.') }} € / Monat</strong>
+                    @if($oneTimeSum > 0)
+                        <span class="ml-2 text-[var(--ui-muted)]">·</span>
+                        <span class="ml-2">Einmalkosten: <strong class="text-amber-700 tabular-nums">{{ number_format($oneTimeSum, 2, ',', '.') }} €</strong></span>
+                        <span class="text-[10px] text-[var(--ui-muted)]">(nicht in Monatssumme)</span>
+                    @endif
                 </span>
             </div>
 
@@ -217,7 +222,13 @@
                                     <td class="px-4 py-2.5 text-xs text-gray-500">{{ $line->vendor?->name ?? '—' }}</td>
                                     <td class="px-4 py-2.5 text-right tabular-nums">{{ number_format((float)$line->amount, 2, ',', '.') }} €</td>
                                     <td class="px-4 py-2.5 text-xs text-gray-500">{{ ['monthly'=>'mtl.','quarterly'=>'qrtl.','yearly'=>'jähr.','once'=>'einm.'][$line->frequency] ?? $line->frequency }}</td>
-                                    <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-violet-700">{{ number_format((float)$line->monthly_amount, 2, ',', '.') }} €</td>
+                                    <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-violet-700">
+                                        @if($line->frequency === 'once')
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-500/10 text-amber-700 border border-amber-500/20" title="Einmalbetrag — fließt nicht in die monatliche Aufteilung">einmalig</span>
+                                        @else
+                                            {{ number_format((float)$line->monthly_amount, 2, ',', '.') }} €
+                                        @endif
+                                    </td>
                                     <td class="px-4 py-2.5 text-right whitespace-nowrap">
                                         <button wire:click.stop="toggleActive({{ $line->id }})" class="text-xs text-gray-400 hover:text-amber-600" title="Aktiv/Inaktiv">@svg('heroicon-o-power', 'w-4 h-4 inline')</button>
                                     </td>

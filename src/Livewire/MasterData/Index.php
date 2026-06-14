@@ -193,6 +193,13 @@ class Index extends Component
 
         $this->validate($this->rulesFor($this->active));
 
+        // Single-Source-Guard: pro Team nur EINE hardware_afa- bzw. ms_license-Kostenart. normalizedLines
+        // nutzt firstWhere(aggregation_source) → eine zweite würde stillschweigend nie ausgewertet. Bei
+        // Verstoß abbrechen (Panel bleibt offen). asset_device ist erlaubt (Aggregation nutzt pluck).
+        if ($this->active === 'cost-types' && ! $this->assertSingleSourceCostType()) {
+            return;
+        }
+
         match ($this->active) {
             'companies'    => $this->saveCompany(),
             'cost-centers' => $this->saveCostCenter(),
@@ -201,6 +208,27 @@ class Index extends Component
         };
 
         $this->resetSelection();
+    }
+
+    /** Verhindert eine zweite hardware_afa/ms_license-Kostenart pro Team. false = Verstoß (mit Flash). */
+    protected function assertSingleSourceCostType(): bool
+    {
+        $source = $this->form['aggregation_source'] ?? null;
+        if (! in_array($source, ['hardware_afa', 'ms_license'], true)) {
+            return true;
+        }
+
+        $exists = AssetCostType::where('team_id', $this->teamId())
+            ->where('aggregation_source', $source)
+            ->when($this->selectedId, fn ($q) => $q->where('id', '!=', $this->selectedId))
+            ->exists();
+
+        if ($exists) {
+            $this->flash = "Es gibt bereits eine Kostenart mit Quelle '{$source}'. Pro Team ist nur EINE {$source}-Kostenart zulässig (eine zweite würde nie ausgewertet) — bitte die bestehende bearbeiten.";
+            return false;
+        }
+
+        return true;
     }
 
     protected function saveCompany(): void

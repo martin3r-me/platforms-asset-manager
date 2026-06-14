@@ -118,7 +118,9 @@ class AssetDevice extends Model
      */
     public static function computeMonthlyFrom($monthly, $price, $depMonths, $purchaseDate): ?float
     {
-        if ($monthly !== null && $monthly !== '') {
+        // 0 (bzw. "0.00" aus dem decimal-Cast) ist KEIN Override → auf Modell-Default/Kauf-AfA durchfallen
+        // lassen, statt das Gerät mit 0 € aus der Kostenbasis zu kippen. Nur ein echter >0-Wert überschreibt.
+        if ($monthly !== null && $monthly !== '' && (float) $monthly > 0) {
             return round((float) $monthly, 2);
         }
         // decimal-Casts liefern "0.00" (truthy) — daher explizit auf > 0 prüfen, nicht auf Truthiness.

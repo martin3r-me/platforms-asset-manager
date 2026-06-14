@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Services;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Platform\AssetManager\Models\AssetCompany;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostLine;
@@ -31,9 +32,13 @@ class CostAggregationService
         $total = $b['hardware'] + $b['licenses'] + $b['costlines'];
 
         // Kapazität (kein Spend): AfA von Items OHNE Mitarbeiter (Lager/Pool) + SKU-Katalogkosten
-        // (gekauft/konsumiert, unabhängig von realen Zuweisungen).
-        $hardwareUnassigned = (float) AssetItem::where('team_id', $teamId)
-            ->whereNull('assignee_id')->get()->sum(fn ($i) => $i->monthlyCost());
+        // (gekauft/konsumiert, unabhängig von realen Zuweisungen). Items mit eigener cost_line auch hier
+        // ausschließen (deren Kosten stecken bereits im costlines-Bucket).
+        $itemIdsWithCostLine = $this->itemIdsWithCostLine($teamId);
+        $hardwareUnassigned  = (float) AssetItem::where('team_id', $teamId)
+            ->whereNull('assignee_id')->get()
+            ->reject(fn ($i) => $itemIdsWithCostLine->has($i->id))
+            ->sum(fn ($i) => $i->monthlyCost());
         $licensesCatalog = (float) AssetLicenseSku::where('team_id', $teamId)
             ->get()->sum(fn ($s) => $s->monthlyCost());
 
@@ -76,6 +81,17 @@ class CostAggregationService
         }
 
         return $b;
+    }
+
+    /** asset_item_ids mit aktiver, aktuell gültiger cost_line (Key-Set für Doppelzählungs-Ausschluss). */
+    protected function itemIdsWithCostLine(int $teamId): Collection
+    {
+        return AssetCostLine::active()->validOn(now())
+            ->where('team_id', $teamId)
+            ->whereNotNull('asset_item_id')
+            ->pluck('asset_item_id')
+            ->unique()
+            ->flip();
     }
 
     /**
@@ -364,10 +380,15 @@ class CostAggregationService
         // 2) hardware_afa
         $afaType = $types->firstWhere('aggregation_source', 'hardware_afa');
         if ($afaType) {
+            // Items, die bereits eine eigene Kostenposition (cost_line) tragen, NICHT zusätzlich als AfA
+            // zählen — sonst Doppelzählung (z. B. Drucker/Internet mit cost_line UND gesetztem Kaufpreis).
+            $itemIdsWithCostLine = $this->itemIdsWithCostLine($teamId);
+
             AssetItem::where('team_id', $teamId)
                 ->whereNotNull('assignee_id')
                 ->get()
-                ->each(function ($i) use ($rows, $afaType, $ccById) {
+                ->each(function ($i) use ($rows, $afaType, $ccById, $itemIdsWithCostLine) {
+                    if ($itemIdsWithCostLine->has($i->id)) return;
                     $c = $i->monthlyCost();
                     if ($c <= 0) return;
                     $rows->push([
@@ -436,8 +457,22 @@ class CostAggregationService
 
         $ccByUpn = AssetEmployee::where('team_id', $teamId)->pluck('cost_center_id', 'user_principal_name');
 
+        // Modelle nach normalisiertem Schlüssel. Kollisionen (mehrere Modelle → selber Key, z. B. "HP" vs
+        // "hp ") erkennen und WARNEN statt still den letzten zu behalten (sonst evtl. falscher Modell-Preis
+        // fürs Gerät). Deterministisch das Modell mit hinterlegtem Preis/Kostenart wählen, sonst kleinste id.
         $models = AssetDeviceModel::where('team_id', $teamId)->get()
-            ->keyBy(fn($m) => $this->deviceModelKey($m->manufacturer, $m->model));
+            ->groupBy(fn ($m) => $this->deviceModelKey($m->manufacturer, $m->model))
+            ->map(function ($group, $key) use ($teamId) {
+                if ($group->count() > 1) {
+                    Log::warning('AssetManager: Geräte-Modell-Schlüsselkollision — mehrere Modelle normalisieren auf denselben Schlüssel', [
+                        'team_id' => $teamId,
+                        'key'     => $key,
+                        'models'  => $group->map(fn ($m) => ['id' => $m->id, 'manufacturer' => $m->manufacturer, 'model' => $m->model])->values()->all(),
+                    ]);
+                }
+                return $group->first(fn ($m) => $m->cost_type_id !== null || $m->monthly_cost !== null || $m->purchase_price !== null)
+                    ?? $group->sortBy('id')->first();
+            });
 
         return AssetDevice::where('team_id', $teamId)->get()
             ->map(function ($d) use ($deviceTypeIds, $models, $ccByUpn) {

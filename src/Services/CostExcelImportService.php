@@ -56,20 +56,22 @@ class CostExcelImportService
         $this->stats         = [];
         $this->writtenHashes = [];
 
-        // Stammdaten sicherstellen — der BROICH-Excel-Import braucht das BROICH-Set (feste
-        // Kostenart-Keys), sonst würden Positionen mit unbekanntem Key übersprungen.
-        $this->bootstrap->seedBroichDefaults($teamId);
-
-        $this->costTypes = AssetCostType::where('team_id', $teamId)->get()->keyBy('key')->all();
-        $this->vendors   = AssetVendor::where('team_id', $teamId)->get()->keyBy('name')->all();
-        $this->employeesByName = AssetEmployee::where('team_id', $teamId)->get()
-            ->keyBy(fn($e) => $this->normName($e->display_name ?: $e->user_principal_name))
-            ->all();
-
         $sheets = $this->readWorkbook($path);
 
         DB::beginTransaction();
         try {
+            // Stammdaten + Lookups INNERHALB der Transaktion sicherstellen — der BROICH-Excel-Import braucht
+            // das BROICH-Set (feste Kostenart-Keys), sonst würden Positionen mit unbekanntem Key übersprungen.
+            // Wichtig fürs Dry-Run: so rollt der rollback auch das seedBroichDefaults mit zurück und schreibt
+            // keine BROICH-Defaults dauerhaft in (fremde) Teams (Multi-Tenant-Leitplanke).
+            $this->bootstrap->seedBroichDefaults($teamId);
+
+            $this->costTypes = AssetCostType::where('team_id', $teamId)->get()->keyBy('key')->all();
+            $this->vendors   = AssetVendor::where('team_id', $teamId)->get()->keyBy('name')->all();
+            $this->employeesByName = AssetEmployee::where('team_id', $teamId)->get()
+                ->keyBy(fn($e) => $this->normName($e->display_name ?: $e->user_principal_name))
+                ->all();
+
             $this->importUebersicht($this->findSheet($sheets, ['ubersicht', 'übersicht']));
             $this->importInternet($this->findSheet($sheets, ['internet']));
             $this->importDrucker($this->findSheet($sheets, ['drucker']));
@@ -338,10 +340,16 @@ class CostExcelImportService
         // den Hash, sonst kollidieren monatlich/jährlich derselben Position.
         $frequency = $attrs['frequency'] ?? $type->frequency_default ?? 'monthly';
 
+        // FX-Policy = SNAPSHOT: Der Importer schreibt ausschließlich EUR (Nicht-EUR/USD-Posten werden als
+        // manuelle Cost-Lines mit currency+fx_rate gepflegt, siehe docs/adr). currency gehört in den Hash,
+        // damit gleiche Position in unterschiedlicher Währung nicht kollidiert. Siehe CreateCostLineTool
+        // (lehnt Nicht-EUR ohne fx_rate ab) und AssetCostLine::computeMonthlyAmount (amount × fx_rate).
+        $currency = 'EUR';
+
         $hash = sha1(implode('|', [
             $this->teamId, $typeKey,
             $attrs['cost_center_id'] ?? '', $attrs['assignee_id'] ?? '', $attrs['asset_item_id'] ?? '',
-            $attrs['label'] ?? '', number_format($amount, 4, '.', ''), $frequency,
+            $attrs['label'] ?? '', number_format($amount, 4, '.', ''), $frequency, $currency,
         ]));
 
         $values = [
@@ -352,7 +360,7 @@ class CostExcelImportService
             'asset_item_id'       => $attrs['asset_item_id'] ?? null,
             'label'               => $attrs['label'] ?? $type->name,
             'amount'              => $amount,
-            'currency'            => 'EUR',
+            'currency'            => $currency,
             'frequency'           => $frequency,
             'gl_account'          => $attrs['gl_account'] ?? null,
             'gl_contra_account'   => $attrs['gl_contra_account'] ?? null,

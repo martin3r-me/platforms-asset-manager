@@ -6,6 +6,7 @@ use Livewire\Component;
 use Livewire\WithPagination;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Platform\AssetManager\Models\AssetAssignment;
 use Platform\AssetManager\Models\AssetCategory;
 use Platform\AssetManager\Models\AssetEmployee;
@@ -186,7 +187,8 @@ class Index extends Component
             'bcManufacturer'       => 'nullable|string|max:255',
             'bcModel'              => 'nullable|string|max:255',
             'bcQuantity'           => 'required|integer|min:1|max:500',
-            'bcAssigneeId'         => 'nullable|exists:asset_employees,id',
+            // Assignee MUSS zum eigenen Team gehören (sonst danglende cross-team FK).
+            'bcAssigneeId'         => ['nullable', 'integer', Rule::exists('asset_employees', 'id')->where('team_id', $this->teamId())],
             'bcPurchasePrice'      => 'nullable|numeric|min:0',
             'bcDepreciationMonths' => 'nullable|integer|min:1|max:240',
         ]);

@@ -25,11 +25,15 @@ class ImportTenantUsersJob implements ShouldQueue
 
     public function handle(IntuneGraphService $graph, EmployeeService $employees): void
     {
-        $config = AssetConnectorConfig::where('team_id', $this->teamId)->first();
+        $config = AssetConnectorConfig::where('team_id', $this->teamId)
+            ->where('enabled', true)
+            ->first();
         if (!$config || !$config->isConfigured()) {
-            Log::warning('AssetManager: Import übersprungen — Connector nicht konfiguriert', ['team_id' => $this->teamId]);
+            Log::warning('AssetManager: Import übersprungen — Connector nicht konfiguriert oder deaktiviert', ['team_id' => $this->teamId]);
             return;
         }
+
+        Log::info('AssetManager: Tenant-User-Import gestartet', ['team_id' => $this->teamId]);
 
         $users = $graph->getUsersWithLicenses($config);
         if ($users === null) {

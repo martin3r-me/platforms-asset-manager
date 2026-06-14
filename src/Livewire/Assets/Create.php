@@ -5,6 +5,7 @@ namespace Platform\AssetManager\Livewire\Assets;
 use Livewire\Component;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Platform\AssetManager\Models\AssetCategory;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetItem;
@@ -43,13 +44,16 @@ class Create extends Component
     {
         Gate::authorize('create', AssetItem::class);
 
+        $teamId = Auth::user()->currentTeam->id;
+
         $validated = $this->validate([
             'categoryId'         => 'required|exists:asset_categories,id',
             'name'               => 'required|string|max:255',
             'manufacturer'       => 'nullable|string|max:255',
             'model'              => 'nullable|string|max:255',
             'serialNumber'       => 'nullable|string|max:255',
-            'assigneeId'         => 'nullable|exists:asset_employees,id',
+            // Assignee MUSS zum eigenen Team gehören (sonst danglende cross-team FK).
+            'assigneeId'         => ['nullable', 'integer', Rule::exists('asset_employees', 'id')->where('team_id', $teamId)],
             'status'             => 'required|in:in_stock,assigned,retired,lost',
             'purchaseDate'       => 'nullable|date',
             'purchasePrice'      => 'nullable|numeric|min:0',

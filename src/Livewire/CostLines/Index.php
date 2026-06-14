@@ -210,6 +210,10 @@ class Index extends Component
         // Summe ohne Sortier-Join berechnen (Join wäre 1:1, aber so bleibt es robust)
         $monthlySum = round((float) (clone $base)->sum('monthly_amount'), 2);
 
+        // Einmalkosten separat (auditierbar): once-Positionen haben monthly_amount=0 und fließen NICHT in
+        // die Monatssumme — ihr Rohbetrag würde sonst still verschwinden. Hier als eigener Topf ausgewiesen.
+        $oneTimeSum = round((float) (clone $base)->where('asset_cost_lines.frequency', 'once')->sum('amount'), 2);
+
         $query = (clone $base)
             ->with(['costType', 'costCenter', 'vendor', 'assignee'])
             ->select('asset_cost_lines.*');
@@ -223,6 +227,7 @@ class Index extends Component
             'costCenters' => AssetCostCenter::where('team_id', $teamId)->orderBy('code')->get(),
             'vendors'     => AssetVendor::where('team_id', $teamId)->orderBy('name')->get(),
             'monthlySum'  => $monthlySum,
+            'oneTimeSum'  => $oneTimeSum,
         ])->layout('platform::layouts.app');
     }
 }

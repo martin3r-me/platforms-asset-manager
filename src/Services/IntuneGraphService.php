@@ -214,12 +214,27 @@ class IntuneGraphService
         $users = [];
         $url   = "{$this->graphBase}/users?\$select=id,displayName,userPrincipalName,assignedLicenses&\$top=999";
 
+        $retried = false;
+
         while ($url) {
             try {
                 $response = Http::withHeaders([
                     'Authorization'    => 'Bearer ' . $token,
                     'ConsistencyLevel' => 'eventual',
                 ])->get($url);
+
+                // 401 mitten in der Paginierung (Token während des Laufs abgelaufen): einmal Cache leeren,
+                // Token frisch holen und dieselbe Seite erneut anfordern — analog getManagedDevices.
+                if ($response->status() === 401 && !$retried) {
+                    $retried = true;
+                    $this->clearTokenCache($config->team_id);
+                    $token = $this->fetchToken($config);
+                    if (!$token) {
+                        $this->lastError = 'Token abgelaufen und Erneuerung fehlgeschlagen. Credentials prüfen.';
+                        return null;
+                    }
+                    continue;
+                }
 
                 if ($response->status() === 403) {
                     $graphMsg  = $response->json('error.message', '');
