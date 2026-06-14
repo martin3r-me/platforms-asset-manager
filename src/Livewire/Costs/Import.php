@@ -5,12 +5,14 @@ namespace Platform\AssetManager\Livewire\Costs;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithFileUploads;
+use Platform\AssetManager\Concerns\AuthorizesTeamRole;
 use Platform\AssetManager\Services\CostExcelImportService;
 use Platform\AssetManager\Services\CostResetService;
 
 class Import extends Component
 {
     use WithFileUploads;
+    use AuthorizesTeamRole;
 
     public $file;                      // TemporaryUploadedFile
     public ?array $result = null;      // Statistik je Sheet
@@ -27,12 +29,7 @@ class Import extends Component
     /** owner/admin im aktiven Team? (analog AssetDevicePolicy) */
     protected function canManage(): bool
     {
-        $user = Auth::user();
-        $role = $user->teams()
-            ->where('team_id', $user->currentTeam?->id)
-            ->first()?->pivot?->role;
-
-        return in_array($role, ['owner', 'admin'], true);
+        return $this->isTeamOwnerOrAdmin(Auth::user());
     }
 
     public function updatedFile(): void

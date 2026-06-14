@@ -4,6 +4,7 @@ namespace Platform\AssetManager\Livewire\Employees;
 
 use Livewire\Component;
 use Livewire\WithPagination;
+use Platform\AssetManager\Concerns\AuthorizesTeamRole;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Platform\AssetManager\Models\AssetCostCenter;
@@ -16,6 +17,7 @@ use Platform\AssetManager\Models\AssetUserLicense;
 class Index extends Component
 {
     use WithPagination;
+    use AuthorizesTeamRole;
 
     public string $preset           = 'active'; // all|active|with_license|with_device|with_asset|unassigned|inactive
     public string $search           = '';
@@ -76,12 +78,7 @@ class Index extends Component
     /** owner/admin im aktiven Team? (analog AssetDevicePolicy) */
     public function canManage(): bool
     {
-        $user = Auth::user();
-        $role = $user->teams()
-            ->where('team_id', $user->currentTeam?->id)
-            ->first()?->pivot?->role;
-
-        return in_array($role, ['owner', 'admin'], true);
+        return $this->isTeamOwnerOrAdmin(Auth::user());
     }
 
     /**

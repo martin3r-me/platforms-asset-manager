@@ -4,6 +4,7 @@ namespace Platform\AssetManager\Livewire\Devices;
 
 use Livewire\Component;
 use Illuminate\Support\Facades\Auth;
+use Platform\AssetManager\Concerns\AuthorizesTeamRole;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetDevice;
@@ -11,6 +12,8 @@ use Platform\AssetManager\Models\AssetDeviceSyncLog;
 
 class Show extends Component
 {
+    use AuthorizesTeamRole;
+
     public AssetDevice $device;
     public bool $showRawData = false;
 
@@ -48,12 +51,7 @@ class Show extends Component
     /** owner/admin im aktiven Team? (analog Costs/Import) */
     protected function canManage(): bool
     {
-        $user = Auth::user();
-        $role = $user->teams()
-            ->where('team_id', $user->currentTeam?->id)
-            ->first()?->pivot?->role;
-
-        return in_array($role, ['owner', 'admin'], true);
+        return $this->isTeamOwnerOrAdmin(Auth::user());
     }
 
     public function toggleRawData(): void

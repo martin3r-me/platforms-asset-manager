@@ -4,6 +4,7 @@ namespace Platform\AssetManager\Livewire\DeviceModels;
 
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Platform\AssetManager\Concerns\AuthorizesTeamRole;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceModel;
@@ -11,6 +12,8 @@ use Platform\AssetManager\Models\AssetVendor;
 
 class Index extends Component
 {
+    use AuthorizesTeamRole;
+
     public ?int    $editId    = null;
     public ?string $eMonthly  = null;
     public ?string $ePurchase = null;
@@ -31,12 +34,7 @@ class Index extends Component
     /** owner/admin im aktiven Team? (analog Devices/Show — Preise pflegen ist eine Verwaltungsaktion) */
     protected function canManage(): bool
     {
-        $user = Auth::user();
-        $role = $user->teams()
-            ->where('team_id', $user->currentTeam?->id)
-            ->first()?->pivot?->role;
-
-        return in_array($role, ['owner', 'admin'], true);
+        return $this->isTeamOwnerOrAdmin(Auth::user());
     }
 
     public function edit(int $id): void

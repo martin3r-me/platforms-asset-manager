@@ -3,9 +3,12 @@
 namespace Platform\AssetManager\Policies;
 
 use Illuminate\Contracts\Auth\Authenticatable;
+use Platform\AssetManager\Concerns\AuthorizesTeamRole;
 
 class AssetDevicePolicy
 {
+    use AuthorizesTeamRole;
+
     public function viewAny(Authenticatable $user): bool
     {
         return true;
@@ -23,20 +26,11 @@ class AssetDevicePolicy
 
     public function sync(Authenticatable $user): bool
     {
-        return $this->isOwnerOrAdmin($user);
+        return $this->isTeamOwnerOrAdmin($user);
     }
 
     public function manageConnector(Authenticatable $user): bool
     {
-        return $this->isOwnerOrAdmin($user);
-    }
-
-    private function isOwnerOrAdmin(Authenticatable $user): bool
-    {
-        $role = $user->teams()
-            ->where('team_id', $user->currentTeam?->id)
-            ->first()?->pivot?->role;
-
-        return in_array($role, ['owner', 'admin']);
+        return $this->isTeamOwnerOrAdmin($user);
     }
 }
