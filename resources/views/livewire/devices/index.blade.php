@@ -45,6 +45,7 @@
                             ['noncompliant', 'Nicht konform'],
                             ['issues',       'Fehler / Konflikt'],
                             ['expiring',     'Läuft ab (90 T.)'],
+                            ['unencrypted',  'Nicht verschlüsselt'],
                         ] as [$key, $label])
                             <button wire:click="setPreset('{{ $key }}')"
                                 class="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-[11px] rounded-md transition-colors {{ $preset === $key ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300 font-medium' : 'text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]' }}">
@@ -343,7 +344,7 @@
             {{-- Aktive Filter --}}
             @if($search || $filterCompliance || $filterOs || $filterLifecycle || $preset !== 'all')
                 @php
-                    $presetLabels = ['no_user' => 'Ohne Nutzer', 'inactive' => 'Inaktiv (>30 T.)', 'noncompliant' => 'Nicht konform', 'issues' => 'Fehler / Konflikt', 'expiring' => 'Läuft ab (90 T.)'];
+                    $presetLabels = ['no_user' => 'Ohne Nutzer', 'inactive' => 'Inaktiv (>30 T.)', 'noncompliant' => 'Nicht konform', 'issues' => 'Fehler / Konflikt', 'expiring' => 'Läuft ab (90 T.)', 'unencrypted' => 'Nicht verschlüsselt'];
                     $lifecycleLabels = ['in_use' => 'In Betrieb', 'spare' => 'Reserve / Lager', 'repair' => 'In Reparatur', 'retired' => 'Ausgemustert', 'lost' => 'Verloren / Gestohlen'];
                 @endphp
                 <div class="flex flex-wrap items-center gap-2 text-xs">

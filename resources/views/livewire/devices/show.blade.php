@@ -66,6 +66,33 @@
                     </dl>
                 </section>
 
+                {{-- Sicherheit & Hardware --}}
+                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Sicherheit & Hardware</h3>
+                    <div class="py-2 px-3 flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--ui-muted)]">Verschlüsselung</span>
+                        @php $enc = $device->encryptionBadgeColor(); @endphp
+                        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-{{ $enc }}-500/10 text-{{ $enc }}-600 dark:text-{{ $enc }}-400">
+                            <span class="w-1.5 h-1.5 rounded-full bg-{{ $enc }}-500"></span>
+                            {{ $device->encryptionLabel() }}
+                        </span>
+                    </div>
+                    <dl class="divide-y divide-[var(--ui-border)]/30 text-[11px] border-t border-[var(--ui-border)]/30">
+                        <div class="flex items-baseline justify-between gap-3 py-1.5 px-3">
+                            <dt class="text-[var(--ui-muted)]">Enrollment</dt>
+                            <dd class="text-[var(--ui-secondary)] m-0 truncate max-w-[55%] text-right">{{ $device->enrollment_type ?: '—' }}</dd>
+                        </div>
+                        <div class="flex items-baseline justify-between gap-3 py-1.5 px-3">
+                            <dt class="text-[var(--ui-muted)]">Speicher</dt>
+                            <dd class="text-[var(--ui-secondary)] m-0 tabular-nums">{{ $device->storageSummary() }}</dd>
+                        </div>
+                        <div class="flex items-baseline justify-between gap-3 py-1.5 px-3">
+                            <dt class="text-[var(--ui-muted)]">Arbeitsspeicher</dt>
+                            <dd class="text-[var(--ui-secondary)] m-0 tabular-nums">{{ $device->memoryLabel() }}</dd>
+                        </div>
+                    </dl>
+                </section>
+
                 {{-- Nutzer --}}
                 <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
                     <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Nutzer</h3>

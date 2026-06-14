@@ -45,6 +45,11 @@ class AssetDevice extends Model
         'order_no',
         'order_date',
         'location',
+        'is_encrypted',
+        'enrollment_type',
+        'free_storage_bytes',
+        'total_storage_bytes',
+        'physical_memory_bytes',
         'enrolled_at',
         'last_check_in_at',
         'raw_data',
@@ -60,6 +65,7 @@ class AssetDevice extends Model
         'warranty_until'   => 'date',
         'lease_until'      => 'date',
         'order_date'       => 'date',
+        'is_encrypted'     => 'boolean',
     ];
 
     /** Tage-Schwelle, ab der Garantie/Leasing als „läuft bald ab" gilt (inkl. bereits abgelaufen). */
@@ -224,5 +230,45 @@ class AssetDevice extends Model
     {
         $e = $this->earliestExpiry();
         return $e !== null && $e->lte(now()->addDays(self::EXPIRY_SOON_DAYS));
+    }
+
+    public function encryptionLabel(): string
+    {
+        return match (true) {
+            $this->is_encrypted === true  => 'Verschlüsselt',
+            $this->is_encrypted === false => 'Nicht verschlüsselt',
+            default                       => 'Unbekannt',
+        };
+    }
+
+    public function encryptionBadgeColor(): string
+    {
+        return match (true) {
+            $this->is_encrypted === true  => 'emerald',
+            $this->is_encrypted === false => 'red',
+            default                       => 'gray',
+        };
+    }
+
+    /** Bytes menschenlesbar (GB/MB). null/0 → „—". */
+    public static function formatBytes(?int $bytes): string
+    {
+        if ($bytes === null || $bytes <= 0) return '—';
+        $gb = $bytes / 1073741824;
+        if ($gb >= 1) return number_format($gb, $gb >= 100 ? 0 : 1, ',', '.') . ' GB';
+        return number_format($bytes / 1048576, 0, ',', '.') . ' MB';
+    }
+
+    /** „frei / gesamt" Speicher oder „—". */
+    public function storageSummary(): string
+    {
+        if (!$this->free_storage_bytes && !$this->total_storage_bytes) return '—';
+        $free = self::formatBytes($this->free_storage_bytes);
+        return $this->total_storage_bytes ? $free . ' / ' . self::formatBytes($this->total_storage_bytes) : $free;
+    }
+
+    public function memoryLabel(): string
+    {
+        return self::formatBytes($this->physical_memory_bytes);
     }
 }

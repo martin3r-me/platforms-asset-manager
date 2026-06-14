@@ -4,6 +4,7 @@ use Platform\AssetManager\Livewire\Dashboard;
 use Platform\AssetManager\Livewire\ConnectorSetup;
 use Platform\AssetManager\Livewire\Devices\Index as DevicesIndex;
 use Platform\AssetManager\Livewire\Devices\Show as DevicesShow;
+use Platform\AssetManager\Livewire\Compliance\Index as ComplianceIndex;
 use Platform\AssetManager\Livewire\Licenses\Index as LicensesIndex;
 use Platform\AssetManager\Livewire\Licenses\Show as LicensesShow;
 use Platform\AssetManager\Livewire\Assets\Index as AssetsIndex;
@@ -25,6 +26,8 @@ Route::get('/', Dashboard::class)->name('asset-manager.dashboard');
 
 Route::get('/devices', DevicesIndex::class)->name('asset-manager.devices.index');
 Route::get('/devices/{device}', DevicesShow::class)->name('asset-manager.devices.show');
+
+Route::get('/compliance', ComplianceIndex::class)->name('asset-manager.compliance.index');
 
 Route::get('/assets', AssetsIndex::class)->name('asset-manager.assets.index');
 Route::get('/assets/create', AssetsCreate::class)->name('asset-manager.assets.create');

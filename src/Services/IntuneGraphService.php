@@ -88,7 +88,9 @@ class IntuneGraphService
         $url = "{$this->graphBase}/deviceManagement/managedDevices"
             . '?$select=id,deviceName,userDisplayName,userPrincipalName,operatingSystem,osVersion'
             . ',complianceState,managementState,managedDeviceOwnerType,manufacturer,model,serialNumber'
-            . ',enrolledDateTime,lastSyncDateTime';
+            . ',enrolledDateTime,lastSyncDateTime'
+            // Security-/Health-Felder — alle unter DeviceManagementManagedDevices.Read.All (keine neue Permission).
+            . ',isEncrypted,deviceEnrollmentType,freeStorageSpaceInBytes,totalStorageSpaceInBytes,physicalMemoryInBytes';
 
         $retried = false;
 

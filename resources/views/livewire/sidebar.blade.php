@@ -33,6 +33,13 @@
         </x-ui-sidebar-item>
     </x-ui-sidebar-list>
 
+    <x-ui-sidebar-list label="Sicherheit">
+        <x-ui-sidebar-item :href="route('asset-manager.compliance.index')" :active="request()->routeIs('asset-manager.compliance.*')">
+            @svg('heroicon-o-shield-check', 'w-4 h-4 text-[var(--ui-secondary)]')
+            <span class="ml-2 text-sm">Compliance-Cockpit</span>
+        </x-ui-sidebar-item>
+    </x-ui-sidebar-list>
+
     <x-ui-sidebar-list label="Mitarbeiter">
         <x-ui-sidebar-item :href="route('asset-manager.employees.index')" :active="request()->routeIs('asset-manager.employees.*')">
             @svg('heroicon-o-users', 'w-4 h-4 text-[var(--ui-secondary)]')
@@ -98,6 +105,9 @@
             </a>
             <a href="{{ route('asset-manager.internet.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.internet.*') ? 'bg-[var(--ui-primary-10)] text-[var(--ui-primary)]' : 'text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]' }}">
                 @svg('heroicon-o-wifi', 'w-5 h-5')
+            </a>
+            <a href="{{ route('asset-manager.compliance.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.compliance.*') ? 'bg-[var(--ui-primary-10)] text-[var(--ui-primary)]' : 'text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]' }}">
+                @svg('heroicon-o-shield-check', 'w-5 h-5')
             </a>
             <a href="{{ route('asset-manager.employees.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.employees.*') ? 'bg-[var(--ui-primary-10)] text-[var(--ui-primary)]' : 'text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]' }}">
                 @svg('heroicon-o-users', 'w-5 h-5')

@@ -41,7 +41,7 @@ class Index extends Component
     /** Schwellwert (Tage ohne Check-in), ab dem ein Gerät als inaktiv gilt. */
     public const INACTIVE_DAYS = 30;
 
-    public const PRESETS = ['all', 'no_user', 'inactive', 'noncompliant', 'issues', 'expiring'];
+    public const PRESETS = ['all', 'no_user', 'inactive', 'noncompliant', 'issues', 'expiring', 'unencrypted'];
 
     protected $queryString = [
         'preset'           => ['except' => 'all'],
@@ -207,6 +207,9 @@ class Index extends Component
                       ->orWhere(function ($w) use ($t) { $w->whereNotNull('lease_until')->where('lease_until', '<=', $t); });
                 });
                 return;
+            case 'unencrypted':
+                $query->where('is_encrypted', false);
+                return;
             case 'all':
             default:
                 // keine Einschränkung
@@ -227,7 +230,7 @@ class Index extends Component
             fputcsv($out, [
                 'Gerät', 'Hersteller', 'Modell', 'Seriennr.', 'Betriebssystem', 'OS-Version',
                 'Compliance', 'Management', 'Typ', 'Nutzer', 'UPN', 'Enrollt am', 'Letztes Check-In',
-                'Lifecycle', 'Garantie bis', 'Leasing bis', 'Standort', 'Lieferant', 'Bestell-Nr.',
+                'Lifecycle', 'Garantie bis', 'Leasing bis', 'Standort', 'Lieferant', 'Bestell-Nr.', 'Verschlüsselt',
             ], ';');
 
             foreach ($rows->cursor() as $d) {
@@ -251,6 +254,7 @@ class Index extends Component
                     $d->location,
                     optional($d->vendor)->name,
                     $d->order_no,
+                    $d->encryptionLabel(),
                 ], ';');
             }
 
@@ -294,6 +298,7 @@ class Index extends Component
                                     $q->where(function ($w) use ($t) { $w->whereNotNull('warranty_until')->where('warranty_until', '<=', $t); })
                                       ->orWhere(function ($w) use ($t) { $w->whereNotNull('lease_until')->where('lease_until', '<=', $t); });
                                 })->count(),
+            'unencrypted'  => AssetDevice::where('team_id', $team->id)->where('is_encrypted', false)->count(),
         ];
 
         $osList = AssetDevice::where('team_id', $team->id)

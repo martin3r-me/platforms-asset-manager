@@ -192,6 +192,11 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
             'serial_number'       => $d['serialNumber'] ?? null,
             'enrolled_at'         => isset($d['enrolledDateTime']) ? \Carbon\Carbon::parse($d['enrolledDateTime']) : null,
             'last_check_in_at'    => isset($d['lastSyncDateTime']) ? \Carbon\Carbon::parse($d['lastSyncDateTime']) : null,
+            'is_encrypted'          => $d['isEncrypted'] ?? null,
+            'enrollment_type'       => $d['deviceEnrollmentType'] ?? null,
+            'free_storage_bytes'    => $d['freeStorageSpaceInBytes'] ?? null,
+            'total_storage_bytes'   => $d['totalStorageSpaceInBytes'] ?? null,
+            'physical_memory_bytes' => $d['physicalMemoryInBytes'] ?? null,
             'raw_data'            => $d,
         ];
     }
