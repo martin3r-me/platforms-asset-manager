@@ -64,6 +64,10 @@
             @svg('heroicon-o-banknotes', 'w-4 h-4 text-[var(--ui-secondary)]')
             <span class="ml-2 text-sm">Kosten (pro MA)</span>
         </x-ui-sidebar-item>
+        <x-ui-sidebar-item :href="route('asset-manager.reports.device-models')" :active="request()->routeIs('asset-manager.reports.*')">
+            @svg('heroicon-o-chart-bar', 'w-4 h-4 text-[var(--ui-secondary)]')
+            <span class="ml-2 text-sm">Geräte nach Modell</span>
+        </x-ui-sidebar-item>
     </x-ui-sidebar-list>
 
     <x-ui-sidebar-list label="Einstellungen">
@@ -127,6 +131,9 @@
             </a>
             <a href="{{ route('asset-manager.costs') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.costs') ? 'bg-[var(--ui-primary-10)] text-[var(--ui-primary)]' : 'text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]' }}">
                 @svg('heroicon-o-banknotes', 'w-5 h-5')
+            </a>
+            <a href="{{ route('asset-manager.reports.device-models') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.reports.*') ? 'bg-[var(--ui-primary-10)] text-[var(--ui-primary)]' : 'text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]' }}">
+                @svg('heroicon-o-chart-bar', 'w-5 h-5')
             </a>
             <a href="{{ route('asset-manager.master-data.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.master-data.index') ? 'bg-[var(--ui-primary-10)] text-[var(--ui-primary)]' : 'text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]' }}">
                 @svg('heroicon-o-rectangle-stack', 'w-5 h-5')
