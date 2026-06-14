@@ -15,6 +15,7 @@ class AssetDeviceController extends Controller
         Gate::authorize('viewAny', AssetDevice::class);
 
         $team = $request->user()->currentTeam;
+        abort_unless($team, 403, 'Kein Team zugeordnet.');
 
         $devices = AssetDevice::where('team_id', $team->id)
             ->orderBy('device_name')

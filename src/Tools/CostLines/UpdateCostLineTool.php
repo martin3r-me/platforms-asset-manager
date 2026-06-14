@@ -114,6 +114,18 @@ class UpdateCostLineTool implements ToolContract, ToolMetadataContract
                 $line->active = (bool) $arguments['active'];
             }
 
+            // Betrag prüfen, wenn er geändert wurde: 0 ablehnen; negativ nur bei allow_negative-Kostenart
+            // (Gutschrift) — verhindert stilles Netting durch Tippfehler-Minusbeträge.
+            if (array_key_exists('amount', $arguments)) {
+                $amount = (float) $line->amount;
+                if ($amount == 0.0) {
+                    return ToolResult::error('VALIDATION_ERROR', 'amount darf nicht 0,00 sein.');
+                }
+                if ($amount < 0 && ! (bool) AssetCostType::where('team_id', $teamId)->whereKey($line->cost_type_id)->value('allow_negative')) {
+                    return ToolResult::error('VALIDATION_ERROR', 'Negativer Betrag ist nur für Kostenarten mit allow_negative (Gutschrift) zulässig.');
+                }
+            }
+
             // Effektive Währung/Kurs prüfen (nach Anwenden der Argumente): Nicht-EUR ohne positiven
             // fx_rate ablehnen, sonst bewertet computeMonthlyAmount den Betrag still 1:1 als EUR.
             $effCurrency = strtoupper(trim((string) $line->currency)) ?: 'EUR';

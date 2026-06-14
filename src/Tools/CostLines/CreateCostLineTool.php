@@ -88,6 +88,16 @@ class CreateCostLineTool implements ToolContract, ToolMetadataContract
                     . "Manuelle Kostenpositionen sind nur für cost_line-Kostenarten zulässig (sonst unsichtbar im Pivot). Gültig: {$valid}");
             }
 
+            // Betrag 0 oder (ohne allow_negative-Kostenart) negativ ablehnen — verhindert stilles Netting
+            // durch Tippfehler-Minusbeträge. Gutschriften laufen explizit über allow_negative-Kostenarten.
+            $amount = (float) $arguments['amount'];
+            if ($amount == 0.0) {
+                return ToolResult::error('VALIDATION_ERROR', 'amount darf nicht 0,00 sein.');
+            }
+            if ($amount < 0 && ! $costType->allow_negative) {
+                return ToolResult::error('VALIDATION_ERROR', "Negativer Betrag ist nur für Kostenarten mit allow_negative (Gutschrift) zulässig — '{$costType->name}' nicht.");
+            }
+
             $error = $this->validateOptionalRefs($arguments, $teamId);
             if ($error) {
                 return $error;

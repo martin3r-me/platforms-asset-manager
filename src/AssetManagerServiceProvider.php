@@ -167,7 +167,12 @@ class AssetManagerServiceProvider extends ServiceProvider
                 continue;
             }
 
-            $aliasPath = str_replace(['\\', '/'], '.', Str::kebab(str_replace('.php', '', $relativePath)));
+            // Jedes Pfad-Segment EINZELN kebaben, dann mit '.' joinen — sonst kebabt Str::kebab über die
+            // Trenner hinweg und erzeugt einen führenden Bindestrich (z. B. "costs.-allocation" statt
+            // "costs.allocation"), was bei verschachtelter Nutzung als 500-Falle endet.
+            $aliasPath = collect(preg_split('#[\\\\/]#', str_replace('.php', '', $relativePath)))
+                ->map(fn ($segment) => Str::kebab($segment))
+                ->implode('.');
             $alias     = $prefix . '.' . $aliasPath;
 
             Livewire::component($alias, $class);

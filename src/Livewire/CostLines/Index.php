@@ -134,6 +134,16 @@ class Index extends Component
         $type   = AssetCostType::where('team_id', $teamId)->find($this->fCostType);
         $center = $bootstrap->resolveCostCenter($teamId, $this->fCostCenter ?: null);
 
+        // Betrag 0 ablehnen; negativ nur bei allow_negative-Kostenart (Gutschrift) — verhindert stilles
+        // Netting durch Tippfehler-Minusbeträge. Inline-Fehler, Editor bleibt offen.
+        $amount = (float) $this->fAmount;
+        if ($amount == 0.0 || ($amount < 0 && ! $type?->allow_negative)) {
+            $this->addError('fAmount', $amount == 0.0
+                ? 'Betrag darf nicht 0,00 sein.'
+                : 'Negativer Betrag ist nur für Gutschrift-Kostenarten (allow_negative) zulässig.');
+            return;
+        }
+
         $data = [
             'team_id'           => $teamId,
             'cost_type_id'      => $this->fCostType,

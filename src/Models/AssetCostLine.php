@@ -5,6 +5,7 @@ namespace Platform\AssetManager\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Log;
 
 class AssetCostLine extends Model
 {
@@ -61,7 +62,10 @@ class AssetCostLine extends Model
 
     protected static function booted(): void
     {
-        // monthly_amount immer aus amount/fx_rate/frequency ableiten
+        // monthly_amount ist eine ABGELEITETE Invariante: immer aus amount/fx_rate/frequency berechnet.
+        // WICHTIG: Nie per Query-Builder ->update(['monthly_amount'=>…]) / ->upsert() / Raw-SQL setzen —
+        // das umgeht diesen saving-Hook und desynchronisiert monthly_amount von amount/frequency. Immer
+        // über Model-Instanzen save()/create()/update() schreiben, damit der Hook greift.
         static::saving(function (AssetCostLine $line) {
             $line->monthly_amount = $line->computeMonthlyAmount();
         });
@@ -69,7 +73,19 @@ class AssetCostLine extends Model
 
     public function computeMonthlyAmount(): float
     {
-        $factor = self::FREQUENCY_FACTORS[$this->frequency] ?? 1.0;
+        // Unbekannte (nicht-null) Frequenz fail-loud loggen statt still als monatlich (1.0) zu werten —
+        // sonst zählt eine Tippfehler-Frequenz voll mit. Die Eingabe-Layer (Tools/Livewire) begrenzen
+        // frequency bereits auf das Enum; dies ist die letzte Verteidigungslinie.
+        $freq = $this->frequency;
+        if ($freq !== null && ! array_key_exists($freq, self::FREQUENCY_FACTORS)) {
+            Log::warning('AssetCostLine: unbekannte frequency — als monatlich (Faktor 1.0) gewertet', [
+                'id'        => $this->id,
+                'team_id'   => $this->team_id,
+                'frequency' => $freq,
+            ]);
+        }
+
+        $factor = self::FREQUENCY_FACTORS[$freq] ?? 1.0;
         $fx     = $this->fx_rate !== null ? (float) $this->fx_rate : 1.0;
 
         return round((float) $this->amount * $fx * $factor, 2);
