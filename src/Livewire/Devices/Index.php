@@ -6,7 +6,9 @@ use Livewire\Component;
 use Livewire\WithPagination;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
+use Platform\AssetManager\Concerns\AuthorizesTeamRole;
 use Platform\AssetManager\Models\AssetConnectorConfig;
+use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceSyncLog;
 use Platform\AssetManager\Models\AssetEmployee;
@@ -17,6 +19,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class Index extends Component
 {
     use WithPagination;
+    use AuthorizesTeamRole;
 
     public string $preset           = 'all'; // all|no_user|inactive|noncompliant|issues|expiring
     public string $search           = '';
@@ -29,6 +32,13 @@ class Index extends Component
 
     public bool    $syncing    = false;
     public ?string $syncResult = null;
+
+    /** Bulk-Auswahl (Geräte-IDs als Strings) + Aktions-Inputs (nur owner/admin) */
+    public array   $selected       = [];
+    public bool    $selectPage     = false;
+    public ?int    $bulkCostCenter = null;
+    public string  $bulkLifecycle  = '';
+    public ?string $bulkResult     = null;
 
     /** Master-Detail: 'device' | 'employee' | null  */
     public ?string $detailType = null;
@@ -90,15 +100,17 @@ class Index extends Component
         return $valid;
     }
 
-    public function updatingSearch(): void           { $this->resetPage(); }
-    public function updatingFilterCompliance(): void { $this->resetPage(); }
-    public function updatingFilterOs(): void         { $this->resetPage(); }
-    public function updatingFilterLifecycle(): void  { $this->resetPage(); }
+    public function updatingSearch(): void           { $this->resetPage(); $this->clearBulkSelection(); }
+    public function updatingFilterCompliance(): void { $this->resetPage(); $this->clearBulkSelection(); }
+    public function updatingFilterOs(): void         { $this->resetPage(); $this->clearBulkSelection(); }
+    public function updatingFilterLifecycle(): void  { $this->resetPage(); $this->clearBulkSelection(); }
+    public function updatingPage(): void             { $this->selectPage = false; }
 
     public function setPreset(string $preset): void
     {
         $this->preset = in_array($preset, self::PRESETS, true) ? $preset : 'all';
         $this->resetPage();
+        $this->clearBulkSelection();
     }
 
     public function sortBy(string $field): void
@@ -145,6 +157,78 @@ class Index extends Component
     {
         $this->detailType = null;
         $this->detailId   = null;
+    }
+
+    /** owner/admin im aktiven Team? (analog Devices/Show) */
+    protected function canManage(): bool
+    {
+        return $this->isTeamOwnerOrAdmin(Auth::user());
+    }
+
+    public function clearBulkSelection(): void
+    {
+        $this->selected   = [];
+        $this->selectPage = false;
+        $this->bulkResult = null;
+    }
+
+    /** Wählt alle aktuell gefilterten Geräte aus (über alle Seiten). */
+    public function selectAllFiltered(): void
+    {
+        $this->selected = $this->filteredQuery()
+            ->pluck('id')->map(fn ($id) => (string) $id)->toArray();
+    }
+
+    public function updatedSelectPage($value): void
+    {
+        $pageIds = $this->filteredQuery()
+            ->orderBy($this->sortField, $this->sortDirection)
+            ->forPage($this->getPage(), $this->perPage)
+            ->pluck('id')->map(fn ($id) => (string) $id)->toArray();
+
+        $this->selected = $value
+            ? array_values(array_unique(array_merge($this->selected, $pageIds)))
+            : array_values(array_diff($this->selected, $pageIds));
+    }
+
+    /** Bulk: Kostenstelle für die ausgewählten Geräte setzen (owner/admin). */
+    public function bulkSetCostCenter(): void
+    {
+        abort_unless($this->canManage(), 403);
+        if (empty($this->selected) || ! $this->bulkCostCenter) return;
+
+        $teamId = Auth::user()->currentTeam->id;
+        $cc = AssetCostCenter::where('team_id', $teamId)->find($this->bulkCostCenter);
+        if (! $cc) return;
+
+        $devices = AssetDevice::where('team_id', $teamId)->whereIn('id', $this->selected)->get();
+        foreach ($devices as $device) {
+            $device->update(['cost_center_id' => $cc->id]);
+        }
+
+        $this->bulkResult     = $devices->count() . ' Gerät(e) der Kostenstelle ' . ($cc->code ?? $cc->id) . ' zugeordnet.';
+        $this->selected       = [];
+        $this->selectPage     = false;
+        $this->bulkCostCenter = null;
+    }
+
+    /** Bulk: Lifecycle-Status für die ausgewählten Geräte setzen (owner/admin). */
+    public function bulkSetLifecycle(): void
+    {
+        abort_unless($this->canManage(), 403);
+        if (empty($this->selected) || ! in_array($this->bulkLifecycle, AssetDevice::LIFECYCLE_STATUSES, true)) return;
+
+        $teamId  = Auth::user()->currentTeam->id;
+        $devices = AssetDevice::where('team_id', $teamId)->whereIn('id', $this->selected)->get();
+        foreach ($devices as $device) {
+            $device->update(['lifecycle_status' => $this->bulkLifecycle]);
+        }
+
+        $labels = ['in_use' => 'In Betrieb', 'spare' => 'Reserve / Lager', 'repair' => 'In Reparatur', 'retired' => 'Ausgemustert', 'lost' => 'Verloren / Gestohlen'];
+        $this->bulkResult    = $devices->count() . ' Gerät(e) auf Lifecycle "' . ($labels[$this->bulkLifecycle] ?? $this->bulkLifecycle) . '" gesetzt.';
+        $this->selected      = [];
+        $this->selectPage    = false;
+        $this->bulkLifecycle = '';
     }
 
     /** Team-Query inkl. Suche, Compliance-/OS-Filter und Schnellfilter-Preset (geteilt von Liste + Export). */
@@ -370,6 +454,8 @@ class Index extends Component
             'osBreakdown'         => $osBreakdown,
             'complianceBreakdown' => $complianceBreakdown,
             'canSync'             => $canSync,
+            'canManage'           => $this->canManage(),
+            'costCenters'         => AssetCostCenter::where('team_id', $team->id)->orderBy('code')->get(),
             'columns'             => $this->columnOrder,
             'selectedDevice'      => $selectedDevice,
             'selectedEmployee'    => $selectedEmployee,

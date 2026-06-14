@@ -357,6 +357,49 @@
                 </div>
             @endif
 
+            {{-- Bulk-Result --}}
+            @if($bulkResult)
+                <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                    @svg('heroicon-o-check-circle', 'w-4 h-4 text-emerald-500 flex-shrink-0')
+                    <p class="text-sm text-emerald-700 dark:text-emerald-400">{{ $bulkResult }}</p>
+                    <button wire:click="$set('bulkResult', null)" class="ml-auto text-emerald-600 hover:text-emerald-800">×</button>
+                </div>
+            @endif
+
+            {{-- Bulk-Aktionsleiste (nur owner/admin, nur bei Auswahl) --}}
+            @if($canManage && count($selected) > 0)
+                <div class="sticky top-0 z-10 flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl bg-violet-600 text-white shadow-lg">
+                    <span class="text-sm font-medium">{{ count($selected) }} ausgewählt</span>
+                    <div class="h-4 w-px bg-white/30"></div>
+
+                    {{-- Kostenstelle --}}
+                    <div class="flex items-center gap-1.5">
+                        <select wire:model="bulkCostCenter" class="px-2 py-1 text-xs rounded-md bg-white/15 border border-white/20 text-white [&>option]:text-gray-900">
+                            <option value="">Kostenstelle…</option>
+                            @foreach($costCenters as $cc)
+                                <option value="{{ $cc->id }}">{{ $cc->code }}{{ $cc->name ? ' · ' . $cc->name : '' }}</option>
+                            @endforeach
+                        </select>
+                        <button wire:click="bulkSetCostCenter" class="px-2.5 py-1 text-xs font-medium rounded-md bg-white/20 hover:bg-white/30 transition-colors">Setzen</button>
+                    </div>
+
+                    {{-- Lifecycle --}}
+                    <div class="flex items-center gap-1.5">
+                        <select wire:model="bulkLifecycle" class="px-2 py-1 text-xs rounded-md bg-white/15 border border-white/20 text-white [&>option]:text-gray-900">
+                            <option value="">Lifecycle…</option>
+                            <option value="in_use">In Betrieb</option>
+                            <option value="spare">Reserve / Lager</option>
+                            <option value="repair">In Reparatur</option>
+                            <option value="retired">Ausgemustert</option>
+                            <option value="lost">Verloren / Gestohlen</option>
+                        </select>
+                        <button wire:click="bulkSetLifecycle" class="px-2.5 py-1 text-xs font-medium rounded-md bg-white/20 hover:bg-white/30 transition-colors">Setzen</button>
+                    </div>
+
+                    <button wire:click="clearBulkSelection" class="ml-auto text-xs text-white/80 hover:text-white">Auswahl aufheben</button>
+                </div>
+            @endif
+
             {{-- Tabelle --}}
             @php
                 $columnDefs = [
@@ -378,9 +421,20 @@
                         </p>
                     </div>
                 @else
+                    @if($canManage && $selectPage && count($selected) < $devices->total())
+                        <div class="px-5 py-2 bg-violet-500/10 border-b border-violet-500/20 text-center text-xs text-violet-700 dark:text-violet-400">
+                            {{ count($selected) }} auf dieser Seite ausgewählt.
+                            <button wire:click="selectAllFiltered" class="font-medium underline hover:text-violet-900">Alle {{ $devices->total() }} gefilterten auswählen</button>
+                        </div>
+                    @endif
                     <table class="w-full text-sm">
                         <thead>
                             <tr wire:sortable="reorderColumns" wire:sortable.options="{ axis: 'x' }" class="border-b border-black/5 dark:border-white/5">
+                                @if($canManage)
+                                    <th class="w-10 px-5 py-3 bg-white/40 dark:bg-white/[0.02]">
+                                        <input type="checkbox" wire:model.live="selectPage" class="rounded border-black/20 dark:border-white/20 text-violet-600 focus:ring-violet-500/30" />
+                                    </th>
+                                @endif
                                 @foreach($columns as $colKey)
                                     @php $def = $columnDefs[$colKey] ?? null; @endphp
                                     @if($def)
@@ -406,9 +460,17 @@
                         </thead>
                         <tbody class="divide-y divide-black/[0.03] dark:divide-white/[0.04]">
                             @foreach($devices as $device)
-                                @php $isSelected = $detailType === 'device' && $detailId === $device->id; @endphp
+                                @php
+                                    $isSelected = $detailType === 'device' && $detailId === $device->id;
+                                    $isChecked  = $canManage && in_array((string) $device->id, $selected, true);
+                                @endphp
                                 <tr wire:key="row-{{ $device->id }}"
-                                    class="cursor-pointer transition-colors {{ $isSelected ? 'bg-violet-500/10' : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]' }}">
+                                    class="cursor-pointer transition-colors {{ $isSelected ? 'bg-violet-500/10' : ($isChecked ? 'bg-violet-500/5' : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]') }}">
+                                    @if($canManage)
+                                        <td class="px-5 py-3">
+                                            <input type="checkbox" value="{{ $device->id }}" wire:model.live="selected" class="rounded border-black/20 dark:border-white/20 text-violet-600 focus:ring-violet-500/30" />
+                                        </td>
+                                    @endif
                                     @foreach($columns as $colKey)
                                         @switch($colKey)
                                             @case('device')
