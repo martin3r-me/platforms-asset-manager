@@ -10,6 +10,7 @@ use Platform\AssetManager\Livewire\Licenses\Show as LicensesShow;
 use Platform\AssetManager\Livewire\Assets\Index as AssetsIndex;
 use Platform\AssetManager\Livewire\Assets\Create as AssetsCreate;
 use Platform\AssetManager\Livewire\Assets\Show as AssetsShow;
+use Platform\AssetManager\Livewire\Inventory\Index as InventoryIndex;
 use Platform\AssetManager\Livewire\Employees\Index as EmployeesIndex;
 use Platform\AssetManager\Livewire\Employees\Show as EmployeesShow;
 use Platform\AssetManager\Livewire\Costs\Dashboard as CostsDashboard;
@@ -28,6 +29,8 @@ Route::get('/devices', DevicesIndex::class)->name('asset-manager.devices.index')
 Route::get('/devices/{device}', DevicesShow::class)->name('asset-manager.devices.show');
 
 Route::get('/compliance', ComplianceIndex::class)->name('asset-manager.compliance.index');
+
+Route::get('/inventory', InventoryIndex::class)->name('asset-manager.inventory.index');
 
 Route::get('/assets', AssetsIndex::class)->name('asset-manager.assets.index');
 Route::get('/assets/create', AssetsCreate::class)->name('asset-manager.assets.create');

@@ -11,6 +11,10 @@
     </x-ui-sidebar-list>
 
     <x-ui-sidebar-list label="Assets">
+        <x-ui-sidebar-item :href="route('asset-manager.inventory.index')" :active="request()->routeIs('asset-manager.inventory.*')">
+            @svg('heroicon-o-rectangle-group', 'w-4 h-4 text-[var(--ui-secondary)]')
+            <span class="ml-2 text-sm">Inventar</span>
+        </x-ui-sidebar-item>
         <x-ui-sidebar-item :href="route('asset-manager.assets.index')" :active="request()->routeIs('asset-manager.assets.*')">
             @svg('heroicon-o-cube-transparent', 'w-4 h-4 text-[var(--ui-secondary)]')
             <span class="ml-2 text-sm">Alle Assets</span>
@@ -90,6 +94,9 @@
         <div class="flex flex-col gap-2">
             <a href="{{ route('asset-manager.dashboard') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.dashboard') ? 'bg-[var(--ui-primary-10)] text-[var(--ui-primary)]' : 'text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]' }}">
                 @svg('heroicon-o-home', 'w-5 h-5')
+            </a>
+            <a href="{{ route('asset-manager.inventory.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.inventory.*') ? 'bg-[var(--ui-primary-10)] text-[var(--ui-primary)]' : 'text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]' }}">
+                @svg('heroicon-o-rectangle-group', 'w-5 h-5')
             </a>
             <a href="{{ route('asset-manager.assets.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.assets.*') ? 'bg-[var(--ui-primary-10)] text-[var(--ui-primary)]' : 'text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]' }}">
                 @svg('heroicon-o-cube-transparent', 'w-5 h-5')
