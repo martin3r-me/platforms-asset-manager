@@ -6,6 +6,7 @@ use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceModel;
 use Platform\AssetManager\Models\AssetDeviceSyncLog;
+use Platform\AssetManager\Concerns\RunsTeamSync;
 use Platform\AssetManager\Services\EmployeeService;
 use Platform\AssetManager\Services\IntuneGraphService;
 use Illuminate\Bus\Queueable;
@@ -19,6 +20,7 @@ use Illuminate\Support\Facades\Log;
 class SyncIntuneDevicesJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use RunsTeamSync;
 
     public int $timeout = 300;
     public int $tries   = 1;
@@ -118,15 +120,11 @@ class SyncIntuneDevicesJob implements ShouldQueue
                 // ganze Flotte löschen. $devices === null ist oben bereits als Fehler abgefangen; ein leeres
                 // Array ist syntaktisch valide, würde aber whereNotIn('intune_id', []) zu „alle Zeilen"
                 // machen → Totalverlust beim ersten Tenant-Glitch. Dann nichts entfernen (removed=0).
-                if (!empty($intuneIds)) {
-                    $removed = AssetDevice::where('team_id', $this->teamId)
-                        ->whereNotIn('intune_id', $intuneIds)
-                        ->count();
-
-                    AssetDevice::where('team_id', $this->teamId)
-                        ->whereNotIn('intune_id', $intuneIds)
-                        ->delete();
-                }
+                $removed = $this->reconcileDelete(
+                    fn () => AssetDevice::where('team_id', $this->teamId),
+                    'intune_id',
+                    $intuneIds
+                );
 
                 $log->update([
                     'status'          => 'success',
@@ -188,14 +186,7 @@ class SyncIntuneDevicesJob implements ShouldQueue
 
     protected function markFailed(AssetConnectorConfig $config, AssetDeviceSyncLog $log, \Carbon\Carbon $startedAt, string $message): void
     {
-        $durationMs = (int) ($startedAt->diffInMilliseconds(now()));
-
-        $log->update([
-            'status'        => 'error',
-            'error_message' => $message,
-            'duration_ms'   => $durationMs,
-            'completed_at'  => now(),
-        ]);
+        $this->markSyncLogFailed($log, $startedAt, $message);
 
         $config->update([
             'sync_status' => 'error',
@@ -215,13 +206,7 @@ class SyncIntuneDevicesJob implements ShouldQueue
                 ->where('sync_status', 'running')
                 ->update(['sync_status' => 'error', 'sync_error' => $e->getMessage()]);
 
-            AssetDeviceSyncLog::where('team_id', $this->teamId)
-                ->where('status', 'started')
-                ->update([
-                    'status'        => 'error',
-                    'error_message' => $e->getMessage(),
-                    'completed_at'  => now(),
-                ]);
+            $this->failStuckSyncLogs(AssetDeviceSyncLog::class, $this->teamId, $e->getMessage());
         } catch (\Throwable $ignored) {
             // failed() muss schweigend bleiben
         }
