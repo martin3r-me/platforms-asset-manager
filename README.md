@@ -1,226 +1,77 @@
 # Platform Asset Manager
 
-Dieses Modul dient als **Template und Startpunkt** für neue Module in der Platform.
+IT-Asset- und Kostenverwaltung für die Platform. Verwaltet Hardware, Lizenzen und Geräte
+**und** deren Kosten je **Kostenstelle** und **Gesellschaft** — als digitales Abbild der
+bisher manuellen Excel `Kostenaufteilung_IT.xlsx`.
 
-## 📋 Übersicht
+- **Paket:** `martin3r/platform-asset-manager`
+- **Namespace:** `Platform\AssetManager\`
+- **Tabellen-Prefix:** `asset_`
 
-Dieses Template zeigt die **minimale Struktur** eines Platform-Moduls:
-- ✅ Service Provider mit Modul-Registrierung
-- ✅ Config-Datei mit Navigation und Sidebar
-- ✅ Routes (Dashboard + Test-Seite)
-- ✅ Livewire Components (Dashboard, Sidebar, Test)
-- ✅ Views mit beiden Sidebars (links & rechts)
-- ✅ Vollständige Dokumentation für LLMs
+> Produktives Fachmodul, **kein Template**. Es wurde ursprünglich aus `module-template`
+> gebootstrappt — die generische „neues Modul anlegen"-Anleitung lebt im Template-Repo, nicht hier.
 
-## 🚀 Schnellstart
+## Was es tut
 
-### 1. Modul kopieren und umbenennen
+Vier **doppelzählungsfreie** Datenquellen speisen die Kostenaufteilung — jede **Kostenart**
+zieht ihren Pivot-Wert aus **genau einer** Quelle (Details: [`CONTEXT.md`](CONTEXT.md)):
 
-```bash
-# Kopiere das Template-Modul
-cp -r platform/modules/asset-manager platform/modules/dein-modul-name
+| Quelle | `aggregation_source` | Herkunft |
+|---|---|---|
+| Kostenposition | `cost_line` | manuell / Excel-Import |
+| Hardware-AfA | `hardware_afa` | gekaufte Hardware (lineare Abschreibung) |
+| MS-Lizenz | `ms_license` | Graph-Sync (M365-SKUs × User-Lizenzen) |
+| Gerät | `asset_device` | Intune-Geräte mit Leasing-/AfA-Kosten |
 
-# Gehe in das neue Modul
-cd platform/modules/dein-modul-name
-```
+Die Kostenaufteilung (Pivot Kostenstelle × Kostenart) reproduziert die Excel-Sheets über
+`CostAggregationService::costCenterByType($teamId, 'monthly'|'quarterly')` (UI: `Costs/Allocation`).
 
-### 2. Dateien umbenennen und anpassen
+## Dateneingabe
 
-**WICHTIG:** Ersetze in ALLEN Dateien:
-- `AssetManager` → `DeinModulName` (Namespace)
-- `asset-manager` → `dein-modul-name` (Verzeichnisname, Route-Prefix)
-- `module_template` → `dein_modul_name` (Config-Key, Tabellennamen)
+1. **Einmaliger Excel-Bootstrap:** `php artisan asset-manager:import-costs --team=ID --file=… [--dry-run]` (idempotent via `import_hash`).
+2. **Manuelle Pflege:** Livewire-CRUD (Kostenpositionen, Kostenstellen, Kreditoren, Kostenarten).
+3. **Graph-Sync:** `asset-manager:sync-intune` + `asset-manager:sync-licenses` (MS-Lizenzen + Intune-Geräte/Hardware).
 
-**Dateien die angepasst werden müssen:**
-- `composer.json` - Name, Namespace, Provider
-- `config/asset-manager.php` → `config/dein-modul-name.php`
-- `src/AssetManagerServiceProvider.php` → `src/DeinModulNameServiceProvider.php`
-- Alle PHP-Dateien: Namespace ändern
-- Alle Blade-Dateien: `asset-manager::` → `dein-modul-name::`
-- Routes: `asset-manager` → `dein-modul-name`
+## Konventionen (dieses Modul)
 
-### 3. Composer registrieren
+- **Auto-increment IDs** — *kein* UuidV7.
+- **Kein** `LogsActivity`-Trait.
+- `team_id`-Scoping überall; Tabellen-Prefix `asset_`.
+- **Content-Bereich:** custom Tailwind statt `x-ui-*` (nur die Page-Shell-Komponenten bleiben) — siehe [`DESIGN.md`](DESIGN.md).
 
-Füge das Modul zur Hauptanwendung hinzu:
+> Plattformweite Modul-Architektur, Boot-Sequenz und Goldene Regeln stehen in der übergeordneten
+> `C:\Coding\Platforms\CLAUDE.md` und gelten unverändert.
 
-**In `composer.json` der Hauptanwendung:**
-```json
-{
-  "require": {
-    "martin3r/platform-dein-modul-name": "dev-main"
-  },
-  "repositories": [
-    {
-      "type": "path",
-      "url": "../platform/modules/dein-modul-name"
-    }
-  ]
-}
-```
+## Doku-Landkarte
 
-Dann:
-```bash
-composer update
-```
+| Datei | Inhalt |
+|---|---|
+| [`CONTEXT.md`](CONTEXT.md) | Domänen-Sprache, Glossar, Datenquellen, Pivot |
+| [`DESIGN.md`](DESIGN.md) | UI-Design-System (Linear/Raycast-Personality) |
+| [`docs/adr/0001-cost-lines-modell.md`](docs/adr/0001-cost-lines-modell.md) | Kostenaufteilung über generische `asset_cost_lines` |
+| [`docs/adr/0002-fx-snapshot-policy.md`](docs/adr/0002-fx-snapshot-policy.md) | Währungsumrechnung via Snapshot-`fx_rate` |
+| [`docs/agents/`](docs/agents/) | Agent-Skills: Issue-Tracker, Triage-Labels, Domain-Docs, Logic-Audit, Architecture-Review |
+| [`CLAUDE.md`](CLAUDE.md) | Repo-spezifische Skill-Konfiguration |
 
-### 4. Config publizieren (optional)
-
-```bash
-php artisan vendor:publish --tag=config --provider="Platform\DeinModulName\DeinModulNameServiceProvider"
-```
-
-## 📁 Struktur
+## Struktur
 
 ```
-asset-manager/
-├── composer.json              # Package-Definition
-├── config/
-│   └── asset-manager.php    # Modul-Konfiguration
-├── database/
-│   └── migrations/            # Migrationen (optional)
-├── resources/
-│   └── views/
-│       └── livewire/
-│           ├── dashboard.blade.php    # Dashboard-View
-│           ├── test.blade.php         # Test-Seite
-│           └── sidebar.blade.php      # Sidebar-View
-├── routes/
-│   └── web.php                # Web-Routes
-├── src/
-│   ├── AssetManagerServiceProvider.php  # Service Provider
-│   └── Livewire/
-│       ├── Dashboard.php       # Dashboard Component
-│       ├── Test.php           # Test Component
-│       └── Sidebar.php        # Sidebar Component
-└── README.md                   # Diese Datei
+src/
+├── AssetManagerServiceProvider.php   # Boot: Modul-Registrierung, Routes, Views, Livewire, Tools
+├── Console/Commands/   # Artisan: import-costs, sync-intune, sync-licenses, backfill-employees
+├── Http/               # Controller/Middleware (Connector-OAuth-Callback etc.)
+├── Jobs/               # Sync-Jobs (SyncIntuneDevicesJob, SyncLicensesJob, …)
+├── Livewire/           # UI-Komponenten (Dashboard, Costs/*, Devices/*, Licenses/*, MasterData/*, …)
+├── Models/             # Eloquent (AssetCostLine, AssetCostCenter, AssetCompany, AssetDevice, …)
+├── Policies/           # Authorization (AssetItemPolicy, AssetDevicePolicy)
+├── Services/           # Business-Logik (CostAggregationService, CostExcelImportService, …)
+├── Support/            # CostBootstrap (Stammdaten + code→Gesellschaft-Mapping)
+└── Tools/              # MCP/LLM-Tools (Naming: asset-manager.resource.VERB)
 ```
 
-## 🔧 Wichtige Komponenten
+## Entwicklung
 
-### Service Provider
-
-Der `AssetManagerServiceProvider` ist das Herzstück des Moduls:
-
-1. **register()**: Config wird hier geladen (Laravel Best Practice)
-2. **boot()**: 
-   - Modul wird bei PlatformCore registriert
-   - Routes werden geladen (nur wenn Modul aktiv)
-   - Views und Livewire-Komponenten werden registriert
-
-### Config-Datei
-
-Die Config (`config/asset-manager.php`) definiert:
-- **routing**: Route-Modus (path/subdomain) und Prefix
-- **navigation**: Hauptnavigation (Icon, Route, Order)
-- **sidebar**: Sidebar-Struktur für das Modul
-
-### Routes
-
-- `/asset-manager` → Dashboard
-- `/asset-manager/test` → Test-Seite
-
-### Livewire Components
-
-- **Dashboard**: Hauptübersicht
-- **Test**: Test-Seite für Entwicklung
-- **Sidebar**: Modul-spezifische Sidebar
-
-## 📝 Anpassungen für dein Modul
-
-### 1. Models hinzufügen
-
-Erstelle Models in `src/Models/`:
-```php
-<?php
-namespace Platform\DeinModulName\Models;
-
-use Illuminate\Database\Eloquent\Model;
-use Platform\ActivityLog\Traits\LogsActivity;
-
-class DeinModulNameEntity extends Model
-{
-    use LogsActivity;
-    
-    protected $table = 'dein_modul_name_entities';
-    // ...
-}
-```
-
-### 2. Migrationen erstellen
-
-```bash
-php artisan make:migration create_dein_modul_name_entities_table
-```
-
-### 3. Livewire Components erweitern
-
-Füge neue Components in `src/Livewire/` hinzu:
-- Index-Views für Listen
-- Create/Edit Modals
-- Show-Views für Details
-
-### 4. Routes erweitern
-
-In `routes/web.php`:
-```php
-Route::get('/entities', Entity\Index::class)->name('dein-modul-name.entities.index');
-```
-
-## 🎯 Best Practices
-
-1. **Immer Team-basiert**: Nutze `$user->currentTeam->id` für Team-Filterung
-2. **Activity Logging**: Nutze `LogsActivity` Trait für Models
-3. **UUIDs**: Verwende UUIDs für alle Models (UuidV7)
-4. **Policies**: Erstelle Policies für Authorization
-5. **Sidebars**: Beide Sidebars (links & rechts) in allen Views
-6. **Modals**: Immer innerhalb von `<x-ui-page>` platzieren
-
-## 🤖 Für LLMs
-
-Dieses Template ist so strukturiert, dass LLMs es verstehen können:
-
-- **Klare Namenskonventionen**: Alles folgt dem Muster `{modul-name}`
-- **Ausführliche Kommentare**: Alle wichtigen Stellen sind dokumentiert
-- **Konsistente Struktur**: Gleiche Struktur wie andere Module (HCM, Planner)
-- **Beispiele**: Dashboard und Test-Seite zeigen alle Patterns
-
-**Wichtige Patterns:**
-- Service Provider Pattern (wie in HCM/Planner)
-- Livewire Component Pattern
-- Route Registration Pattern
-- Sidebar Pattern (links & rechts)
-
-## 📚 Weitere Ressourcen
-
-- Siehe `platform/modules/hcm` für komplexere Beispiele
-- Siehe `platform/modules/planner` für Modals und erweiterte Features
-- Siehe `platform/core/src/PlatformCore.php` für Modul-Registrierung
-
-## ✅ Checkliste für neues Modul
-
-- [ ] Modul kopiert und umbenannt
-- [ ] Alle Namespaces angepasst
-- [ ] Composer.json angepasst
-- [ ] Config-Datei angepasst
-- [ ] Routes angepasst
-- [ ] Service Provider angepasst
-- [ ] Views angepasst
-- [ ] In Hauptanwendung registriert
-- [ ] `composer dump-autoload` ausgeführt
-- [ ] Config publiziert (optional)
-- [ ] Getestet
-
-## 🐛 Troubleshooting
-
-**Routen funktionieren nicht:**
-- Config publiziert? → `php artisan vendor:publish --tag=config`
-- Config-Cache geleert? → `php artisan config:clear`
-- Route-Cache geleert? → `php artisan route:clear`
-
-**Modul erscheint nicht in Navigation:**
-- Modul in Datenbank registriert? → Prüfe `modules` Tabelle
-- Config korrekt? → Prüfe `config/dein-modul-name.php`
-
-**Livewire Components nicht gefunden:**
-- Service Provider registriert? → Prüfe `composer.json`
-- `composer dump-autoload` ausgeführt?
+- Code = dieses Repo · ADRs = `docs/adr/` · Domänen-Glossar = `CONTEXT.md` · Tasks = Dev-Modul (Package `platforms-asset-manager`).
+- **Vor dem Commit:** `php -l <datei>`; Modul-Blade lokal gegen die Demo-App kompilieren (HTTP-500-Falle).
+- **Static Guardrails:** `php tests/guardrails.php` (kein Framework nötig) prüft Tool-Registrierungs-Vollständigkeit, Layer-Abhängigkeitsrichtung und Blade-Alias-Mangling. Exit 0 = grün.
+- **Git-/Deploy-Workflow** (pull → commit → push → auf der Umgebung `composer update` + `update.sh`): siehe übergeordnete `CLAUDE.md`.
