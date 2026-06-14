@@ -10,6 +10,7 @@ use Platform\AssetManager\Concerns\RunsTeamSync;
 use Platform\AssetManager\Services\EmployeeService;
 use Platform\AssetManager\Services\IntuneGraphService;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -17,13 +18,20 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-class SyncIntuneDevicesJob implements ShouldQueue
+class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
     use RunsTeamSync;
 
     public int $timeout = 300;
     public int $tries   = 1;
+
+    /** Serialisiert parallele Geraete-Syncs desselben Teams (3.0-Entscheidung; analog SyncLicensesJob) —
+     *  schliesst das check-then-act-Rennen (first()->create()) gegen den (team_id,intune_id)-Unique-Index. */
+    public function uniqueId(): string
+    {
+        return (string) $this->teamId;
+    }
 
     public function __construct(
         public readonly int $teamId
