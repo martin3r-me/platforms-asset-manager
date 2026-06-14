@@ -6,6 +6,7 @@ use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetLicenseSyncLog;
 use Platform\AssetManager\Models\AssetUserLicense;
+use Platform\AssetManager\Concerns\RunsTeamSync;
 use Platform\AssetManager\Services\EmployeeService;
 use Platform\AssetManager\Services\IntuneGraphService;
 use Illuminate\Bus\Queueable;
@@ -20,6 +21,7 @@ use Illuminate\Support\Facades\Log;
 class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use RunsTeamSync;
 
     public int $timeout = 300;
     public int $tries   = 1;
@@ -173,15 +175,11 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
                 // Schutz analog zu SyncIntuneDevicesJob: Ist KEINE einzige Lizenzzuweisung erhalten geblieben
                 // (leere Graph-Antwort oder alle User ohne Lizenzen), nichts löschen — whereNotIn('id', [])
                 // würde sonst sämtliche Zuweisungen des Teams entfernen.
-                if (!empty($keptIds)) {
-                    $removed = AssetUserLicense::where('team_id', $this->teamId)
-                        ->whereNotIn('id', $keptIds)
-                        ->count();
-
-                    AssetUserLicense::where('team_id', $this->teamId)
-                        ->whereNotIn('id', $keptIds)
-                        ->delete();
-                }
+                $removed = $this->reconcileDelete(
+                    fn () => AssetUserLicense::where('team_id', $this->teamId),
+                    'id',
+                    $keptIds
+                );
 
                 $totalAssignments = AssetUserLicense::where('team_id', $this->teamId)->count();
 
@@ -219,12 +217,7 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
 
     protected function markFailed(AssetLicenseSyncLog $log, \Carbon\Carbon $startedAt, string $message): void
     {
-        $log->update([
-            'status'        => 'error',
-            'error_message' => $message,
-            'duration_ms'   => (int) ($startedAt->diffInMilliseconds(now())),
-            'completed_at'  => now(),
-        ]);
+        $this->markSyncLogFailed($log, $startedAt, $message);
     }
 
     /**
@@ -235,13 +228,7 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
     public function failed(\Throwable $e): void
     {
         try {
-            AssetLicenseSyncLog::where('team_id', $this->teamId)
-                ->where('status', 'started')
-                ->update([
-                    'status'        => 'error',
-                    'error_message' => $e->getMessage(),
-                    'completed_at'  => now(),
-                ]);
+            $this->failStuckSyncLogs(AssetLicenseSyncLog::class, $this->teamId, $e->getMessage());
         } catch (\Throwable $ignored) {
             // failed() muss schweigend bleiben
         }
