@@ -94,16 +94,9 @@ class Show extends Component
         // nicht doppelt zählt. Keyed nach device_id für den Per-Gerät-Betrag in der Liste.
         $deviceRows = app(CostAggregationService::class)->deviceCostRows($teamId)->keyBy('device_id');
 
-        // Monatliche Kosten
-        $hardwareCost = $items->sum(fn($i) => $i->monthlyCost());
-        $deviceCost   = $devices->sum(fn($d) => (float) ($deviceRows[$d->id]['amount'] ?? 0));
-        $licenseCost  = 0.0;
-        foreach ($licenses as $lic) {
-            $sku = $skuMap[$lic->sku_id] ?? null;
-            if ($sku && $sku->unit_price !== null) {
-                $licenseCost += (float) $sku->unit_price;
-            }
-        }
+        // Monatliche Kosten: gemeinsame Quelle der Wahrheit (identisch mit dem Panel der Liste).
+        // $deviceRows wird durchgereicht, damit deviceCostRows() nicht ein zweites Mal läuft.
+        $cost = app(CostAggregationService::class)->employeeCost($teamId, $this->employee, $deviceRows);
 
         return view('asset-manager::livewire.employees.show', [
             'employee'     => $this->employee,
@@ -112,10 +105,10 @@ class Show extends Component
             'deviceRows'   => $deviceRows,
             'licenses'     => $licenses,
             'skuMap'       => $skuMap,
-            'hardwareCost' => $hardwareCost,
-            'deviceCost'   => $deviceCost,
-            'licenseCost'  => $licenseCost,
-            'totalCost'    => $hardwareCost + $deviceCost + $licenseCost,
+            'hardwareCost' => $cost['hardware'],
+            'deviceCost'   => $cost['device'],
+            'licenseCost'  => $cost['license'],
+            'totalCost'    => $cost['total'],
         ])->layout('platform::layouts.app');
     }
 }

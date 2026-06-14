@@ -4,7 +4,6 @@ namespace Platform\AssetManager\Livewire\Employees;
 
 use Livewire\Component;
 use Livewire\WithPagination;
-use Platform\AssetManager\Concerns\AuthorizesTeamRole;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Platform\AssetManager\Models\AssetCostCenter;
@@ -13,11 +12,11 @@ use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetUserLicense;
+use Platform\AssetManager\Services\CostAggregationService;
 
 class Index extends Component
 {
     use WithPagination;
-    use AuthorizesTeamRole;
 
     public string $preset           = 'active'; // all|active|with_license|with_device|with_asset|unassigned|inactive
     public string $search           = '';
@@ -31,6 +30,7 @@ class Index extends Component
     public int    $perPage          = 25;
     public string $sortField        = 'display_name';
     public string $sortDirection    = 'asc';
+    public ?int   $selectedId       = null; // im rechten Detail-Panel gewählter Mitarbeiter
 
     protected $queryString = [
         'preset'           => ['except' => 'active'],
@@ -75,34 +75,23 @@ class Index extends Component
         $this->resetPage();
     }
 
-    /** owner/admin im aktiven Team? (analog AssetDevicePolicy) */
-    public function canManage(): bool
+    /** Mitarbeiter im rechten Detail-Panel selektieren (nur eigenes Team) und Panel aufklappen. */
+    public function selectEmployee(int $id): void
     {
-        return $this->isTeamOwnerOrAdmin(Auth::user());
-    }
-
-    /**
-     * Weist einem Mitarbeiter manuell eine Kostenstelle zu (Quelle der Wahrheit).
-     * Setzt FK (cost_center_id, für normalizedLines) UND String (cost_center=code, für byCostCenter).
-     * $costCenterId leer/0 → Zuordnung entfernen. Nur owner/admin.
-     */
-    public function assignCostCenter(int $employeeId, $costCenterId): void
-    {
-        abort_unless($this->canManage(), 403);
-
         $teamId = Auth::user()->currentTeam->id;
 
-        $employee = AssetEmployee::where('team_id', $teamId)->findOrFail($employeeId);
-
-        $center = null;
-        if ($costCenterId) {
-            $center = AssetCostCenter::where('team_id', $teamId)->find((int) $costCenterId);
-            if (!$center) return; // fremde/ungültige Kostenstelle ignorieren
+        // Fremd-/ungültige IDs ignorieren, sonst zeigt das Panel nichts (render lädt team-scoped).
+        if (! AssetEmployee::where('team_id', $teamId)->whereKey($id)->exists()) {
+            return;
         }
 
-        $employee->cost_center_id = $center?->id;
-        $employee->cost_center    = $center?->code;
-        $employee->save();
+        $this->selectedId = $id;
+        $this->dispatch('open-activity'); // kollabierte rechte Sidebar aufklappen (Listener im Blade)
+    }
+
+    public function clearSelection(): void
+    {
+        $this->selectedId = null;
     }
 
     public function sortBy(string $field): void
@@ -279,16 +268,51 @@ class Index extends Component
             ->orderBy('code')
             ->get(['id', 'code', 'name']);
 
+        // --- Rechtes Detail-Panel: gewählter Mitarbeiter + Zähler + Monatskosten ---
+        $selectedEmployee = null;
+        $selDeviceCount   = 0;
+        $selAssetCount    = 0;
+        $selLicenseCount  = 0;
+        $selectedCost     = ['hardware' => 0.0, 'device' => 0.0, 'license' => 0.0, 'total' => 0.0];
+
+        if ($this->selectedId) {
+            $selectedEmployee = AssetEmployee::where('team_id', $teamId)->find($this->selectedId);
+
+            if ($selectedEmployee) {
+                $upn = $selectedEmployee->user_principal_name;
+
+                // Assets hängen an assignee_id; Geräte/Lizenzen am UPN (ohne UPN → 0).
+                $selAssetCount = AssetItem::where('team_id', $teamId)
+                    ->where('assignee_id', $selectedEmployee->id)->count();
+
+                if ($upn) {
+                    $selDeviceCount  = AssetDevice::where('team_id', $teamId)
+                        ->where('user_principal_name', $upn)->count();
+                    $selLicenseCount = AssetUserLicense::where('team_id', $teamId)
+                        ->where('user_principal_name', $upn)->count();
+                }
+
+                // Identische Zahl wie die Profil-Seite (gemeinsame Methode).
+                $selectedCost = app(CostAggregationService::class)->employeeCost($teamId, $selectedEmployee);
+            } else {
+                $this->selectedId = null; // Auswahl ins Leere (gelöscht / Team-Wechsel) → zurücksetzen
+            }
+        }
+
         return view('asset-manager::livewire.employees.index', [
-            'employees'     => $employees,
-            'itemCounts'    => $itemCounts,
-            'deviceCounts'  => $deviceCounts,
-            'licenseCounts' => $licenseCounts,
-            'counts'        => $counts,
-            'departments'   => $departments,
-            'skus'          => $skus,
-            'costCenters'   => $costCenters,
-            'canManage'     => $this->canManage(),
+            'employees'        => $employees,
+            'itemCounts'       => $itemCounts,
+            'deviceCounts'     => $deviceCounts,
+            'licenseCounts'    => $licenseCounts,
+            'counts'           => $counts,
+            'departments'      => $departments,
+            'skus'             => $skus,
+            'costCenters'      => $costCenters,
+            'selectedEmployee' => $selectedEmployee,
+            'selDeviceCount'   => $selDeviceCount,
+            'selAssetCount'    => $selAssetCount,
+            'selLicenseCount'  => $selLicenseCount,
+            'selectedCost'     => $selectedCost,
         ])->layout('platform::layouts.app');
     }
 }

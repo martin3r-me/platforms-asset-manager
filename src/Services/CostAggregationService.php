@@ -502,6 +502,66 @@ class CostAggregationService
             ->values();
     }
 
+    /**
+     * Monatskosten EINES Mitarbeiters, aufgeschlüsselt nach Anzeige-Bucket.
+     *
+     * Einzige Quelle der Wahrheit für die Mitarbeiter-Sicht: Employees/Show (Kosten-Sidebar) UND das
+     * Zusammenfassungs-Panel der Liste (Employees/Index) rufen diese Methode → garantiert identische Zahl.
+     * Buckets bewusst wie die Profil-Seite: Hardware-AfA (manuelle Items über assignee_id) + Intune-Geräte
+     * (über UPN, gated via deviceCostRows) + MS-Lizenzen (SKU-unit_price). Assignee-gebundene cost_line-Posten
+     * sind hier — wie im Profil — NICHT enthalten.
+     *
+     * @param  Collection|null  $deviceRows  optional vorgeladen (keyBy device_id), sonst intern berechnet —
+     *                                        damit Aufrufer mit eigener Geräte-Map keine Doppelberechnung auslösen.
+     * @return array{hardware:float, device:float, license:float, total:float}
+     */
+    public function employeeCost(int $teamId, AssetEmployee $emp, ?Collection $deviceRows = null): array
+    {
+        $upn        = $emp->user_principal_name;
+        $deviceRows ??= $this->deviceCostRows($teamId)->keyBy('device_id');
+
+        // Hardware-AfA: manuelle Items über assignee_id.
+        $hardware = (float) AssetItem::with('category')
+            ->where('team_id', $teamId)
+            ->where('assignee_id', $emp->id)
+            ->get()
+            ->sum(fn ($i) => $i->monthlyCost());
+
+        $device  = 0.0;
+        $license = 0.0;
+
+        // Geräte + Lizenzen hängen am UPN — ohne UPN gibt es keine Zuordnung (z. B. abgeleitete Karteileichen).
+        if ($upn) {
+            $device = (float) AssetDevice::where('team_id', $teamId)
+                ->where('user_principal_name', $upn)
+                ->get()
+                ->sum(fn ($d) => (float) ($deviceRows[$d->id]['amount'] ?? 0));
+
+            $licenses = AssetUserLicense::where('team_id', $teamId)
+                ->where('user_principal_name', $upn)
+                ->get();
+
+            $skuMap = AssetLicenseSku::where('team_id', $teamId)
+                ->whereIn('sku_id', $licenses->pluck('sku_id')->unique())
+                ->get()
+                ->keyBy('sku_id');
+
+            foreach ($licenses as $lic) {
+                $sku = $skuMap[$lic->sku_id] ?? null;
+                if ($sku && $sku->unit_price !== null) {
+                    $license += (float) $sku->unit_price;
+                }
+            }
+        }
+
+        return [
+            'hardware' => round($hardware, 2),
+            'device'   => round($device, 2),
+            'license'  => round($license, 2),
+            'total'    => round($hardware + $device + $license, 2),
+        ];
+    }
+
     /** Map-Key für den (Hersteller, Modell)-Abgleich Gerät ↔ Geräte-Modell — delegiert an die zentrale Normalisierung. */
     protected function deviceModelKey(?string $manufacturer, ?string $model): string
     {
