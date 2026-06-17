@@ -31,7 +31,7 @@ class ConnectorSetup extends Component
 
         if ($config) {
             $this->clientId = $config->client_id ?? '';
-            $this->tenantId = $config->tenant_id ?? '';
+            $this->tenantId = $config->azure_tenant_id ?? '';
             $this->objectId = $config->object_id ?? '';
             $this->keyId    = $config->key_id    ?? '';
             $this->enabled  = $config->enabled;
@@ -69,7 +69,7 @@ class ConnectorSetup extends Component
         $data = ['enabled' => $this->enabled];
 
         if ($this->clientId     !== '') $data['client_id']     = $this->clientId;
-        if ($this->tenantId     !== '') $data['tenant_id']     = $this->tenantId;
+        if ($this->tenantId     !== '') $data['azure_tenant_id'] = $this->tenantId;
         if ($this->objectId     !== '') $data['object_id']     = $this->objectId;
         if ($this->keyId        !== '') $data['key_id']        = $this->keyId;
         if ($this->clientSecret !== '') $data['client_secret'] = $this->clientSecret;

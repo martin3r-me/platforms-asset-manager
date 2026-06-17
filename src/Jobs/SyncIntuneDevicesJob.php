@@ -94,7 +94,7 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                 } else {
                     $created = AssetDevice::create(array_merge($data, [
                         'team_id'   => $this->teamId,
-                        'tenant_id' => $config->tenant_id,
+                        'tenant_id' => $config->azure_tenant_id,
                         'intune_id' => $device['id'],
                         'source'    => 'intune',
                     ]));

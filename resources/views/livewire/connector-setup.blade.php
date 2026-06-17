@@ -153,7 +153,7 @@
                                     </p>
                                     <ul class="mt-1.5 space-y-0.5 text-xs text-amber-600/80 dark:text-amber-400/70">
                                         @if(empty($config->client_id))     <li>→ Client ID fehlt</li> @endif
-                                        @if(empty($config->tenant_id))     <li>→ Tenant ID fehlt</li> @endif
+                                        @if(empty($config->azure_tenant_id)) <li>→ Tenant ID fehlt</li> @endif
                                         @if(empty($config->client_secret)) <li>→ Secret fehlt</li> @endif
                                     </ul>
                                 </div>

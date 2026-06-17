@@ -30,7 +30,7 @@ class IntuneGraphService
     {
         try {
             $response = Http::asForm()->post(
-                "{$this->loginBase}/{$config->tenant_id}/oauth2/v2.0/token",
+                "{$this->loginBase}/{$config->azure_tenant_id}/oauth2/v2.0/token",
                 [
                     'grant_type'    => 'client_credentials',
                     'client_id'     => $config->client_id,
@@ -288,7 +288,7 @@ class IntuneGraphService
 
         try {
             $tokenResponse = Http::asForm()->post(
-                "{$this->loginBase}/{$config->tenant_id}/oauth2/v2.0/token",
+                "{$this->loginBase}/{$config->azure_tenant_id}/oauth2/v2.0/token",
                 [
                     'grant_type'    => 'client_credentials',
                     'client_id'     => $config->client_id,

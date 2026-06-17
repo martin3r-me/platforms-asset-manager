@@ -12,8 +12,9 @@ class AssetConnectorConfig extends Model
 
     protected $fillable = [
         'team_id',
-        'client_id',
         'tenant_id',
+        'client_id',
+        'azure_tenant_id',
         'object_id',
         'key_id',
         'client_secret',
@@ -29,7 +30,7 @@ class AssetConnectorConfig extends Model
     ];
 
     /** Defense-in-depth: Secrets nie in toArray()/toJson() (Logs, API-Responses, Events) durchreichen. */
-    protected $hidden = ['client_id', 'tenant_id', 'object_id', 'key_id', 'client_secret'];
+    protected $hidden = ['client_id', 'azure_tenant_id', 'object_id', 'key_id', 'client_secret'];
 
     // Verschlüsselte Felder — Accessors/Mutators nach MicrosoftOAuthToken-Muster
 
@@ -43,14 +44,14 @@ class AssetConnectorConfig extends Model
         return $this->decryptField($value, 'client_id');
     }
 
-    public function setTenantIdAttribute(?string $value): void
+    public function setAzureTenantIdAttribute(?string $value): void
     {
-        $this->attributes['tenant_id'] = $value ? Crypt::encryptString($value) : null;
+        $this->attributes['azure_tenant_id'] = $value ? Crypt::encryptString($value) : null;
     }
 
-    public function getTenantIdAttribute(?string $value): ?string
+    public function getAzureTenantIdAttribute(?string $value): ?string
     {
-        return $this->decryptField($value, 'tenant_id');
+        return $this->decryptField($value, 'azure_tenant_id');
     }
 
     public function setObjectIdAttribute(?string $value): void
@@ -108,7 +109,7 @@ class AssetConnectorConfig extends Model
      */
     public function hasUndecryptableSecrets(): bool
     {
-        foreach (['client_id', 'tenant_id', 'object_id', 'key_id', 'client_secret'] as $field) {
+        foreach (['client_id', 'azure_tenant_id', 'object_id', 'key_id', 'client_secret'] as $field) {
             $raw = $this->attributes[$field] ?? null;
             if (!$raw) continue;
             try {
@@ -123,12 +124,18 @@ class AssetConnectorConfig extends Model
     public function isConfigured(): bool
     {
         return !empty($this->client_id)
-            && !empty($this->tenant_id)
+            && !empty($this->azure_tenant_id)
             && !empty($this->client_secret);
     }
 
     public function team()
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);
+    }
+
+    /** Tenant (Kundenkontext), zu dem diese Microsoft-Anbindung gehört. */
+    public function tenant()
+    {
+        return $this->belongsTo(AssetTenant::class, 'tenant_id');
     }
 }
