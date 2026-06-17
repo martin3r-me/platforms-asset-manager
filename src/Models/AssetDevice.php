@@ -18,6 +18,7 @@ class AssetDevice extends Model
     protected $fillable = [
         'team_id',
         'tenant_id',
+        'azure_tenant_id',
         'intune_id',
         'source',
         'device_name',
@@ -77,6 +78,12 @@ class AssetDevice extends Model
     public function team()
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);
+    }
+
+    /** Tenant (Kundenkontext), zu dem dieses Gerät gehört. */
+    public function tenant()
+    {
+        return $this->belongsTo(AssetTenant::class, 'tenant_id');
     }
 
     public function costType()
