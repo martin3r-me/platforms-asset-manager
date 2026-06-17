@@ -33,6 +33,11 @@ automatisch aus dem `cost_line`-Block (Aggregation gated über `aggregation_sour
 - **Frequenz** — `monthly|quarterly|yearly|once`; Normalisierung auf Monat in `AssetCostLine::computeMonthlyAmount()` (saving-Hook).
 - **Buchungssystem** — `HGK` oder `Moss` (welche Buchhaltung die Kostenart kontiert).
 
+### Anbindung & Tenants
+
+- **Tenant** — Ein vom **Team** verwalteter Kundenkontext (`asset_tenants`), auf den sich das gesamte Inventar bezieht: jedes Inventar-Objekt (Gerät, Asset, Lizenz, Mitarbeiter) gehört zu **genau einem** Tenant (`tenant_id`, Pflicht, keine Mehrfach-Zugehörigkeit). **Kann**, muss aber nicht, eine Microsoft-Anbindung haben — ein Tenant **ohne** Connector ist ein reiner Manuell-Kunde (kein Intune). Ein Team hat viele Tenants, nicht teamübergreifend. _Avoid_: Mandant, Kunde, Organisation (= `platform-organization`-Begriff). _Hinweis_: bei uns **nicht** zwingend ein M365-Verzeichnis — die Azure-Tenant-GUID lebt am Connector.
+- **Connector** — Die **optionale** Microsoft-365-/Intune-Anbindung eines Tenants (**0..1** je Tenant): trägt die Azure-Tenant-GUID, Consent- und Sync-Status. Synchronisierte Geräte/Lizenzen kommen *durch* den Connector herein und erben den Tenant. _Avoid_: Integration, Verbindung.
+
 ## Kostenaufteilung (Pivot)
 
 `CostAggregationService::costCenterByType($teamId, 'monthly'|'quarterly')` reproduziert Excel Sheet1/2:
