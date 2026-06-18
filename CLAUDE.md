@@ -26,3 +26,9 @@ Single-context: ein `CONTEXT.md` + `docs/adr/` im Repo-Root. Siehe `docs/agents/
 Wiederverwendbarer Korrektheits-/Failure-Mode-Audit-Prompt (gegen `src/` verifiziert). Einer
 frischen Analyse-Session als Instruktions-Set übergeben → `LOGIC ANALYSIS REPORT`. Siehe
 `docs/agents/logic-audit.md`. Bei Code-Änderungen die Zeilen-Anker im Prompt nachziehen.
+
+### Architecture review
+
+Komplementärer Struktur-/Safe-Refactor-Audit-Prompt (Layer & Anker gegen `src/` verifiziert).
+Beurteilt Boundaries, Clutter und sichere Refactorings statt Bugs → `ARCHITECTURE REVIEW REPORT`.
+Siehe `docs/agents/architecture-review.md`. Bei Umbau die Layer-/Datei-Anker nachziehen.
