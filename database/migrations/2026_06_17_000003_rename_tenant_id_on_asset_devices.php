@@ -14,15 +14,20 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('asset_devices', function (Blueprint $table) {
-            $table->renameColumn('tenant_id', 'azure_tenant_id');
-        });
+        // Idempotent: nur umbenennen, wenn noch nicht geschehen (übersteht einen Teil-/Wiederholungslauf).
+        if (! Schema::hasColumn('asset_devices', 'azure_tenant_id')) {
+            Schema::table('asset_devices', function (Blueprint $table) {
+                $table->renameColumn('tenant_id', 'azure_tenant_id');
+            });
+        }
     }
 
     public function down(): void
     {
-        Schema::table('asset_devices', function (Blueprint $table) {
-            $table->renameColumn('azure_tenant_id', 'tenant_id');
-        });
+        if (! Schema::hasColumn('asset_devices', 'tenant_id')) {
+            Schema::table('asset_devices', function (Blueprint $table) {
+                $table->renameColumn('azure_tenant_id', 'tenant_id');
+            });
+        }
     }
 };

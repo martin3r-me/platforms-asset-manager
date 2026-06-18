@@ -30,6 +30,11 @@ return new class extends Migration
     public function up(): void
     {
         foreach ($this->tables as $name) {
+            // Idempotent: FK-Spalte je Tabelle nur ergänzen, wenn noch nicht vorhanden (übersteht einen
+            // Teil-Abbruch dieser 8-Tabellen-Schleife auf MySQL und ist beliebig wiederholbar).
+            if (Schema::hasColumn($name, 'tenant_id')) {
+                continue;
+            }
             Schema::table($name, function (Blueprint $table) {
                 $table->foreignId('tenant_id')->nullable()->after('team_id')
                     ->constrained('asset_tenants')->cascadeOnDelete();
@@ -78,6 +83,9 @@ return new class extends Migration
     public function down(): void
     {
         foreach ($this->tables as $name) {
+            if (! Schema::hasColumn($name, 'tenant_id')) {
+                continue;
+            }
             Schema::table($name, function (Blueprint $table) {
                 $table->dropForeign(['tenant_id']);
                 $table->dropColumn('tenant_id');
