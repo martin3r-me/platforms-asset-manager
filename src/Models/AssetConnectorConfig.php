@@ -22,11 +22,13 @@ class AssetConnectorConfig extends Model
         'last_sync_at',
         'sync_status',
         'sync_error',
+        'consent_confirmed_at',
     ];
 
     protected $casts = [
-        'enabled'      => 'boolean',
-        'last_sync_at' => 'datetime',
+        'enabled'              => 'boolean',
+        'last_sync_at'         => 'datetime',
+        'consent_confirmed_at' => 'datetime',
     ];
 
     /** Defense-in-depth: Secrets nie in toArray()/toJson() (Logs, API-Responses, Events) durchreichen. */
@@ -121,11 +123,45 @@ class AssetConnectorConfig extends Model
         return false;
     }
 
+    /**
+     * Effektive Client-ID: bevorzugt die am Connector hinterlegte (Legacy/Override), sonst die der
+     * zentralen Multi-Tenant-App aus der Config. Siehe Übergangs-Sicherheit in config/asset-manager.php.
+     */
+    public function effectiveClientId(): ?string
+    {
+        return $this->client_id ?: config('asset-manager.azure.client_id');
+    }
+
+    /** Effektives Client-Secret: Connector-eigenes (Legacy/Override) vor zentralem App-Secret. */
+    public function effectiveClientSecret(): ?string
+    {
+        return $this->client_secret ?: config('asset-manager.azure.client_secret');
+    }
+
     public function isConfigured(): bool
     {
-        return !empty($this->client_id)
-            && !empty($this->azure_tenant_id)
-            && !empty($this->client_secret);
+        return !empty($this->azure_tenant_id)
+            && !empty($this->effectiveClientId())
+            && !empty($this->effectiveClientSecret());
+    }
+
+    /** True, sobald „Anbindung prüfen" einmal erfolgreich war (oder ein Sync nachweislich lief). */
+    public function isConsentConfirmed(): bool
+    {
+        return $this->consent_confirmed_at !== null;
+    }
+
+    /**
+     * Abgeleiteter Verbindungs-Status für die UI (kein DB-Feld):
+     * 'disconnected' = getrennt/deaktiviert · 'incomplete' = kein Kunden-Verzeichnis ·
+     * 'pending' = Consent ausstehend · 'active' = bestätigt.
+     */
+    public function connectionStatus(): string
+    {
+        if (! $this->enabled)                  return 'disconnected';
+        if (empty($this->azure_tenant_id))     return 'incomplete';
+        if (! $this->isConsentConfirmed())     return 'pending';
+        return 'active';
     }
 
     public function team()

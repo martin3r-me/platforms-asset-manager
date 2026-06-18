@@ -10,6 +10,7 @@ class AssetLicenseSyncLog extends Model
 
     protected $fillable = [
         'team_id',
+        'tenant_id',
         'status',
         'skus_synced',
         'assignments_synced',
@@ -25,4 +26,10 @@ class AssetLicenseSyncLog extends Model
         'started_at'   => 'datetime',
         'completed_at' => 'datetime',
     ];
+
+    /** Tenant (Kundenkontext), für den dieser Sync-Lauf erfolgte. */
+    public function tenant()
+    {
+        return $this->belongsTo(AssetTenant::class, 'tenant_id');
+    }
 }

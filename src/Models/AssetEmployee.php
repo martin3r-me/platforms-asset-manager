@@ -10,6 +10,7 @@ class AssetEmployee extends Model
 
     protected $fillable = [
         'team_id',
+        'tenant_id',
         'user_principal_name',
         'display_name',
         'email',
@@ -34,6 +35,12 @@ class AssetEmployee extends Model
     public function team()
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);
+    }
+
+    /** Tenant (Kundenkontext), zu dem dieser Mitarbeiter gehört. */
+    public function tenant()
+    {
+        return $this->belongsTo(AssetTenant::class, 'tenant_id');
     }
 
     public function costCenter()

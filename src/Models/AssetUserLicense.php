@@ -10,6 +10,7 @@ class AssetUserLicense extends Model
 
     protected $fillable = [
         'team_id',
+        'tenant_id',
         'sku_id',
         'sku_part_number',
         'user_principal_name',
@@ -27,5 +28,11 @@ class AssetUserLicense extends Model
     {
         return $this->hasOne(AssetLicenseSku::class, 'sku_id', 'sku_id')
             ->where('team_id', $this->team_id);
+    }
+
+    /** Tenant (Kundenkontext), zu dem diese Lizenzzuweisung gehört. */
+    public function tenant()
+    {
+        return $this->belongsTo(AssetTenant::class, 'tenant_id');
     }
 }

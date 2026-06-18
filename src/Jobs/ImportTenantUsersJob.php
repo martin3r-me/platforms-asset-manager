@@ -20,26 +20,41 @@ class ImportTenantUsersJob implements ShouldQueue
     public int $tries   = 1;
 
     public function __construct(
-        public readonly int $teamId
+        public readonly int $connectorId
     ) {}
+
+    /** Fan-out: importiert Tenant-User je aktivem, konfiguriertem Connector des Teams. */
+    public static function dispatchForTeam(int $teamId): int
+    {
+        $count = 0;
+        foreach (AssetConnectorConfig::where('team_id', $teamId)->where('enabled', true)->get() as $config) {
+            if (!$config->isConfigured()) continue;
+            self::dispatch($config->id);
+            $count++;
+        }
+        return $count;
+    }
 
     public function handle(IntuneGraphService $graph, EmployeeService $employees): void
     {
-        $config = AssetConnectorConfig::where('team_id', $this->teamId)
+        $config = AssetConnectorConfig::where('id', $this->connectorId)
             ->where('enabled', true)
             ->first();
-        if (!$config || !$config->isConfigured()) {
-            Log::warning('AssetManager: Import übersprungen — Connector nicht konfiguriert oder deaktiviert', ['team_id' => $this->teamId]);
+        if (!$config || !$config->isConfigured() || !$config->tenant_id) {
+            Log::warning('AssetManager: Import übersprungen — Connector nicht konfiguriert/ohne Tenant', ['connector_id' => $this->connectorId]);
             return;
         }
 
-        Log::info('AssetManager: Tenant-User-Import gestartet', ['team_id' => $this->teamId]);
+        $teamId   = $config->team_id;
+        $tenantId = $config->tenant_id;
+
+        Log::info('AssetManager: Tenant-User-Import gestartet', ['connector_id' => $this->connectorId, 'tenant_id' => $tenantId]);
 
         $users = $graph->getUsersWithLicenses($config);
         if ($users === null) {
             Log::error('AssetManager: Tenant-User-Import fehlgeschlagen', [
-                'team_id' => $this->teamId,
-                'error'   => $graph->lastError ?? 'unbekannt',
+                'connector_id' => $this->connectorId,
+                'error'        => $graph->lastError ?? 'unbekannt',
             ]);
             $config->update(['sync_error' => 'Tenant-User-Import: ' . ($graph->lastError ?? 'unbekannt')]);
             return;
@@ -49,7 +64,8 @@ class ImportTenantUsersJob implements ShouldQueue
         foreach ($users as $u) {
             if (empty($u['userPrincipalName'])) continue;
             $employee = $employees->findOrCreateByUpn(
-                $this->teamId,
+                $teamId,
+                $tenantId,
                 $u['userPrincipalName'],
                 $u['displayName'] ?? null,
                 'graph'
@@ -64,8 +80,9 @@ class ImportTenantUsersJob implements ShouldQueue
         }
 
         Log::info('AssetManager: Tenant-User-Import abgeschlossen', [
-            'team_id' => $this->teamId,
-            'count'   => $count,
+            'connector_id' => $this->connectorId,
+            'tenant_id'    => $tenantId,
+            'count'        => $count,
         ]);
     }
 }

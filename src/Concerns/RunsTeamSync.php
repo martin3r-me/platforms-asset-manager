@@ -45,12 +45,14 @@ trait RunsTeamSync
     }
 
     /**
-     * Reset a team's stuck 'started' sync-log rows to 'error' — used by failed() when Laravel kills
-     * the job (timeout/uncaught) and handle()'s try/catch never ran. Caller wraps this in try/catch.
+     * Reset a tenant's stuck 'started' sync-log rows to 'error' — used by failed() when Laravel kills
+     * the job (timeout/uncaught) and handle()'s try/catch never ran. Tenant-scoped (per connector),
+     * damit ein hängender Sync nicht die Logs der anderen Tenants desselben Teams anfasst.
+     * Caller wraps this in try/catch.
      */
-    protected function failStuckSyncLogs(string $logClass, int $teamId, string $message): void
+    protected function failStuckSyncLogs(string $logClass, int $tenantId, string $message): void
     {
-        $logClass::where('team_id', $teamId)
+        $logClass::where('tenant_id', $tenantId)
             ->where('status', 'started')
             ->update([
                 'status'        => 'error',

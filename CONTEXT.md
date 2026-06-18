@@ -36,7 +36,10 @@ automatisch aus dem `cost_line`-Block (Aggregation gated über `aggregation_sour
 ### Anbindung & Tenants
 
 - **Tenant** — Ein vom **Team** verwalteter Kundenkontext (`asset_tenants`), auf den sich das gesamte Inventar bezieht: jedes Inventar-Objekt (Gerät, Asset, Lizenz, Mitarbeiter) gehört zu **genau einem** Tenant (`tenant_id`, Pflicht, keine Mehrfach-Zugehörigkeit). **Kann**, muss aber nicht, eine Microsoft-Anbindung haben — ein Tenant **ohne** Connector ist ein reiner Manuell-Kunde (kein Intune). Ein Team hat viele Tenants, nicht teamübergreifend. _Avoid_: Mandant, Kunde, Organisation (= `platform-organization`-Begriff). _Hinweis_: bei uns **nicht** zwingend ein M365-Verzeichnis — die Azure-Tenant-GUID lebt am Connector.
-- **Connector** — Die **optionale** Microsoft-365-/Intune-Anbindung eines Tenants (**0..1** je Tenant): trägt die Azure-Tenant-GUID, Consent- und Sync-Status. Synchronisierte Geräte/Lizenzen kommen *durch* den Connector herein und erben den Tenant. _Avoid_: Integration, Verbindung.
+- **Connector** — Die **optionale** Microsoft-365-/Intune-Anbindung eines Tenants (**0..1** je Tenant): trägt die Azure-Tenant-GUID (`azure_tenant_id`), Consent- und Sync-Status. Synchronisierte Geräte/Lizenzen kommen *durch* den Connector herein und erben den Tenant. _Avoid_: Integration, Verbindung.
+  - **Zentrale App + Fallback**: Auth läuft über **eine** zentrale Multi-Tenant-Azure-App (`config('asset-manager.azure.*')`, geteilt). Hinterlegt ein Connector eigene `client_id`/`client_secret`, haben diese **Vorrang** (Legacy/Override) — sonst die zentrale App. Token-Cache ist **pro Connector**.
+  - **Consent ist manuell**: Der Admin-Consent-Link (`/{azure_tenant_id}/v2.0/adminconsent`) wird angezeigt/verschickt; aktiviert wird über **„Anbindung prüfen"** (Token-Test) — **kein** öffentlicher Callback. `consent_confirmed_at` markiert die Aktivierung.
+  - **Status** (abgeleitet, `connectionStatus()`): `incomplete` (kein Verzeichnis) · `pending` (Consent ausstehend) · `active` · `disconnected` (getrennt = `enabled=false`, **Daten bleiben**). Sync läuft **pro Connector** (`uniqueId=connector_id`), reconcile-delete strikt pro Tenant.
 
 ## Kostenaufteilung (Pivot)
 

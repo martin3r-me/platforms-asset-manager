@@ -129,7 +129,7 @@ class Index extends Component
 
         $team = Auth::user()->currentTeam;
 
-        SyncIntuneDevicesJob::dispatch($team->id);
+        SyncIntuneDevicesJob::dispatchForTeam($team->id);
 
         $this->syncResult = 'Sync gestartet — Geräte werden im Hintergrund synchronisiert.';
     }

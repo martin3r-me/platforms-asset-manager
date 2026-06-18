@@ -58,7 +58,7 @@ class Index extends Component
 
         $team = Auth::user()->currentTeam;
 
-        SyncLicensesJob::dispatch($team->id);
+        SyncLicensesJob::dispatchForTeam($team->id);
 
         $this->syncResult = 'Lizenz-Sync gestartet — Daten werden im Hintergrund synchronisiert.';
     }

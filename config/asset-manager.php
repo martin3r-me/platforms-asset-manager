@@ -33,6 +33,24 @@ return [
     'guard' => 'web',
 
     /**
+     * Zentrale Microsoft-/Azure-App (Multi-Tenant)
+     *
+     * EINE App-Registrierung, geteilt über ALLE Connectoren. Pro Connector wird nur das Kunden-
+     * Verzeichnis (azure_tenant_id) gehalten; client_id/secret kommen von hier.
+     * Übergangs-Sicherheit: hat ein Connector eigene client_id/client_secret hinterlegt, haben diese
+     * Vorrang (IntuneGraphService-Fallback) — so läuft der bestehende Connector weiter, bis die
+     * zentrale App registriert + vom jeweiligen Kunden-Tenant konsentiert ist.
+     *
+     * 'redirect_uri' wird beim Admin-Consent-Link mitgegeben (muss in der App registriert sein),
+     * aber NICHT von uns verarbeitet (manueller Consent: Operator klickt danach „Anbindung prüfen").
+     */
+    'azure' => [
+        'client_id'     => env('ASSET_MANAGER_AZURE_CLIENT_ID'),
+        'client_secret' => env('ASSET_MANAGER_AZURE_CLIENT_SECRET'),
+        'redirect_uri'  => env('ASSET_MANAGER_AZURE_REDIRECT_URI', 'https://login.microsoftonline.com/common/oauth2/nativeclient'),
+    ],
+
+    /**
      * Navigation-Konfiguration
      * 
      * Definiert, wie das Modul in der Hauptnavigation erscheint.
@@ -156,8 +174,8 @@ return [
                     'icon'  => 'heroicon-o-document-magnifying-glass',
                 ],
                 [
-                    'label' => 'Connector',
-                    'route' => 'asset-manager.setup',
+                    'label' => 'Konnektoren',
+                    'route' => 'asset-manager.connectors.index',
                     'icon'  => 'heroicon-o-wrench-screwdriver',
                 ],
             ],

@@ -27,31 +27,54 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
     public int $timeout = 300;
     public int $tries   = 1;
 
-    /** Serialisiert parallele Geraete-Syncs desselben Teams (3.0-Entscheidung; analog SyncLicensesJob) —
-     *  schliesst das check-then-act-Rennen (first()->create()) gegen den (team_id,intune_id)-Unique-Index. */
+    /** Team-/Tenant-Kontext des Connectors — in handle() gesetzt, von den Helfern genutzt (nicht serialisiert). */
+    protected ?int $teamId   = null;
+    protected ?int $tenantId = null;
+
+    /** Serialisiert parallele Geraete-Syncs DESSELBEN Connectors (Multi-Tenant: ein Connector = ein Tenant) —
+     *  schliesst das check-then-act-Rennen (first()->create()) gegen den (tenant_id,intune_id)-Unique-Index. */
     public function uniqueId(): string
     {
-        return (string) $this->teamId;
+        return (string) $this->connectorId;
     }
 
     public function __construct(
-        public readonly int $teamId
+        public readonly int $connectorId
     ) {}
+
+    /**
+     * Fan-out: dispatcht je aktivem, konfiguriertem Connector des Teams einen eigenen Job.
+     * Team-Level-Auslöser (UI-Button „Jetzt synchronisieren", MCP-Tool) gehen hierüber.
+     */
+    public static function dispatchForTeam(int $teamId): int
+    {
+        $count = 0;
+        foreach (AssetConnectorConfig::where('team_id', $teamId)->where('enabled', true)->get() as $config) {
+            if (!$config->isConfigured()) continue;
+            self::dispatch($config->id);
+            $count++;
+        }
+        return $count;
+    }
 
     public function handle(IntuneGraphService $service, EmployeeService $employeeService): void
     {
-        $config = AssetConnectorConfig::where('team_id', $this->teamId)
+        $config = AssetConnectorConfig::where('id', $this->connectorId)
             ->where('enabled', true)
             ->first();
 
-        if (!$config || !$config->isConfigured()) {
-            Log::warning('AssetManager: Sync übersprungen — Connector nicht konfiguriert', ['team_id' => $this->teamId]);
+        if (!$config || !$config->isConfigured() || !$config->tenant_id) {
+            Log::warning('AssetManager: Sync übersprungen — Connector nicht konfiguriert/ohne Tenant', ['connector_id' => $this->connectorId]);
             return;
         }
+
+        $this->teamId   = $config->team_id;
+        $this->tenantId = $config->tenant_id;
 
         $startedAt = now();
         $log = AssetDeviceSyncLog::create([
             'team_id'    => $this->teamId,
+            'tenant_id'  => $this->tenantId,
             'status'     => 'started',
             'started_at' => $startedAt,
         ]);
@@ -76,8 +99,9 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
 
                 // withTrashed: ein zuvor verschwundenes (soft-deleted) Gerät wird restored statt neu
                 // angelegt — so bleiben seine Kosten-Overrides (monthly_cost, cost_type_id …) erhalten.
+                // Lookup strikt pro Tenant (Multi-Tenant: intune_id ist nur innerhalb eines Tenants eindeutig).
                 $existing = AssetDevice::withTrashed()
-                    ->where('team_id', $this->teamId)
+                    ->where('tenant_id', $this->tenantId)
                     ->where('intune_id', $device['id'])
                     ->first();
 
@@ -94,7 +118,7 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                 } else {
                     $created = AssetDevice::create(array_merge($data, [
                         'team_id'         => $this->teamId,
-                        'tenant_id'       => $config->tenant_id,
+                        'tenant_id'       => $this->tenantId,
                         'azure_tenant_id' => $config->azure_tenant_id,
                         'intune_id'       => $device['id'],
                         'source'          => 'intune',
@@ -103,7 +127,7 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                     $added++;
                 }
 
-                // Geräte-Modell-Katalog pflegen (Preise ergänzt der User im UI). Nur bei bekanntem Modell/Hersteller.
+                // Geräte-Modell-Katalog pflegen — team-weit (Teil des Kostenmodells, NICHT tenant-skopiert).
                 if (!empty($data['manufacturer']) || !empty($data['model'])) {
                     AssetDeviceModel::firstOrCreate([
                         'team_id'      => $this->teamId,
@@ -116,6 +140,7 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                 if (!empty($device['userPrincipalName'])) {
                     $employeeService->findOrCreateByUpn(
                         $this->teamId,
+                        $this->tenantId,
                         $device['userPrincipalName'],
                         $device['userDisplayName'] ?? null,
                         'derived'
@@ -133,8 +158,9 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                 // ganze Flotte löschen. $devices === null ist oben bereits als Fehler abgefangen; ein leeres
                 // Array ist syntaktisch valide, würde aber whereNotIn('intune_id', []) zu „alle Zeilen"
                 // machen → Totalverlust beim ersten Tenant-Glitch. Dann nichts entfernen (removed=0).
+                // Scope strikt pro Tenant — kein Kreuz-Löschen zwischen Tenants desselben Teams.
                 $removed = $this->reconcileDelete(
-                    fn () => AssetDevice::where('team_id', $this->teamId),
+                    fn () => AssetDevice::where('tenant_id', $this->tenantId),
                     'intune_id',
                     $intuneIds
                 );
@@ -156,23 +182,24 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                 ]);
             });
 
-            // Safety-Net: nochmal alle UPNs einsammeln (fängt Bestandsdaten vor Phase 3 ab)
-            $employeeService->backfillForTeam($this->teamId);
+            // Safety-Net: nochmal alle UPNs einsammeln (fängt Bestandsdaten ab)
+            $employeeService->backfillForTenant($this->teamId, $this->tenantId);
 
             Log::info('AssetManager: Sync erfolgreich', [
-                'team_id'  => $this->teamId,
-                'synced'   => count($devices),
-                'added'    => $added,
-                'updated'  => $updated,
-                'removed'  => $removed,
-                'duration' => $durationMs . 'ms',
+                'connector_id' => $this->connectorId,
+                'tenant_id'    => $this->tenantId,
+                'synced'       => count($devices),
+                'added'        => $added,
+                'updated'      => $updated,
+                'removed'      => $removed,
+                'duration'     => $durationMs . 'ms',
             ]);
 
         } catch (\Throwable $e) {
             $this->markFailed($config, $log, $startedAt, $e->getMessage());
             Log::error('AssetManager: Sync-Exception', [
-                'team_id' => $this->teamId,
-                'error'   => $e->getMessage(),
+                'connector_id' => $this->connectorId,
+                'error'        => $e->getMessage(),
             ]);
         }
     }
@@ -229,6 +256,7 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
         try {
             AssetDeviceEvent::create([
                 'team_id'         => $this->teamId,
+                'tenant_id'       => $this->tenantId,
                 'asset_device_id' => $device->id,
                 'event_type'      => $type,
                 'description'     => $description,
@@ -237,8 +265,8 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
             ]);
         } catch (\Throwable $e) {
             Log::warning('AssetManager: Geräte-Event nicht geschrieben', [
-                'team_id' => $this->teamId,
-                'error'   => $e->getMessage(),
+                'connector_id' => $this->connectorId,
+                'error'        => $e->getMessage(),
             ]);
         }
     }
@@ -255,17 +283,22 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
 
     /**
      * Wird von Laravel bei terminalem Scheitern (Timeout/Kill/uncaught) aufgerufen — der try/catch in
-     * handle() greift dort NICHT. Räumt hängengebliebene 'running'/'started'-Zustände des Teams auf,
+     * handle() greift dort NICHT. Räumt hängengebliebene 'running'/'started'-Zustände des Connectors auf,
      * damit Connector-Status und Sync-Log nicht ewig „läuft" zeigen. Darf selbst nie werfen.
      */
     public function failed(\Throwable $e): void
     {
         try {
-            AssetConnectorConfig::where('team_id', $this->teamId)
-                ->where('sync_status', 'running')
-                ->update(['sync_status' => 'error', 'sync_error' => $e->getMessage()]);
+            $config = AssetConnectorConfig::find($this->connectorId);
+            if (!$config) return;
 
-            $this->failStuckSyncLogs(AssetDeviceSyncLog::class, $this->teamId, $e->getMessage());
+            if ($config->sync_status === 'running') {
+                $config->update(['sync_status' => 'error', 'sync_error' => $e->getMessage()]);
+            }
+
+            if ($config->tenant_id) {
+                $this->failStuckSyncLogs(AssetDeviceSyncLog::class, $config->tenant_id, $e->getMessage());
+            }
         } catch (\Throwable $ignored) {
             // failed() muss schweigend bleiben
         }

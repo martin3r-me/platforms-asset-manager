@@ -13,6 +13,7 @@ class AssetItem extends Model
 
     protected $fillable = [
         'team_id',
+        'tenant_id',
         'category_id',
         'source',
         'external_id',
@@ -40,6 +41,12 @@ class AssetItem extends Model
     public function team()
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);
+    }
+
+    /** Tenant (Kundenkontext), zu dem dieses Asset gehört. */
+    public function tenant()
+    {
+        return $this->belongsTo(AssetTenant::class, 'tenant_id');
     }
 
     public function category()

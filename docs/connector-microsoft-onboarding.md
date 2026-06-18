@@ -17,8 +17,10 @@ die für **alle** Kunden-Connectoren genutzt wird.
 1. **Azure Portal → App-Registrierungen → Neue Registrierung**
    - Name: z. B. `Asset Manager – Intune Sync`
    - Unterstützte Kontotypen: **„Konten in einem beliebigen Organisationsverzeichnis (mehrmandantenfähig)"**
-   - Redirect-URI (Plattform „Web"): `https://office.bhgdigital.de/asset-manager/connectors/microsoft/callback`
-     _(finale URL ergibt sich aus der M2-Implementierung — hier Platzhalter)_
+   - Redirect-URI: muss in der App **registriert** sein (Microsoft verlangt eine für den Consent-Link), wird von
+     uns aber **nicht verarbeitet** (manueller Consent, kein Callback). Default in der Config:
+     `https://login.microsoftonline.com/common/oauth2/nativeclient` — überschreibbar via
+     `ASSET_MANAGER_AZURE_REDIRECT_URI`. Wert muss exakt mit der App-Registrierung übereinstimmen.
 
 2. **API-Berechtigungen → hinzufügen → Microsoft Graph → Anwendungsberechtigungen** (nicht „delegiert"!):
 
@@ -34,32 +36,38 @@ die für **alle** Kunden-Connectoren genutzt wird.
    - **Zertifikat** (empfohlen für app-only Produktion), **oder**
    - **Client-Secret** (einfacher; läuft ab → Rotation einplanen)
 
-4. **Werte hinterlegen** (einmalig, geteilt über alle Connectoren) in `env`/`config`:
-   - `Application (client) ID`
-   - das Secret bzw. das Zertifikat
+4. **Werte hinterlegen** (einmalig, geteilt über alle Connectoren) in `.env` der Host-App:
+   - `ASSET_MANAGER_AZURE_CLIENT_ID` = Application (client) ID
+   - `ASSET_MANAGER_AZURE_CLIENT_SECRET` = das Secret (bzw. künftig Zertifikat)
+   - `ASSET_MANAGER_AZURE_REDIRECT_URI` = die registrierte Redirect-URI (optional; Default s. o.)
    - (Tenant-GUIDs der Kunden werden **nicht** hier, sondern pro Connector gespeichert)
+
+   _Übergang:_ Ein bestehender Connector mit **eigenen** `client_id`/`client_secret` läuft unverändert weiter
+   (Connector-Werte haben Vorrang). Erst neue Connectoren ohne eigene Credentials nutzen die zentrale App.
 
 ---
 
 ## Teil 2 — Pro Kunde: Connector verbinden (du)
 
-1. Im Asset Manager den **Tenant** wählen (oder neu anlegen).
-2. Links **„Konnektoren" → „Connector hinzufügen → Microsoft"**.
-3. **Kunden-Verzeichnis** angeben: Domain (`kunde.de`) **oder** Tenant-GUID.
-4. Es erscheint ein **Admin-Consent-Link**. Status des Connectors: **„Consent ausstehend"**.
-   Der Link hat die Form:
+1. Im Asset Manager den **Tenant** wählen (oder über **„+ Tenant"** neu anlegen).
+2. Rechts im Tenant-Detail **„Connector hinzufügen → Microsoft"**.
+3. **Kunden-Verzeichnis** angeben: Domain (`kunde.de`) **oder** Tenant-GUID. (Eigene App-Credentials nur unter
+   „Erweitert", falls nicht die zentrale App genutzt wird.) Speichern → Status **„Consent ausstehend"**.
+4. Es erscheint ein **Admin-Consent-Link** (zum Kopieren). Der Link hat die Form:
    ```
    https://login.microsoftonline.com/{kunden-tenant}/v2.0/adminconsent
      ?client_id={unsere-client-id}
      &scope=https://graph.microsoft.com/.default
-     &redirect_uri={callback}
+     &redirect_uri={registrierte-redirect-uri}
      &state={zufallswert}
    ```
 5. **Link an den Admin des Kunden schicken** (Mail/Teams) — Textbaustein in Teil 3.
-6. Sobald der Admin zugestimmt hat, ruft Microsoft unseren Callback mit `admin_consent=True&tenant={guid}` auf.
-   → Connector wird **„aktiv"**, GUID bestätigt, der **erste Sync** startet automatisch.
+6. Sobald der Admin zugestimmt hat (er landet danach auf der registrierten Redirect-URI — die wird von uns
+   **nicht** verarbeitet), im Asset Manager auf **„Anbindung prüfen"** klicken. Das macht einen Token-Test
+   gegen Graph; bei Erfolg wird der Connector **„aktiv"** und kann synchronisiert werden.
+   → Es gibt **keinen** automatischen Callback — die Aktivierung ist bewusst ein manueller Klick.
 
-Bist du selbst Admin des Kunden-Tenants, klickst du den Link direkt — gleicher Ablauf, sofort.
+Bist du selbst Admin des Kunden-Tenants, klickst du den Link direkt und danach „Anbindung prüfen" — sofort fertig.
 
 ---
 

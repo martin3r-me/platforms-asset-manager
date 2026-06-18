@@ -19,7 +19,7 @@ class IntuneGraphService
             return null;
         }
 
-        $cacheKey = 'asset_manager_token_' . $config->team_id;
+        $cacheKey = 'asset_manager_token_conn_' . $config->id;
 
         return Cache::remember($cacheKey, 3480, function () use ($config) {
             return $this->fetchToken($config);
@@ -33,8 +33,8 @@ class IntuneGraphService
                 "{$this->loginBase}/{$config->azure_tenant_id}/oauth2/v2.0/token",
                 [
                     'grant_type'    => 'client_credentials',
-                    'client_id'     => $config->client_id,
-                    'client_secret' => $config->client_secret,
+                    'client_id'     => $config->effectiveClientId(),
+                    'client_secret' => $config->effectiveClientSecret(),
                     'scope'         => 'https://graph.microsoft.com/.default',
                 ]
             );
@@ -61,9 +61,26 @@ class IntuneGraphService
         }
     }
 
-    public function clearTokenCache(int $teamId): void
+    public function clearTokenCache(int $connectorId): void
     {
-        Cache::forget('asset_manager_token_' . $teamId);
+        Cache::forget('asset_manager_token_conn_' . $connectorId);
+    }
+
+    /**
+     * Baut den Admin-Consent-Link für den Connector (manueller Consent — siehe docs/adr/0003).
+     * Der Kunden-Admin öffnet den Link einmal und stimmt zu; aktiviert wird der Connector danach
+     * über „Anbindung prüfen" (testConnection), NICHT über einen Callback.
+     */
+    public function adminConsentUrl(AssetConnectorConfig $config, ?string $state = null): string
+    {
+        $params = http_build_query([
+            'client_id'    => $config->effectiveClientId(),
+            'scope'        => 'https://graph.microsoft.com/.default',
+            'redirect_uri' => config('asset-manager.azure.redirect_uri'),
+            'state'        => $state ?? \Illuminate\Support\Str::random(32),
+        ]);
+
+        return "{$this->loginBase}/{$config->azure_tenant_id}/v2.0/adminconsent?{$params}";
     }
 
     /**
@@ -103,7 +120,7 @@ class IntuneGraphService
 
                 if ($response->status() === 401 && !$retried) {
                     $retried = true;
-                    $this->clearTokenCache($config->team_id);
+                    $this->clearTokenCache($config->id);
                     $token = $this->fetchToken($config);
                     if (!$token) {
                         $this->lastError = 'Token abgelaufen und Erneuerung fehlgeschlagen. Credentials prüfen.';
@@ -155,7 +172,7 @@ class IntuneGraphService
         $this->lastError = null;
 
         // Token komplett frisch holen (umgeht stale Tokens nach Permission-Änderungen)
-        $this->clearTokenCache($config->team_id);
+        $this->clearTokenCache($config->id);
         $token = $this->getAccessToken($config);
         if (!$token) {
             $this->lastError = 'Token-Abruf fehlgeschlagen. Client ID, Tenant ID und Secret prüfen.';
@@ -229,7 +246,7 @@ class IntuneGraphService
                 // Token frisch holen und dieselbe Seite erneut anfordern — analog getManagedDevices.
                 if ($response->status() === 401 && !$retried) {
                     $retried = true;
-                    $this->clearTokenCache($config->team_id);
+                    $this->clearTokenCache($config->id);
                     $token = $this->fetchToken($config);
                     if (!$token) {
                         $this->lastError = 'Token abgelaufen und Erneuerung fehlgeschlagen. Credentials prüfen.';
@@ -284,15 +301,15 @@ class IntuneGraphService
             return 'Connector ist nicht vollständig konfiguriert (Client ID, Tenant ID und Secret werden benötigt).';
         }
 
-        $this->clearTokenCache($config->team_id);
+        $this->clearTokenCache($config->id);
 
         try {
             $tokenResponse = Http::asForm()->post(
                 "{$this->loginBase}/{$config->azure_tenant_id}/oauth2/v2.0/token",
                 [
                     'grant_type'    => 'client_credentials',
-                    'client_id'     => $config->client_id,
-                    'client_secret' => $config->client_secret,
+                    'client_id'     => $config->effectiveClientId(),
+                    'client_secret' => $config->effectiveClientSecret(),
                     'scope'         => 'https://graph.microsoft.com/.default',
                 ]
             );

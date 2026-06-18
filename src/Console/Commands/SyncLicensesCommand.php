@@ -30,12 +30,17 @@ class SyncLicensesCommand extends Command
 
         foreach ($configs as $config) {
             if (!$config->isConfigured()) {
-                $this->warn("Team {$config->team_id}: Connector nicht vollständig konfiguriert, übersprungen.");
+                $this->warn("Connector {$config->id} (Team {$config->team_id}): nicht vollständig konfiguriert, übersprungen.");
                 continue;
             }
 
-            SyncLicensesJob::dispatch($config->team_id);
-            $this->info("Team {$config->team_id}: Lizenz-Sync-Job dispatched.");
+            if (!$config->isConsentConfirmed()) {
+                $this->warn("Connector {$config->id} (Team {$config->team_id}): Consent ausstehend, übersprungen.");
+                continue;
+            }
+
+            SyncLicensesJob::dispatch($config->id);
+            $this->info("Connector {$config->id} (Team {$config->team_id}): Lizenz-Sync-Job dispatched.");
         }
     }
 }

@@ -1,7 +1,7 @@
 <?php
 
 use Platform\AssetManager\Livewire\Dashboard;
-use Platform\AssetManager\Livewire\ConnectorSetup;
+use Platform\AssetManager\Livewire\Connectors\Index as ConnectorsIndex;
 use Platform\AssetManager\Livewire\Devices\Index as DevicesIndex;
 use Platform\AssetManager\Livewire\Devices\Show as DevicesShow;
 use Platform\AssetManager\Livewire\Compliance\Index as ComplianceIndex;
@@ -65,4 +65,8 @@ Route::get('/vendors',      fn () => redirect(route('asset-manager.master-data.i
 
 Route::get('/device-models', DeviceModelsIndex::class)->name('asset-manager.device-models.index');
 
-Route::get('/setup', ConnectorSetup::class)->name('asset-manager.setup');
+// Konnektoren-Verwaltung (Multi-Tenant): Tenant-Liste + Microsoft-Anbindung je Tenant.
+Route::get('/connectors', ConnectorsIndex::class)->name('asset-manager.connectors.index');
+
+// Alte Connector-Route → Weiterleitung auf die neue Konnektoren-Seite (Bookmarks/route()-Aufrufe bleiben gültig).
+Route::get('/setup', fn () => redirect(route('asset-manager.connectors.index')))->name('asset-manager.setup');

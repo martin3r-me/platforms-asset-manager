@@ -12,6 +12,7 @@ class AssetDeviceSyncLog extends Model
 
     protected $fillable = [
         'team_id',
+        'tenant_id',
         'status',
         'devices_synced',
         'devices_added',
@@ -31,5 +32,11 @@ class AssetDeviceSyncLog extends Model
     public function team()
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);
+    }
+
+    /** Tenant (Kundenkontext), für den dieser Sync-Lauf erfolgte. */
+    public function tenant()
+    {
+        return $this->belongsTo(AssetTenant::class, 'tenant_id');
     }
 }

@@ -10,6 +10,7 @@ class AssetDeviceEvent extends Model
 
     protected $fillable = [
         'team_id',
+        'tenant_id',
         'asset_device_id',
         'event_type',
         'description',
@@ -20,6 +21,12 @@ class AssetDeviceEvent extends Model
     public function device()
     {
         return $this->belongsTo(AssetDevice::class, 'asset_device_id');
+    }
+
+    /** Tenant (Kundenkontext), zu dem dieses Geräte-Event gehört. */
+    public function tenant()
+    {
+        return $this->belongsTo(AssetTenant::class, 'tenant_id');
     }
 
     public function eventLabel(): string

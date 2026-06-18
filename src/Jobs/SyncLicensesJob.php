@@ -26,10 +26,14 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
     public int $timeout = 300;
     public int $tries   = 1;
 
-    /** Serialisiert parallele Lizenz-Syncs desselben Teams (verhindert Duplikat-Races vor dem Unique-Index). */
+    /** Team-/Tenant-Kontext des Connectors — in handle() gesetzt (nicht serialisiert). */
+    protected ?int $teamId   = null;
+    protected ?int $tenantId = null;
+
+    /** Serialisiert parallele Lizenz-Syncs DESSELBEN Connectors (verhindert Duplikat-Races vor dem Unique-Index). */
     public function uniqueId(): string
     {
-        return (string) $this->teamId;
+        return (string) $this->connectorId;
     }
 
     protected array $skuNames = [
@@ -45,23 +49,41 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
     ];
 
     public function __construct(
-        public readonly int $teamId
+        public readonly int $connectorId
     ) {}
+
+    /**
+     * Fan-out: dispatcht je aktivem, konfiguriertem Connector des Teams einen eigenen Job.
+     */
+    public static function dispatchForTeam(int $teamId): int
+    {
+        $count = 0;
+        foreach (AssetConnectorConfig::where('team_id', $teamId)->where('enabled', true)->get() as $config) {
+            if (!$config->isConfigured()) continue;
+            self::dispatch($config->id);
+            $count++;
+        }
+        return $count;
+    }
 
     public function handle(IntuneGraphService $service, EmployeeService $employeeService): void
     {
-        $config = AssetConnectorConfig::where('team_id', $this->teamId)
+        $config = AssetConnectorConfig::where('id', $this->connectorId)
             ->where('enabled', true)
             ->first();
 
-        if (!$config || !$config->isConfigured()) {
-            Log::warning('AssetManager: Lizenz-Sync übersprungen — Connector nicht konfiguriert', ['team_id' => $this->teamId]);
+        if (!$config || !$config->isConfigured() || !$config->tenant_id) {
+            Log::warning('AssetManager: Lizenz-Sync übersprungen — Connector nicht konfiguriert/ohne Tenant', ['connector_id' => $this->connectorId]);
             return;
         }
+
+        $this->teamId   = $config->team_id;
+        $this->tenantId = $config->tenant_id;
 
         $startedAt = now();
         $log = AssetLicenseSyncLog::create([
             'team_id'    => $this->teamId,
+            'tenant_id'  => $this->tenantId,
             'status'     => 'started',
             'started_at' => $startedAt,
         ]);
@@ -80,7 +102,7 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
                 $available = max(0, $purchased - $consumed);
                 $partNum   = $sku['skuPartNumber'] ?? '';
 
-                $existing = AssetLicenseSku::where('team_id', $this->teamId)
+                $existing = AssetLicenseSku::where('tenant_id', $this->tenantId)
                     ->where('sku_id', $sku['skuId'])
                     ->first();
 
@@ -100,6 +122,7 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
                 } else {
                     AssetLicenseSku::create(array_merge($data, [
                         'team_id'    => $this->teamId,
+                        'tenant_id'  => $this->tenantId,
                         'sku_id'     => $sku['skuId'],
                         'unit_price' => null,
                     ]));
@@ -125,9 +148,10 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
 
                 if (!$upn) continue;
 
-                // Employee aus Graph-User-Daten anlegen/aktualisieren
+                // Employee aus Graph-User-Daten anlegen/aktualisieren (tenant-skopiert)
                 $employee = $employeeService->findOrCreateByUpn(
                     $this->teamId,
+                    $this->tenantId,
                     $upn,
                     $displayName,
                     'graph'
@@ -145,11 +169,12 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
 
                     $record = AssetUserLicense::updateOrCreate(
                         [
-                            'team_id'             => $this->teamId,
+                            'tenant_id'           => $this->tenantId,
                             'user_principal_name' => $upn,
                             'sku_id'              => $skuId,
                         ],
                         [
+                            'team_id'         => $this->teamId,
                             'sku_part_number' => $skuPartMap[$skuId] ?? null,
                             'display_name'    => $displayName,
                             'raw_data'        => $license,
@@ -174,14 +199,14 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
             DB::transaction(function () use ($keptIds, $log, $skus, $added, $durationMs, &$removed, &$totalAssignments) {
                 // Schutz analog zu SyncIntuneDevicesJob: Ist KEINE einzige Lizenzzuweisung erhalten geblieben
                 // (leere Graph-Antwort oder alle User ohne Lizenzen), nichts löschen — whereNotIn('id', [])
-                // würde sonst sämtliche Zuweisungen des Teams entfernen.
+                // würde sonst sämtliche Zuweisungen des Tenants entfernen. Scope strikt pro Tenant.
                 $removed = $this->reconcileDelete(
-                    fn () => AssetUserLicense::where('team_id', $this->teamId),
+                    fn () => AssetUserLicense::where('tenant_id', $this->tenantId),
                     'id',
                     $keptIds
                 );
 
-                $totalAssignments = AssetUserLicense::where('team_id', $this->teamId)->count();
+                $totalAssignments = AssetUserLicense::where('tenant_id', $this->tenantId)->count();
 
                 $log->update([
                     'status'              => 'success',
@@ -195,22 +220,23 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
             });
 
             // Safety-Net: alle UPNs aus Bestandsdaten nachziehen
-            $employeeService->backfillForTeam($this->teamId);
+            $employeeService->backfillForTenant($this->teamId, $this->tenantId);
 
             Log::info('AssetManager: Lizenz-Sync erfolgreich', [
-                'team_id'  => $this->teamId,
-                'skus'     => count($skus),
-                'total'    => $totalAssignments,
-                'added'    => $added,
-                'removed'  => $removed,
-                'duration' => $durationMs . 'ms',
+                'connector_id' => $this->connectorId,
+                'tenant_id'    => $this->tenantId,
+                'skus'         => count($skus),
+                'total'        => $totalAssignments,
+                'added'        => $added,
+                'removed'      => $removed,
+                'duration'     => $durationMs . 'ms',
             ]);
 
         } catch (\Throwable $e) {
             $this->markFailed($log, $startedAt, $e->getMessage());
             Log::error('AssetManager: Lizenz-Sync Exception', [
-                'team_id' => $this->teamId,
-                'error'   => $e->getMessage(),
+                'connector_id' => $this->connectorId,
+                'error'        => $e->getMessage(),
             ]);
         }
     }
@@ -222,13 +248,16 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
 
     /**
      * Wird von Laravel bei terminalem Scheitern (Timeout/Kill/uncaught) aufgerufen — der try/catch in
-     * handle() greift dort NICHT. Räumt hängengebliebene 'started'-Logs des Teams auf, damit die UI nicht
+     * handle() greift dort NICHT. Räumt hängengebliebene 'started'-Logs des Tenants auf, damit die UI nicht
      * ewig „läuft" zeigt. Darf selbst nie werfen.
      */
     public function failed(\Throwable $e): void
     {
         try {
-            $this->failStuckSyncLogs(AssetLicenseSyncLog::class, $this->teamId, $e->getMessage());
+            $config = AssetConnectorConfig::find($this->connectorId);
+            if ($config && $config->tenant_id) {
+                $this->failStuckSyncLogs(AssetLicenseSyncLog::class, $config->tenant_id, $e->getMessage());
+            }
         } catch (\Throwable $ignored) {
             // failed() muss schweigend bleiben
         }

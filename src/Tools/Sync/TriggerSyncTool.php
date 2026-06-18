@@ -83,10 +83,11 @@ class TriggerSyncTool implements ToolContract, ToolMetadataContract
                 ]);
             }
 
+            // Fan-out je aktivem Connector des Teams (Multi-Tenant).
             match ($target) {
                 'devices'  => app(AssetDeviceService::class)->dispatchSync($teamId),
-                'licenses' => SyncLicensesJob::dispatch($teamId),
-                'users'    => ImportTenantUsersJob::dispatch($teamId),
+                'licenses' => SyncLicensesJob::dispatchForTeam($teamId),
+                'users'    => ImportTenantUsersJob::dispatchForTeam($teamId),
             };
 
             return ToolResult::success([

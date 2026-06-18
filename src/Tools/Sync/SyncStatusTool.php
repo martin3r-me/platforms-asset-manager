@@ -47,15 +47,28 @@ class SyncStatusTool implements ToolContract, ToolMetadataContract
             $deviceLog = $svc->getLastSyncLog($teamId);
             $licLog    = AssetLicenseSyncLog::where('team_id', $teamId)->orderByDesc('started_at')->first();
 
+            // Tenant-genaue Sicht (Multi-Tenant): je Connector Status + letzter Lauf.
+            $connectors = collect($svc->getConnectorsStatus($teamId))->map(fn ($c) => [
+                'tenant_name'       => $c['tenant_name'],
+                'connection_status' => $c['connection_status'],
+                'configured'        => $c['configured'],
+                'enabled'           => $c['enabled'],
+                'sync_status'       => $c['sync_status'],
+                'last_sync_at'      => $c['last_sync_at']?->toIso8601String(),
+                'sync_error'        => $c['sync_error'],
+            ])->all();
+
             return ToolResult::success([
                 'connector' => [
-                    'exists'       => $status['exists'],
-                    'configured'   => $status['configured'],
-                    'enabled'      => $status['enabled'],
-                    'sync_status'  => $status['sync_status'],
-                    'last_sync_at' => $status['last_sync_at']?->toIso8601String(),
-                    'sync_error'   => $status['sync_error'],
+                    'exists'          => $status['exists'],
+                    'configured'      => $status['configured'],
+                    'enabled'         => $status['enabled'],
+                    'connector_count' => $status['connector_count'],
+                    'sync_status'     => $status['sync_status'],
+                    'last_sync_at'    => $status['last_sync_at']?->toIso8601String(),
+                    'sync_error'      => $status['sync_error'],
                 ],
+                'connectors' => $connectors,
                 'last_device_sync' => $deviceLog ? [
                     'status'          => $deviceLog->status,
                     'devices_synced'  => $deviceLog->devices_synced,

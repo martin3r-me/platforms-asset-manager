@@ -10,6 +10,7 @@ class AssetLicenseSku extends Model
 
     protected $fillable = [
         'team_id',
+        'tenant_id',
         'sku_id',
         'sku_part_number',
         'display_name',
@@ -30,6 +31,12 @@ class AssetLicenseSku extends Model
     public function team()
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);
+    }
+
+    /** Tenant (Kundenkontext), zu dem diese SKU gehört. */
+    public function tenant()
+    {
+        return $this->belongsTo(AssetTenant::class, 'tenant_id');
     }
 
     public function monthlyCost(): float
