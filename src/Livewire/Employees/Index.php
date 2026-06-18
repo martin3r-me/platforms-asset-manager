@@ -6,6 +6,7 @@ use Livewire\Component;
 use Livewire\WithPagination;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Platform\AssetManager\Concerns\ScopesToTenant;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetEmployee;
@@ -17,6 +18,7 @@ use Platform\AssetManager\Services\CostAggregationService;
 class Index extends Component
 {
     use WithPagination;
+    use ScopesToTenant;
 
     public string $preset           = 'active'; // all|active|with_license|with_device|with_asset|unassigned|inactive
     public string $search           = '';
@@ -182,7 +184,7 @@ class Index extends Component
         $assetIds    = $this->employeeIdsWithAsset($teamId);
         $allUpns     = $licenseUpns->merge($deviceUpns)->unique()->values();
 
-        $base = AssetEmployee::where('team_id', $teamId);
+        $base = AssetEmployee::where('team_id', $teamId)->forTenant($this->selectedTenantId);
 
         $counts = [
             'all'          => (clone $base)->count(),
@@ -201,7 +203,7 @@ class Index extends Component
         ];
 
         // --- Hauptquery ---
-        $query = AssetEmployee::where('team_id', $teamId);
+        $query = AssetEmployee::where('team_id', $teamId)->forTenant($this->selectedTenantId);
         $this->applyPreset($query, $teamId);
 
         // Sidebar-Filter (kombiniert mit Preset)
@@ -252,14 +254,14 @@ class Index extends Component
             ->pluck('count', 'user_principal_name');
 
         // --- Dropdowns ---
-        $departments = AssetEmployee::where('team_id', $teamId)
+        $departments = AssetEmployee::where('team_id', $teamId)->forTenant($this->selectedTenantId)
             ->whereNotNull('department')
             ->select('department')
             ->distinct()
             ->orderBy('department')
             ->pluck('department');
 
-        $skus = AssetLicenseSku::where('team_id', $teamId)
+        $skus = AssetLicenseSku::where('team_id', $teamId)->forTenant($this->selectedTenantId)
             ->orderBy('display_name')
             ->get(['id', 'sku_id', 'sku_part_number', 'display_name']);
 

@@ -27,10 +27,11 @@ class InventoryService
      * deviceModel() → ein Query pro Gerät), sondern über die EINMAL vorgeladenen Geräte-Modelle plus die
      * statische AssetDevice::computeMonthlyFrom() — dieselbe Logik, aber 2 Queries statt N.
      */
-    public function rows(int $teamId): Collection
+    public function rows(int $teamId, ?int $tenantId = null): Collection
     {
         $items = AssetItem::with('assignee')
             ->where('team_id', $teamId)
+            ->forTenant($tenantId)
             ->get()
             ->map(fn (AssetItem $item) => InventoryRow::fromItem($item));
 
@@ -41,6 +42,7 @@ class InventoryService
         }
 
         $devices = AssetDevice::where('team_id', $teamId)
+            ->forTenant($tenantId)
             ->get()
             ->map(function (AssetDevice $device) use ($modelByKey) {
                 $monthly = AssetDevice::computeMonthlyFrom(
@@ -127,14 +129,14 @@ class InventoryService
         );
     }
 
-    /** Team-weite Zähler für die Stat-Karten (unabhängig von der gefilterten Sicht). */
-    public function counts(int $teamId): array
+    /** Zähler für die Stat-Karten (unabhängig von der gefilterten Sicht; tenant-rein, wenn $tenantId gesetzt). */
+    public function counts(int $teamId, ?int $tenantId = null): array
     {
-        $manual = AssetItem::where('team_id', $teamId)->count();
-        $intune = AssetDevice::where('team_id', $teamId)->count();
+        $manual = AssetItem::where('team_id', $teamId)->forTenant($tenantId)->count();
+        $intune = AssetDevice::where('team_id', $teamId)->forTenant($tenantId)->count();
 
-        $assigned = AssetItem::where('team_id', $teamId)->whereNotNull('assignee_id')->count()
-            + AssetDevice::where('team_id', $teamId)
+        $assigned = AssetItem::where('team_id', $teamId)->forTenant($tenantId)->whereNotNull('assignee_id')->count()
+            + AssetDevice::where('team_id', $teamId)->forTenant($tenantId)
                 ->whereNotNull('user_principal_name')
                 ->where('user_principal_name', '!=', '')
                 ->count();

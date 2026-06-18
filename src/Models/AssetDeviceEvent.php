@@ -3,9 +3,12 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Platform\AssetManager\Concerns\TenantScopable;
 
 class AssetDeviceEvent extends Model
 {
+    use TenantScopable;
+
     protected $table = 'asset_device_events';
 
     protected $fillable = [

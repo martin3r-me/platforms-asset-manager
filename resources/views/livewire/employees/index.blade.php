@@ -7,7 +7,11 @@
         <x-ui-page-actionbar :breadcrumbs="[
             ['label' => 'Asset Manager', 'href' => route('asset-manager.dashboard'), 'icon' => 'cube'],
             ['label' => 'Mitarbeiter', 'icon' => 'users'],
-        ]" />
+        ]">
+            <x-slot name="actions">
+                @include('asset-manager::livewire.partials.tenant-selector')
+            </x-slot>
+        </x-ui-page-actionbar>
     </x-slot>
 
     <x-slot name="sidebar">

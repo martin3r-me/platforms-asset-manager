@@ -3,9 +3,12 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Platform\AssetManager\Concerns\TenantScopable;
 
 class AssetLicenseSyncLog extends Model
 {
+    use TenantScopable;
+
     protected $table = 'asset_license_sync_logs';
 
     protected $fillable = [

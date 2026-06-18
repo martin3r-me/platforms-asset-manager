@@ -37,6 +37,9 @@ class CostExcelImportService
     /** import_hash jeder in DIESEM Lauf geschriebenen (angelegten/aktualisierten) Cost-Line — Basis des Prune. */
     protected array $writtenHashes = [];
 
+    /** Default-Tenant des Teams (memoisiert) — Tenant-Ziel aller vom Importer angelegten/aktualisierten Assets (kein UI-Kontext). */
+    protected ?int $importTenantId = null;
+
     /** Herkunft der aktuell verarbeiteten Zeile — wird in raw_data der Cost-Line geschrieben. */
     protected ?string $sheetLabel = null;
     protected ?int    $sheetRow   = null;
@@ -53,8 +56,9 @@ class CostExcelImportService
         $this->teamId        = $teamId;
         $this->batchId       = $batchId;
         $this->dryRun        = $dryRun;
-        $this->stats         = [];
-        $this->writtenHashes = [];
+        $this->stats          = [];
+        $this->writtenHashes  = [];
+        $this->importTenantId = null;
 
         $sheets = $this->readWorkbook($path);
 
@@ -427,11 +431,15 @@ class CostExcelImportService
 
     protected function upsertItem(int $categoryId, string $name, array $attrs = []): ?AssetItem
     {
+        // Importer hat keinen UI-/Tenant-Kontext → Assets landen im Default-Tenant des Teams (memoisiert).
+        $tenantId = $this->importTenantId ??= TenantContext::defaultTenantId($this->teamId);
+
         return AssetItem::updateOrCreate(
             ['team_id' => $this->teamId, 'category_id' => $categoryId, 'name' => $name],
             array_merge([
-                'source' => 'manual',
-                'status' => $attrs['assignee_id'] ?? null ? 'assigned' : 'in_stock',
+                'source'    => 'manual',
+                'tenant_id' => $tenantId,
+                'status'    => $attrs['assignee_id'] ?? null ? 'assigned' : 'in_stock',
             ], array_filter([
                 'model'         => $attrs['model'] ?? null,
                 'serial_number' => $attrs['serial_number'] ?? null,

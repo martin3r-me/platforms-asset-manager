@@ -9,6 +9,7 @@ use Illuminate\Validation\Rule;
 use Platform\AssetManager\Models\AssetCategory;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetItem;
+use Platform\AssetManager\Services\TenantContext;
 
 class Create extends Component
 {
@@ -69,6 +70,7 @@ class Create extends Component
 
         $item = AssetItem::create([
             'team_id'             => $team->id,
+            'tenant_id'           => TenantContext::resolveForWrite($team->id, (int) Auth::id()),
             'category_id'         => $this->categoryId,
             'source'              => 'manual',
             'name'                => $this->name,

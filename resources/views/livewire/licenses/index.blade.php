@@ -9,6 +9,7 @@
             ['label' => 'Lizenzen', 'icon' => 'key'],
         ]">
             <x-slot name="actions">
+                @include('asset-manager::livewire.partials.tenant-selector')
                 @if($canSync && $config && $config->isConfigured())
                     <button wire:click="syncNow" wire:loading.attr="disabled" wire:target="syncNow"
                         class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg hover:from-violet-600 hover:to-indigo-700 transition-all shadow-sm disabled:opacity-60">

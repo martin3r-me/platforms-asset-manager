@@ -9,6 +9,7 @@
             ['label' => 'Assets', 'icon' => 'cube-transparent'],
         ]">
             <x-slot name="actions">
+                @include('asset-manager::livewire.partials.tenant-selector')
                 <button wire:click="$toggle('showBulkCreate')"
                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-black/[0.04] dark:bg-white/[0.06] rounded-lg hover:bg-black/[0.07] transition-all">
                     @svg('heroicon-o-square-3-stack-3d', 'w-3.5 h-3.5')

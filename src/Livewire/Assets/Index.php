@@ -7,14 +7,17 @@ use Livewire\WithPagination;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Platform\AssetManager\Concerns\ScopesToTenant;
 use Platform\AssetManager\Models\AssetAssignment;
 use Platform\AssetManager\Models\AssetCategory;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetItem;
+use Platform\AssetManager\Services\TenantContext;
 
 class Index extends Component
 {
     use WithPagination;
+    use ScopesToTenant;
 
     public string $search          = '';
     public string $filterCategory  = '';
@@ -92,10 +95,10 @@ class Index extends Component
         Gate::authorize('create', AssetItem::class);
         if (empty($this->selected) || !$this->bulkAssignee) return;
 
-        $employee = AssetEmployee::where('team_id', $this->teamId())->find($this->bulkAssignee);
+        $employee = AssetEmployee::where('team_id', $this->teamId())->forTenant($this->selectedTenantId)->find($this->bulkAssignee);
         if (!$employee) return;
 
-        $items = AssetItem::where('team_id', $this->teamId())->whereIn('id', $this->selected)->get();
+        $items = AssetItem::where('team_id', $this->teamId())->forTenant($this->selectedTenantId)->whereIn('id', $this->selected)->get();
         foreach ($items as $item) {
             $item->assignTo($employee);
         }
@@ -111,7 +114,7 @@ class Index extends Component
         Gate::authorize('create', AssetItem::class);
         if (empty($this->selected)) return;
 
-        $items = AssetItem::where('team_id', $this->teamId())->whereIn('id', $this->selected)->get();
+        $items = AssetItem::where('team_id', $this->teamId())->forTenant($this->selectedTenantId)->whereIn('id', $this->selected)->get();
         foreach ($items as $item) {
             $item->assignTo(null);
         }
@@ -126,7 +129,7 @@ class Index extends Component
         Gate::authorize('create', AssetItem::class);
         if (empty($this->selected) || !in_array($this->bulkStatus, ['in_stock', 'assigned', 'retired', 'lost'], true)) return;
 
-        $items = AssetItem::where('team_id', $this->teamId())->whereIn('id', $this->selected)->get();
+        $items = AssetItem::where('team_id', $this->teamId())->forTenant($this->selectedTenantId)->whereIn('id', $this->selected)->get();
         foreach ($items as $item) {
             // retired/lost lösen Zuweisung; assigned nur sinnvoll wenn assignee vorhanden
             if (in_array($this->bulkStatus, ['retired', 'lost'], true) && $item->assignee_id) {
@@ -149,7 +152,7 @@ class Index extends Component
         if (empty($this->selected)) return;
 
         // Nur manuelle Items, nur owner/admin
-        $items = AssetItem::where('team_id', $this->teamId())
+        $items = AssetItem::where('team_id', $this->teamId())->forTenant($this->selectedTenantId)
             ->whereIn('id', $this->selected)
             ->where('source', 'manual')
             ->get();
@@ -194,12 +197,14 @@ class Index extends Component
         ]);
 
         $teamId     = $this->teamId();
+        $tenantId   = TenantContext::resolveForWrite($teamId, (int) Auth::id());
         $status     = $this->bcAssigneeId ? 'assigned' : 'in_stock';
         $assignedAt = $this->bcAssigneeId ? now() : null;
 
         for ($i = 0; $i < $this->bcQuantity; $i++) {
             $item = AssetItem::create([
                 'team_id'             => $teamId,
+                'tenant_id'           => $tenantId,
                 'category_id'         => $this->bcCategoryId,
                 'source'              => 'manual',
                 'name'                => $this->bcName,
@@ -234,7 +239,7 @@ class Index extends Component
 
     protected function filteredQuery()
     {
-        $query = AssetItem::where('team_id', $this->teamId());
+        $query = AssetItem::where('team_id', $this->teamId())->forTenant($this->selectedTenantId);
 
         if ($this->search) {
             $query->where(function ($q) {
@@ -266,14 +271,14 @@ class Index extends Component
         $this->selectPage = !empty($pageIds) && empty(array_diff($pageIds, $this->selected));
 
         $stats = [
-            'total'    => AssetItem::where('team_id', $teamId)->count(),
-            'assigned' => AssetItem::where('team_id', $teamId)->where('status', 'assigned')->count(),
-            'in_stock' => AssetItem::where('team_id', $teamId)->where('status', 'in_stock')->count(),
-            'retired'  => AssetItem::where('team_id', $teamId)->where('status', 'retired')->count(),
+            'total'    => AssetItem::where('team_id', $teamId)->forTenant($this->selectedTenantId)->count(),
+            'assigned' => AssetItem::where('team_id', $teamId)->forTenant($this->selectedTenantId)->where('status', 'assigned')->count(),
+            'in_stock' => AssetItem::where('team_id', $teamId)->forTenant($this->selectedTenantId)->where('status', 'in_stock')->count(),
+            'retired'  => AssetItem::where('team_id', $teamId)->forTenant($this->selectedTenantId)->where('status', 'retired')->count(),
         ];
 
         $categories = AssetCategory::orderBy('sort_order')->get();
-        $employees  = AssetEmployee::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get();
+        $employees  = AssetEmployee::where('team_id', $teamId)->forTenant($this->selectedTenantId)->where('is_active', true)->orderBy('display_name')->get();
 
         return view('asset-manager::livewire.assets.index', [
             'items'        => $items,

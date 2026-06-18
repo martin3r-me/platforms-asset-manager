@@ -4,12 +4,15 @@ namespace Platform\AssetManager\Livewire\Printers;
 
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Platform\AssetManager\Concerns\ScopesToTenant;
 use Platform\AssetManager\Models\AssetCategory;
 use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetItem;
 
 class Index extends Component
 {
+    use ScopesToTenant;
+
     public string $search = '';
     public string $filterNiederlassung = '';
     public ?int   $selectedId = null;
@@ -41,7 +44,7 @@ class Index extends Component
         $catId  = AssetCategory::where('key', 'drucker')->value('id');
 
         $all = $catId
-            ? AssetItem::where('team_id', $teamId)->where('category_id', $catId)->orderBy('name')->get()
+            ? AssetItem::where('team_id', $teamId)->forTenant($this->selectedTenantId)->where('category_id', $catId)->orderBy('name')->get()
             : collect();
 
         // Cost-Lines je Drucker (mit Kostenstelle) → Aufschlüsselung, Summe, KSt-Code.
@@ -72,7 +75,7 @@ class Index extends Component
             ))
             ->values();
 
-        $selectedItem  = $this->selectedId ? AssetItem::where('team_id', $teamId)->find($this->selectedId) : null;
+        $selectedItem  = $this->selectedId ? AssetItem::where('team_id', $teamId)->forTenant($this->selectedTenantId)->find($this->selectedId) : null;
         $selectedLines = $selectedItem ? ($linesByItem[$selectedItem->id] ?? collect()) : collect();
 
         return view('asset-manager::livewire.printers.index', [

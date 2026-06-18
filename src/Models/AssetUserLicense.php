@@ -3,9 +3,12 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Platform\AssetManager\Concerns\TenantScopable;
 
 class AssetUserLicense extends Model
 {
+    use TenantScopable;
+
     protected $table = 'asset_user_licenses';
 
     protected $fillable = [

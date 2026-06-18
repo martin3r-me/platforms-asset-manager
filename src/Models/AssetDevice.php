@@ -4,10 +4,12 @@ namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Platform\AssetManager\Concerns\TenantScopable;
 
 class AssetDevice extends Model
 {
     use SoftDeletes;
+    use TenantScopable;
 
     protected $table = 'asset_devices';
 

@@ -5,6 +5,7 @@ namespace Platform\AssetManager\Livewire\Inventory;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Platform\AssetManager\Concerns\ScopesToTenant;
 use Platform\AssetManager\Services\InventoryService;
 
 /**
@@ -15,6 +16,7 @@ use Platform\AssetManager\Services\InventoryService;
 class Index extends Component
 {
     use WithPagination;
+    use ScopesToTenant;
 
     public string $search           = '';
     public string $filterType       = '';   // '' | 'manual' | 'intune'
@@ -64,14 +66,14 @@ class Index extends Component
         $teamId    = $this->teamId();
         $inventory = new InventoryService();
 
-        $rows     = $inventory->rows($teamId);
+        $rows     = $inventory->rows($teamId, $this->selectedTenantId);
         $filtered = $inventory->filter($rows, $this->search, $this->filterType, $this->filterAssignment);
         $sorted   = $inventory->sort($filtered, $this->sortField, $this->sortDirection);
         $items    = $inventory->paginate($sorted, $this->perPage, $this->getPage());
 
         return view('asset-manager::livewire.inventory.index', [
             'items'         => $items,
-            'counts'        => $inventory->counts($teamId),
+            'counts'        => $inventory->counts($teamId, $this->selectedTenantId),
             'totalFiltered' => $sorted->count(),
         ])->layout('platform::layouts.app');
     }

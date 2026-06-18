@@ -3,9 +3,12 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Platform\AssetManager\Concerns\TenantScopable;
 
 class AssetDeviceSyncLog extends Model
 {
+    use TenantScopable;
+
     public $timestamps = false;
 
     protected $table = 'asset_device_sync_logs';

@@ -9,6 +9,7 @@
             ['label' => 'Inventar', 'icon' => 'rectangle-group'],
         ]">
             <x-slot name="actions">
+                @include('asset-manager::livewire.partials.tenant-selector')
                 <a href="{{ route('asset-manager.assets.index') }}" wire:navigate
                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-black/[0.04] dark:bg-white/[0.06] rounded-lg hover:bg-black/[0.07] transition-all">
                     @svg('heroicon-o-cube-transparent', 'w-3.5 h-3.5')

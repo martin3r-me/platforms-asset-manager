@@ -3,9 +3,12 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Platform\AssetManager\Concerns\TenantScopable;
 
 class AssetEmployee extends Model
 {
+    use TenantScopable;
+
     protected $table = 'asset_employees';
 
     protected $fillable = [

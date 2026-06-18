@@ -9,6 +9,7 @@
             ['label' => 'Geräte', 'icon' => 'computer-desktop'],
         ]">
             <x-slot name="actions">
+                @include('asset-manager::livewire.partials.tenant-selector')
                 @if($config && $config->isConfigured() && $config->last_sync_at)
                     <span class="text-xs text-gray-400">
                         @svg('heroicon-o-clock', 'w-3 h-3 inline -mt-0.5')
