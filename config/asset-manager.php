@@ -109,6 +109,11 @@ return [
                     'icon'  => 'heroicon-o-computer-desktop',
                 ],
                 [
+                    'label' => 'Geräte-Status',
+                    'route' => 'asset-manager.devices.status',
+                    'icon'  => 'heroicon-o-signal',
+                ],
+                [
                     'label' => 'Lizenzen',
                     'route' => 'asset-manager.licenses.index',
                     'icon'  => 'heroicon-o-key',

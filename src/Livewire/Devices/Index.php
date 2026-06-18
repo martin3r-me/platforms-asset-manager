@@ -226,7 +226,7 @@ class Index extends Component
             $device->update(['lifecycle_status' => $this->bulkLifecycle]);
         }
 
-        $labels = ['in_use' => 'In Betrieb', 'spare' => 'Reserve / Lager', 'repair' => 'In Reparatur', 'retired' => 'Ausgemustert', 'lost' => 'Verloren / Gestohlen'];
+        $labels = ['in_use' => 'In Betrieb', 'spare' => 'Reserve / Lager', 'repair' => 'In Reparatur', 'defect' => 'Defekt / Kaputt', 'retired' => 'Ausgemustert', 'lost' => 'Verloren / Gestohlen'];
         $this->bulkResult    = $devices->count() . ' Gerät(e) auf Lifecycle "' . ($labels[$this->bulkLifecycle] ?? $this->bulkLifecycle) . '" gesetzt.';
         $this->selected      = [];
         $this->selectPage    = false;

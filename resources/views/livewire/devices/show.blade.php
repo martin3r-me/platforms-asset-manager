@@ -308,6 +308,7 @@
                                     <option value="in_use">In Betrieb</option>
                                     <option value="spare">Reserve / Lager</option>
                                     <option value="repair">In Reparatur</option>
+                                    <option value="defect">Defekt / Kaputt</option>
                                     <option value="retired">Ausgemustert</option>
                                     <option value="lost">Verloren / Gestohlen</option>
                                 </select>

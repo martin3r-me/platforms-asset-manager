@@ -4,6 +4,7 @@ use Platform\AssetManager\Livewire\Dashboard;
 use Platform\AssetManager\Livewire\Connectors\Index as ConnectorsIndex;
 use Platform\AssetManager\Livewire\Devices\Index as DevicesIndex;
 use Platform\AssetManager\Livewire\Devices\Show as DevicesShow;
+use Platform\AssetManager\Livewire\Devices\Status as DevicesStatus;
 use Platform\AssetManager\Livewire\Compliance\Index as ComplianceIndex;
 use Platform\AssetManager\Livewire\Licenses\Index as LicensesIndex;
 use Platform\AssetManager\Livewire\Licenses\Show as LicensesShow;
@@ -27,6 +28,8 @@ use Platform\AssetManager\Livewire\Internet\Index as InternetIndex;
 Route::get('/', Dashboard::class)->name('asset-manager.dashboard');
 
 Route::get('/devices', DevicesIndex::class)->name('asset-manager.devices.index');
+// Literal-Route VOR der {device}-Wildcard registrieren, sonst matcht {device}='status'.
+Route::get('/devices/status', DevicesStatus::class)->name('asset-manager.devices.status');
 Route::get('/devices/{device}', DevicesShow::class)->name('asset-manager.devices.show');
 
 Route::get('/compliance', ComplianceIndex::class)->name('asset-manager.compliance.index');

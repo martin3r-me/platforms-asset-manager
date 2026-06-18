@@ -108,6 +108,7 @@ class AssetManagerServiceProvider extends ServiceProvider
             $registry->register(new \Platform\AssetManager\Tools\Devices\BulkUpdateDeviceCostTool());
             $registry->register(new \Platform\AssetManager\Tools\Devices\ListDeviceModelsTool());
             $registry->register(new \Platform\AssetManager\Tools\Devices\UpsertDeviceModelTool());
+            $registry->register(new \Platform\AssetManager\Tools\Devices\DeviceStatusOverviewTool());
 
             // Lizenzen
             $registry->register(new \Platform\AssetManager\Tools\Licenses\ListLicensesTool());

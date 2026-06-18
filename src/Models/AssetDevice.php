@@ -75,7 +75,7 @@ class AssetDevice extends Model
     public const EXPIRY_SOON_DAYS = 90;
 
     /** Erlaubte Lifecycle-Status (Reihenfolge = UI-Reihenfolge). */
-    public const LIFECYCLE_STATUSES = ['in_use', 'spare', 'repair', 'retired', 'lost'];
+    public const LIFECYCLE_STATUSES = ['in_use', 'spare', 'repair', 'defect', 'retired', 'lost'];
 
     public function team()
     {
@@ -206,6 +206,7 @@ class AssetDevice extends Model
             'in_use'  => 'In Betrieb',
             'spare'   => 'Reserve / Lager',
             'repair'  => 'In Reparatur',
+            'defect'  => 'Defekt / Kaputt',
             'retired' => 'Ausgemustert',
             'lost'    => 'Verloren / Gestohlen',
             default   => '—',
@@ -219,6 +220,7 @@ class AssetDevice extends Model
             'in_use'  => 'emerald',
             'spare'   => 'indigo',
             'repair'  => 'amber',
+            'defect'  => 'orange',
             'retired' => 'gray',
             'lost'    => 'red',
             default   => 'gray',

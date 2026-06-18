@@ -99,6 +99,7 @@
                             <option value="in_use">In Betrieb</option>
                             <option value="spare">Reserve / Lager</option>
                             <option value="repair">In Reparatur</option>
+                            <option value="defect">Defekt / Kaputt</option>
                             <option value="retired">Ausgemustert</option>
                             <option value="lost">Verloren / Gestohlen</option>
                         </select>
@@ -346,7 +347,7 @@
             @if($search || $filterCompliance || $filterOs || $filterLifecycle || $preset !== 'all')
                 @php
                     $presetLabels = ['no_user' => 'Ohne Nutzer', 'inactive' => 'Inaktiv (>30 T.)', 'noncompliant' => 'Nicht konform', 'issues' => 'Fehler / Konflikt', 'expiring' => 'Läuft ab (90 T.)', 'unencrypted' => 'Nicht verschlüsselt'];
-                    $lifecycleLabels = ['in_use' => 'In Betrieb', 'spare' => 'Reserve / Lager', 'repair' => 'In Reparatur', 'retired' => 'Ausgemustert', 'lost' => 'Verloren / Gestohlen'];
+                    $lifecycleLabels = ['in_use' => 'In Betrieb', 'spare' => 'Reserve / Lager', 'repair' => 'In Reparatur', 'defect' => 'Defekt / Kaputt', 'retired' => 'Ausgemustert', 'lost' => 'Verloren / Gestohlen'];
                 @endphp
                 <div class="flex flex-wrap items-center gap-2 text-xs">
                     <span class="text-gray-400">Aktive Filter:</span>
@@ -391,6 +392,7 @@
                             <option value="in_use">In Betrieb</option>
                             <option value="spare">Reserve / Lager</option>
                             <option value="repair">In Reparatur</option>
+                            <option value="defect">Defekt / Kaputt</option>
                             <option value="retired">Ausgemustert</option>
                             <option value="lost">Verloren / Gestohlen</option>
                         </select>

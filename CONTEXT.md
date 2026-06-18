@@ -32,6 +32,7 @@ automatisch aus dem `cost_line`-Block (Aggregation gated über `aggregation_sour
 - **Funktionskonto** — `AssetEmployee.account_type = 'function'` (CONTROLLING, HELPDESK, WEBSHOP …). Trägt Kosten ohne echte Person; synthetische UPN `<slug>@funktion.import.local`.
 - **Frequenz** — `monthly|quarterly|yearly|once`; Normalisierung auf Monat in `AssetCostLine::computeMonthlyAmount()` (saving-Hook).
 - **Buchungssystem** — `HGK` oder `Moss` (welche Buchhaltung die Kostenart kontiert).
+- **Lifecycle-Status** (`AssetDevice.lifecycle_status`) — manuell gepflegter Geräte-Lebenszyklus: `in_use` · `spare` · `repair` · `defect` (kaputt) · `retired` · `lost`. Wird über die Geräte-Detailseite oder die Bulk-Aktion gesetzt (Intune liefert ihn nicht). Die **Geräte-Status-Sicht** (`asset-manager.devices.status`) zeigt Stückzahlen je Status + filterbare Liste, **tenant-rein** über den [[Tenant-Selektor]]; ein gleichnamiges MCP-Tool (`asset-manager.device-status.GET`) liefert die Status-Verteilung LLM-lesbar (Tenant-/Status-Filter).
 
 ### Anbindung & Tenants
 
