@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Livewire\CostLines;
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
@@ -119,16 +120,28 @@ class Index extends Component
 
     public function save(CostBootstrapService $bootstrap): void
     {
+        $teamId = $this->teamId();
+
+        // FK-Refs team-scopen: eine Fremd-Team-Kostenart/-Kreditor wird als Validierungsfehler (422)
+        // abgelehnt, nicht still übernommen — sonst danglende cross-team FK + fremde Namen in der Liste
+        // + verfälschte Kostenzuordnung. Vorbild: CreateCostLineTool / Assets/Create.php.
         $this->validate([
-            'fCostType'  => 'required|exists:asset_cost_types,id',
+            'fCostType'  => ['required', 'integer', Rule::exists('asset_cost_types', 'id')->where('team_id', $teamId)],
             'fLabel'     => 'required|string|max:255',
             'fAmount'    => 'required|numeric',
             'fFrequency' => 'required|in:monthly,quarterly,yearly,once',
-            'fVendor'    => 'nullable|exists:asset_vendors,id',
+            'fVendor'    => ['nullable', 'integer', Rule::exists('asset_vendors', 'id')->where('team_id', $teamId)],
         ]);
 
-        $teamId = $this->teamId();
-        $type   = AssetCostType::where('team_id', $teamId)->find($this->fCostType);
+        // Team-aufgelöste Instanzen laden und deren IDs persistieren (nie die rohe Request-ID).
+        $type = AssetCostType::where('team_id', $teamId)->find($this->fCostType);
+        if ($type === null) {
+            $this->addError('fCostType', 'Kostenart gehört nicht zum Team.');
+            return;
+        }
+        $vendor = $this->fVendor
+            ? AssetVendor::where('team_id', $teamId)->find($this->fVendor)
+            : null;
         $center = $bootstrap->resolveCostCenter($teamId, $this->fCostCenter ?: null);
 
         // Betrag 0 ablehnen; negativ nur bei allow_negative-Kostenart (Gutschrift) — verhindert stilles
@@ -143,8 +156,8 @@ class Index extends Component
 
         $data = [
             'team_id'           => $teamId,
-            'cost_type_id'      => $this->fCostType,
-            'vendor_id'         => $this->fVendor ?: $type?->vendor_default_id,
+            'cost_type_id'      => $type->id,
+            'vendor_id'         => $vendor?->id ?: $type->vendor_default_id,
             'cost_center_id'    => $center?->id,
             'label'             => $this->fLabel,
             'amount'            => (float) $this->fAmount,

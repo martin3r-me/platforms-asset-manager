@@ -4,6 +4,7 @@ namespace Platform\AssetManager\Livewire\Employees;
 
 use Livewire\Component;
 use Illuminate\Support\Facades\Auth;
+use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetItem;
@@ -46,13 +47,22 @@ class Show extends Component
             'isActive'    => 'boolean',
         ]);
 
+        // Kostenstellen-Code team-scoped auflösen und cost_center + cost_center_id KONSISTENT setzen.
+        // CostAggregationService gruppiert ausschließlich über cost_center_id — ein reines String-Update
+        // (wie bisher) ließe die Kosten im Pivot unter „Ohne Kostenstelle" landen. Muster: UpdateEmployeeTool.
+        $code   = trim($this->costCenter);
+        $center = $code !== ''
+            ? AssetCostCenter::where('team_id', $this->employee->team_id)->where('code', $code)->first()
+            : null;
+
         $this->employee->update([
-            'display_name' => $this->displayName ?: null,
-            'email'        => $this->email ?: null,
-            'department'   => $this->department ?: null,
-            'cost_center'  => $this->costCenter ?: null,
-            'job_title'    => $this->jobTitle ?: null,
-            'is_active'    => $this->isActive,
+            'display_name'   => $this->displayName ?: null,
+            'email'          => $this->email ?: null,
+            'department'     => $this->department ?: null,
+            'cost_center'    => $center?->code ?? ($code !== '' ? $code : null),
+            'cost_center_id' => $center?->id,
+            'job_title'      => $this->jobTitle ?: null,
+            'is_active'      => $this->isActive,
         ]);
 
         $this->saved = true;

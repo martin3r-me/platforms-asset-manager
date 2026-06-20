@@ -110,11 +110,19 @@ class Show extends Component
         foreach (['oMonthly', 'oPurchase', 'oDep'] as $f) {
             if ($this->$f === '') $this->$f = null;
         }
+        // Leere FK-Selects (0/'') zu null normalisieren, damit nullable greift (keine id=0-Validierung).
+        if (! $this->oCostType)   $this->oCostType   = null;
+        if (! $this->oCostCenter) $this->oCostCenter = null;
+
+        // cost_type_id/cost_center_id team-scopen (analog saveLifecycle()): eine Fremd-Team-ID wird als
+        // 422 abgelehnt statt roh als danglender cross-team FK geschrieben.
         $this->validate([
             'oMonthly'      => 'nullable|numeric|min:0',
             'oPurchase'     => 'nullable|numeric|min:0',
             'oDep'          => 'nullable|integer|min:1',
             'oPurchaseDate' => 'nullable|date',
+            'oCostType'     => ['nullable', 'integer', Rule::exists('asset_cost_types', 'id')->where('team_id', $this->device->team_id)],
+            'oCostCenter'   => ['nullable', 'integer', Rule::exists('asset_cost_centers', 'id')->where('team_id', $this->device->team_id)],
         ]);
 
         $this->device->update([

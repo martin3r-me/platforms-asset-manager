@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Livewire\DeviceModels;
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Platform\AssetManager\Concerns\AuthorizesTeamRole;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
@@ -52,13 +53,23 @@ class Index extends Component
         foreach (['eMonthly', 'ePurchase', 'eDep'] as $f) {
             if ($this->$f === '') $this->$f = null;
         }
+        // Leere FK-Selects (0/'') zu null normalisieren, damit nullable greift (keine id=0-Validierung).
+        if (! $this->eCostType) $this->eCostType = null;
+        if (! $this->eVendor)   $this->eVendor   = null;
+
+        $teamId = $this->teamId();
+
+        // cost_type_id/vendor_id team-scopen: eine Fremd-Team-ID wird als 422 abgelehnt statt roh
+        // als danglender cross-team FK geschrieben (UpsertDeviceModelTool prüft beide ebenso team-scoped).
         $this->validate([
             'eMonthly'  => 'nullable|numeric|min:0',
             'ePurchase' => 'nullable|numeric|min:0',
             'eDep'      => 'nullable|integer|min:1',
+            'eCostType' => ['nullable', 'integer', Rule::exists('asset_cost_types', 'id')->where('team_id', $teamId)],
+            'eVendor'   => ['nullable', 'integer', Rule::exists('asset_vendors', 'id')->where('team_id', $teamId)],
         ]);
 
-        $m = AssetDeviceModel::where('team_id', $this->teamId())->findOrFail($this->editId);
+        $m = AssetDeviceModel::where('team_id', $teamId)->findOrFail($this->editId);
         $m->update([
             'monthly_cost'        => $this->eMonthly !== null ? $this->eMonthly : null,
             'purchase_price'      => $this->ePurchase !== null ? $this->ePurchase : null,

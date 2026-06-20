@@ -5,6 +5,7 @@ namespace Platform\AssetManager\Livewire\Assets;
 use Livewire\Component;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Platform\AssetManager\Models\AssetCategory;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetItem;
@@ -55,7 +56,9 @@ class Show extends Component
             'manufacturer'       => 'nullable|string|max:255',
             'model'              => 'nullable|string|max:255',
             'serialNumber'       => 'nullable|string|max:255',
-            'assigneeId'         => 'nullable|exists:asset_employees,id',
+            // Assignee MUSS zum Team des Items gehören (sonst danglende cross-team FK +
+            // Fremd-Namens-Leak über die ungescopte belongsTo-Relation). Vorbild: Assets/Create.php.
+            'assigneeId'         => ['nullable', 'integer', Rule::exists('asset_employees', 'id')->where('team_id', $this->item->team_id)],
             'status'             => 'required|in:in_stock,assigned,retired,lost',
             'categoryId'         => 'required|exists:asset_categories,id',
             'purchaseDate'       => 'nullable|date',
@@ -89,7 +92,9 @@ class Show extends Component
 
         // Bei Assignee-Wechsel: Historie schreiben
         if ($this->assigneeId !== $this->item->assignee_id) {
-            $employee = $this->assigneeId ? AssetEmployee::find($this->assigneeId) : null;
+            $employee = $this->assigneeId
+                ? AssetEmployee::where('team_id', $this->item->team_id)->find($this->assigneeId)
+                : null;
             $this->item->assignTo($employee);
             // assignTo hat schon gespeichert — wir holen das Item frisch
             $this->item->refresh();
