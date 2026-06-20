@@ -36,6 +36,10 @@ return new class extends Migration
             $table->index(['team_id', 'assignee_id']);
             $table->index(['team_id', 'category_id']);
             $table->index(['team_id', 'source']);
+            // (team_id, source, external_id): bewusst nur Index, KEIN Unique. Es wäre der Naturschlüssel
+            // einer asset_items↔asset_devices-Brücke (source='intune'), die jedoch inert ist (kein Code legt
+            // intune-Items an — siehe project_inventory_unification / NP2). Solange diese Brücke tot ist,
+            // wird kein Unique benötigt; erst beim Aktivieren der Brücke wäre er nachzuziehen.
             $table->index(['team_id', 'source', 'external_id']);
 
             $table->foreign('assignee_id')->references('id')->on('asset_employees')->nullOnDelete();

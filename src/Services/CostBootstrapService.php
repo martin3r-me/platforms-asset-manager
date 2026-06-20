@@ -12,12 +12,24 @@ use Platform\AssetManager\Support\CostBootstrap;
 /**
  * Legt die Kostenaufteilungs-Stammdaten (Gesellschaften, Kreditoren, Kostenarten) für ein Team an
  * und backfillt Kostenstellen aus den vorhandenen Employee-Strings. Vollständig idempotent.
+ *
+ * ⚠️ MIGRATIONS-STABILER VERTRAG (M6/M12): Die Methoden {@see seedForTeam()} und
+ * {@see backfillCostCenters()} werden von der Schema-Migration
+ * 2026_06_13_000007_backfill_cost_centers_from_employees aufgerufen. Ein frischer `migrate` auf leerer
+ * DB führt damit MUTABLEN Service-Code aus — Signatur UND beobachtbares Verhalten dieser beiden Methoden
+ * (idempotentes firstOrCreate-Seeding bzw. Code→Kostenstelle-Auflösung) müssen daher stabil bleiben.
+ * Verhaltensänderungen NUR additiv und rückwärtskompatibel. Bewusste Entscheidung (statt die historische,
+ * bereits live gelaufene Migration umzuschreiben): die Migration trägt einen Table-Existenz-Guard und ist
+ * idempotent; die Stabilität liegt hier in der Verantwortung dieser Methoden.
  */
 class CostBootstrapService
 {
     /**
      * Neutrale Erst-Defaults für ein neues Team: nur generische Kostenarten, KEINE Firmenspezifika
      * (keine Gesellschaften, keine Kreditoren). Idempotent (firstOrCreate nach team_id+key).
+     *
+     * MIGRATIONS-STABIL — von 2026_06_13_000007 aufgerufen (siehe Klassen-Docblock). Signatur/Verhalten
+     * nur rückwärtskompatibel ändern.
      */
     public function seedForTeam(int $teamId): void
     {
@@ -81,6 +93,9 @@ class CostBootstrapService
     /**
      * Kostenstellen aus den vorhandenen Employee-Strings (cost_center) ableiten,
      * Gesellschaft zuordnen und employee.cost_center_id setzen.
+     *
+     * MIGRATIONS-STABIL — von 2026_06_13_000007 aufgerufen (siehe Klassen-Docblock). Signatur/Verhalten
+     * nur rückwärtskompatibel ändern.
      *
      * @return array{centers_created:int, employees_linked:int, unmapped:array<string>}
      */
