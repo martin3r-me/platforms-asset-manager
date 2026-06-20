@@ -2,6 +2,7 @@
 
 namespace Platform\AssetManager\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -13,7 +14,14 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  */
 class AssetTenant extends Model
 {
+    use HasFactory;
+
     protected $table = 'asset_tenants';
+
+    protected static function newFactory(): \Illuminate\Database\Eloquent\Factories\Factory
+    {
+        return \Platform\AssetManager\Database\Factories\AssetTenantFactory::new();
+    }
 
     protected $fillable = [
         'team_id',

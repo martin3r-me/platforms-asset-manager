@@ -2,13 +2,21 @@
 
 namespace Platform\AssetManager\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AssetCostCenter extends Model
 {
+    use HasFactory;
+
     protected $table = 'asset_cost_centers';
+
+    protected static function newFactory(): \Illuminate\Database\Eloquent\Factories\Factory
+    {
+        return \Platform\AssetManager\Database\Factories\AssetCostCenterFactory::new();
+    }
 
     protected $fillable = [
         'team_id',

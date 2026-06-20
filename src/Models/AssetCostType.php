@@ -2,12 +2,20 @@
 
 namespace Platform\AssetManager\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AssetCostType extends Model
 {
+    use HasFactory;
+
+    protected static function newFactory(): \Illuminate\Database\Eloquent\Factories\Factory
+    {
+        return \Platform\AssetManager\Database\Factories\AssetCostTypeFactory::new();
+    }
+
     /**
      * Erlaubte Werte von `aggregation_source` — die Quelle, aus der eine Kostenart ihren Pivot-Wert
      * zieht. Genau EINE Quelle pro Kostenart (Doppelzählungs-Invariante, ADR 0001). Vorher als

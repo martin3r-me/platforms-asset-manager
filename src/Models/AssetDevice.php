@@ -2,6 +2,7 @@
 
 namespace Platform\AssetManager\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -9,10 +10,16 @@ use Platform\AssetManager\Concerns\TenantScopable;
 
 class AssetDevice extends Model
 {
+    use HasFactory;
     use SoftDeletes;
     use TenantScopable;
 
     protected $table = 'asset_devices';
+
+    protected static function newFactory(): \Illuminate\Database\Eloquent\Factories\Factory
+    {
+        return \Platform\AssetManager\Database\Factories\AssetDeviceFactory::new();
+    }
 
     /** Memoisiertes Modell-Resolve je Instanz (deviceModel() wird pro Render mehrfach gerufen). */
     protected ?AssetDeviceModel $resolvedModel = null;

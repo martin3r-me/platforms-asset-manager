@@ -2,6 +2,7 @@
 
 namespace Platform\AssetManager\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -9,9 +10,15 @@ use Platform\AssetManager\Concerns\TenantScopable;
 
 class AssetEmployee extends Model
 {
+    use HasFactory;
     use TenantScopable;
 
     protected $table = 'asset_employees';
+
+    protected static function newFactory(): \Illuminate\Database\Eloquent\Factories\Factory
+    {
+        return \Platform\AssetManager\Database\Factories\AssetEmployeeFactory::new();
+    }
 
     protected $fillable = [
         'team_id',
