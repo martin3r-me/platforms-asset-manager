@@ -3,6 +3,7 @@
 namespace Platform\AssetManager;
 
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Schema;
@@ -70,6 +71,10 @@ class AssetManagerServiceProvider extends ServiceProvider
         ], 'config');
 
         $this->loadViewsFrom(__DIR__ . '/../resources/views', 'asset-manager');
+
+        // Modul-lokaler Actionbar-Adapter (siehe resources/views/components/page-actionbar.blade.php):
+        // reicht unseren benannten actions-Slot in den Default-Slot des UI-x-ui-page-actionbar durch.
+        Blade::component('asset-manager::components.page-actionbar', 'asset-manager-page-actionbar');
 
         $this->registerLivewireComponents();
 

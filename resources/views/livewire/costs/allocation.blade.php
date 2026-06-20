@@ -4,7 +4,7 @@
     </x-slot>
 
     <x-slot name="actionbar">
-        <x-ui-page-actionbar :breadcrumbs="[
+        <x-asset-manager-page-actionbar :breadcrumbs="[
             ['label' => 'Asset Manager', 'href' => route('asset-manager.dashboard'), 'icon' => 'cube'],
             ['label' => 'Kostenaufteilung', 'icon' => 'table-cells'],
         ]">
@@ -25,7 +25,7 @@
                     CSV-Export
                 </button>
             </x-slot>
-        </x-ui-page-actionbar>
+        </x-asset-manager-page-actionbar>
     </x-slot>
 
     <div class="flex-1 flex flex-col min-h-0 min-w-0">

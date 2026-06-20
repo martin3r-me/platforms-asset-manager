@@ -20,7 +20,7 @@
     </x-slot>
 
     <x-slot name="actionbar">
-        <x-ui-page-actionbar :breadcrumbs="[
+        <x-asset-manager-page-actionbar :breadcrumbs="[
             ['label' => 'Asset Manager', 'href' => route('asset-manager.dashboard'), 'icon' => 'cube'],
             ['label' => 'Stammdaten', 'icon' => 'rectangle-stack'],
             ['label' => $current['label']],
@@ -32,7 +32,7 @@
                     Neu
                 </button>
             </x-slot>
-        </x-ui-page-actionbar>
+        </x-asset-manager-page-actionbar>
     </x-slot>
 
     {{-- LINKS: Bereichs-Navigation + Filter --}}
