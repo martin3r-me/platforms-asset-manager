@@ -56,6 +56,10 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
         $count = 0;
         foreach (AssetConnectorConfig::where('team_id', $teamId)->where('enabled', true)->get() as $config) {
             if (!$config->isConfigured()) continue;
+            // Consent-Guard (M15): einen Connector ohne bestätigten Admin-Consent NICHT dispatchen — der
+            // Lauf würde garantiert mit 403 scheitern und den sync_status auf 'error' kippen (statt
+            // 'pending'). Die Console-Commands prüfen das bereits; UI/MCP gingen bisher ungeprüft hierüber.
+            if (!$config->isConsentConfirmed()) continue;
             self::dispatch($config->id);
             $count++;
         }

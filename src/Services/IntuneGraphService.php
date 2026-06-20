@@ -3,6 +3,8 @@
 namespace Platform\AssetManager\Services;
 
 use Platform\AssetManager\Models\AssetConnectorConfig;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -11,6 +13,32 @@ class IntuneGraphService
 {
     protected string $graphBase = 'https://graph.microsoft.com/v1.0';
     protected string $loginBase = 'https://login.microsoftonline.com';
+
+    /** Obergrenze für 429-Retry-After-Wiederholungen pro Endpunkt (bounded, damit ein dauerhaft
+     *  throttelnder Tenant den Worker nicht endlos blockiert). */
+    protected const MAX_THROTTLE_RETRIES = 3;
+
+    /**
+     * Vorkonfigurierter HTTP-Client für ALLE Graph-/Login-Calls: harte Timeouts (sonst Guzzle-Default =
+     * unbegrenzt → ein hängender Endpunkt blockiert den Worker bis zum Job-Timeout bzw. friert einen
+     * Web-Request bis max_execution_time ein) + begrenzte Wiederholung bei transienten Transportfehlern
+     * (DNS/TLS/Connection-Reset; idempotente GETs/Token-POST). HTTP-Status-Fehler (401/403/429/5xx) werden
+     * bewusst NICHT hier behandelt — die rufen die Aufrufer kontextspezifisch ab (Token-Refresh, 429-Retry).
+     */
+    protected function http(int $timeout = 30): PendingRequest
+    {
+        return Http::timeout($timeout)
+            ->connectTimeout(10)
+            ->retry(3, 200, fn ($e) => $e instanceof ConnectionException, throw: false);
+    }
+
+    /** Retry-After (Sekunden) aus einer 429-Antwort lesen, auf [1, 60] s begrenzt. */
+    protected function throttleWaitSeconds(\Illuminate\Http\Client\Response $response): int
+    {
+        $retryAfter = (int) $response->header('Retry-After');
+
+        return max(1, min($retryAfter, 60));
+    }
 
     public function getAccessToken(AssetConnectorConfig $config): ?string
     {
@@ -29,7 +57,7 @@ class IntuneGraphService
     protected function fetchToken(AssetConnectorConfig $config): ?string
     {
         try {
-            $response = Http::asForm()->post(
+            $response = $this->http()->asForm()->post(
                 "{$this->loginBase}/{$config->azure_tenant_id}/oauth2/v2.0/token",
                 [
                     'grant_type'    => 'client_credentials',
@@ -109,11 +137,12 @@ class IntuneGraphService
             // Security-/Health-Felder — alle unter DeviceManagementManagedDevices.Read.All (keine neue Permission).
             . ',isEncrypted,deviceEnrollmentType,freeStorageSpaceInBytes,totalStorageSpaceInBytes,physicalMemoryInBytes';
 
-        $retried = false;
+        $retried        = false;
+        $throttleRetries = 0;
 
         while ($url) {
             try {
-                $response = Http::withHeaders([
+                $response = $this->http()->withHeaders([
                     'Authorization'    => 'Bearer ' . $token,
                     'ConsistencyLevel' => 'eventual',
                 ])->get($url);
@@ -126,6 +155,15 @@ class IntuneGraphService
                         $this->lastError = 'Token abgelaufen und Erneuerung fehlgeschlagen. Credentials prüfen.';
                         return null;
                     }
+                    continue;
+                }
+
+                // 429/5xx (transiente Drosselung bzw. Serverfehler): Retry-After respektieren (sonst min. 1s)
+                // und dieselbe Seite begrenzt erneut anfordern (analog 401-Pfad, idempotenter GET) — sonst
+                // bräche ein einzelnes Drosseln / ein Server-Schluckauf den ganzen Sync ab.
+                if (($response->status() === 429 || $response->serverError()) && $throttleRetries < self::MAX_THROTTLE_RETRIES) {
+                    $throttleRetries++;
+                    sleep($this->throttleWaitSeconds($response));
                     continue;
                 }
 
@@ -179,41 +217,58 @@ class IntuneGraphService
             return null;
         }
 
-        try {
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $token,
-            ])->get("{$this->graphBase}/subscribedSkus?\$select=id,skuId,skuPartNumber,consumedUnits,prepaidUnits,servicePlans");
+        $skus            = [];
+        $url             = "{$this->graphBase}/subscribedSkus?\$select=id,skuId,skuPartNumber,consumedUnits,prepaidUnits,servicePlans";
+        $throttleRetries = 0;
 
-            if ($response->status() === 403) {
-                $graphMsg = $response->json('error.message', '');
-                $graphCode = $response->json('error.code', '');
-                $this->lastError = "Keine Berechtigung (403) für /subscribedSkus. "
-                    . "Benötigt: Organization.Read.All als Application Permission mit Admin-Consent. "
-                    . "Graph: [{$graphCode}] {$graphMsg}";
-                Log::error('AssetManager: Keine Lizenz-Berechtigung (403)', [
+        // @odata.nextLink-Paging wie bei Devices/Users — sonst stille Datenlücke ab > einer Graph-Seite.
+        while ($url) {
+            try {
+                $response = $this->http()->withHeaders([
+                    'Authorization' => 'Bearer ' . $token,
+                ])->get($url);
+
+                if (($response->status() === 429 || $response->serverError()) && $throttleRetries < self::MAX_THROTTLE_RETRIES) {
+                    $throttleRetries++;
+                    sleep($this->throttleWaitSeconds($response));
+                    continue;
+                }
+
+                if ($response->status() === 403) {
+                    $graphMsg = $response->json('error.message', '');
+                    $graphCode = $response->json('error.code', '');
+                    $this->lastError = "Keine Berechtigung (403) für /subscribedSkus. "
+                        . "Benötigt: Organization.Read.All als Application Permission mit Admin-Consent. "
+                        . "Graph: [{$graphCode}] {$graphMsg}";
+                    Log::error('AssetManager: Keine Lizenz-Berechtigung (403)', [
+                        'team_id' => $config->team_id,
+                        'code'    => $graphCode,
+                        'msg'     => $graphMsg,
+                    ]);
+                    return null;
+                }
+
+                if (!$response->successful()) {
+                    $msg = $response->json('error.message', 'Unbekannter Fehler');
+                    $this->lastError = "Graph-API Fehler (HTTP {$response->status()}): {$msg}";
+                    return null;
+                }
+
+                $data = $response->json();
+                $skus = array_merge($skus, $data['value'] ?? []);
+                $url  = $data['@odata.nextLink'] ?? null;
+
+            } catch (\Throwable $e) {
+                $this->lastError = 'Verbindungsfehler: ' . $e->getMessage();
+                Log::error('AssetManager: Exception beim SKU-Abruf', [
                     'team_id' => $config->team_id,
-                    'code'    => $graphCode,
-                    'msg'     => $graphMsg,
+                    'error'   => $e->getMessage(),
                 ]);
                 return null;
             }
-
-            if (!$response->successful()) {
-                $msg = $response->json('error.message', 'Unbekannter Fehler');
-                $this->lastError = "Graph-API Fehler (HTTP {$response->status()}): {$msg}";
-                return null;
-            }
-
-            return $response->json('value', []);
-
-        } catch (\Throwable $e) {
-            $this->lastError = 'Verbindungsfehler: ' . $e->getMessage();
-            Log::error('AssetManager: Exception beim SKU-Abruf', [
-                'team_id' => $config->team_id,
-                'error'   => $e->getMessage(),
-            ]);
-            return null;
         }
+
+        return $skus;
     }
 
     /**
@@ -233,11 +288,12 @@ class IntuneGraphService
         $users = [];
         $url   = "{$this->graphBase}/users?\$select=id,displayName,userPrincipalName,assignedLicenses&\$top=999";
 
-        $retried = false;
+        $retried        = false;
+        $throttleRetries = 0;
 
         while ($url) {
             try {
-                $response = Http::withHeaders([
+                $response = $this->http()->withHeaders([
                     'Authorization'    => 'Bearer ' . $token,
                     'ConsistencyLevel' => 'eventual',
                 ])->get($url);
@@ -252,6 +308,14 @@ class IntuneGraphService
                         $this->lastError = 'Token abgelaufen und Erneuerung fehlgeschlagen. Credentials prüfen.';
                         return null;
                     }
+                    continue;
+                }
+
+                // 429/5xx (transiente Drosselung/Serverfehler): Retry-After respektieren, Seite begrenzt
+                // erneut anfordern (analog 401, idempotenter GET).
+                if (($response->status() === 429 || $response->serverError()) && $throttleRetries < self::MAX_THROTTLE_RETRIES) {
+                    $throttleRetries++;
+                    sleep($this->throttleWaitSeconds($response));
                     continue;
                 }
 
@@ -304,7 +368,7 @@ class IntuneGraphService
         $this->clearTokenCache($config->id);
 
         try {
-            $tokenResponse = Http::asForm()->post(
+            $tokenResponse = $this->http(15)->asForm()->post(
                 "{$this->loginBase}/{$config->azure_tenant_id}/oauth2/v2.0/token",
                 [
                     'grant_type'    => 'client_credentials',
@@ -329,7 +393,7 @@ class IntuneGraphService
         }
 
         try {
-            $response = Http::withHeaders([
+            $response = $this->http(15)->withHeaders([
                 'Authorization' => 'Bearer ' . $token,
             ])->get("{$this->graphBase}/deviceManagement/managedDevices?\$top=1&\$select=id");
 
