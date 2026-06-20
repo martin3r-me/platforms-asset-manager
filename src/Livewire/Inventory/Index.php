@@ -58,10 +58,9 @@ class Index extends Component
         $this->resetPage();
     }
 
-    public function render()
+    public function render(InventoryService $inventory)
     {
-        $teamId    = $this->teamId();
-        $inventory = new InventoryService();
+        $teamId = $this->teamId();
 
         $rows     = $inventory->rows($teamId, $this->selectedTenantId);
         $filtered = $inventory->filter($rows, $this->search, $this->filterType, $this->filterAssignment);

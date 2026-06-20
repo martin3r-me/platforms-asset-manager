@@ -78,6 +78,21 @@ class AssetDevice extends Model
     /** Erlaubte Lifecycle-Status (Reihenfolge = UI-Reihenfolge). */
     public const LIFECYCLE_STATUSES = ['in_use', 'spare', 'repair', 'defect', 'retired', 'lost'];
 
+    /** Anzeige-Labels je Lifecycle-Status — zentrale Quelle (vorher in Devices/Index + Blade dupliziert). */
+    public const LIFECYCLE_LABELS = [
+        'in_use'  => 'In Betrieb',
+        'spare'   => 'Reserve / Lager',
+        'repair'  => 'In Reparatur',
+        'defect'  => 'Defekt / Kaputt',
+        'retired' => 'Ausgemustert',
+        'lost'    => 'Verloren / Gestohlen',
+    ];
+
+    public static function lifecycleLabelFor(?string $status): string
+    {
+        return self::LIFECYCLE_LABELS[$status] ?? '—';
+    }
+
     public function team(): BelongsTo
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);
@@ -203,15 +218,7 @@ class AssetDevice extends Model
 
     public function lifecycleLabel(): string
     {
-        return match($this->lifecycle_status) {
-            'in_use'  => 'In Betrieb',
-            'spare'   => 'Reserve / Lager',
-            'repair'  => 'In Reparatur',
-            'defect'  => 'Defekt / Kaputt',
-            'retired' => 'Ausgemustert',
-            'lost'    => 'Verloren / Gestohlen',
-            default   => '—',
-        };
+        return self::lifecycleLabelFor($this->lifecycle_status);
     }
 
     /** Nur Farbfamilien verwenden, die im Modul bereits als Klassen vorkommen (Tailwind-Build). */

@@ -5,7 +5,6 @@ namespace Platform\AssetManager\Tools\Employees;
 use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetEmployee;
-use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Services\CostAggregationService;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
 use Platform\Core\Contracts\ToolContext;
@@ -129,19 +128,17 @@ class GetEmployeeTool implements ToolContract, ToolMetadataContract
                 'monthly_amount' => (float) $c->monthly_amount,
             ])->values()->all();
 
-            // Monatskosten-Aufschlüsselung (konsistent zu topEmployees / Reports) — Items/Lizenzen aus den
-            // bereits geladenen Collections (keine zweite items()/licenses()-Query).
-            $itemsCost  = $itemModels->sum(fn ($i) => $i->monthlyCost());
-            $deviceCost = (float) $agg->deviceCostRows($teamId)
-                ->where('upn', $emp->user_principal_name)->sum('amount');
-            $skuPrices  = AssetLicenseSku::where('team_id', $teamId)->whereNotNull('unit_price')->pluck('unit_price', 'sku_id');
-            $licCost    = $licenseModels->sum(fn ($l) => (float) ($skuPrices[$l->sku_id] ?? 0));
-            $clCost     = (float) AssetCostLine::active()->validOn(now())->where('team_id', $teamId)
+            // Hardware-/Geräte-/Lizenz-Kosten aus der zentralen Quelle der Wahrheit (employeeCost) statt
+            // inline neu zu rechnen — verhindert stilles Divergieren bei Kostenmodell-Änderungen (M8).
+            // employeeCost trennt Items (hardware) und Geräte (device); hier wie bisher zu „hardware"
+            // zusammengefasst. Die costline-Sicht ist NICHT Teil von employeeCost und wird ergänzt.
+            $cost     = $agg->employeeCost($teamId, $emp);
+            $hardware = round($cost['hardware'] + $cost['device'], 2);
+            $licCost  = $cost['license'];
+            $clCost   = (float) AssetCostLine::active()->validOn(now())->where('team_id', $teamId)
                 ->where('assignee_id', $emp->id)
                 ->whereHas('costType', fn ($q) => $q->where('aggregation_source', AssetCostType::SOURCE_COST_LINE))
                 ->sum('monthly_amount');
-
-            $hardware = round($itemsCost + $deviceCost, 2);
 
             return ToolResult::success([
                 'employee' => [

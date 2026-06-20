@@ -9,7 +9,11 @@
             "email": "team@platform.com"
         }
     ],
-    "require": {},
+    "require": {
+        "php": "^8.2",
+        "ext-zip": "*",
+        "ext-simplexml": "*"
+    },
     "autoload": {
         "psr-4": {
             "Platform\\AssetManager\\": "src/"

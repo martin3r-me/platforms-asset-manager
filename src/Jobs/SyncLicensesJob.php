@@ -102,6 +102,12 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
                 return;
             }
 
+            // BEWUSST NUR Upsert, KEIN Reconcile-Delete (N11): aus dem Tenant verschwundene/gekündigte SKUs
+            // bleiben in asset_license_skus stehen (mit altem Stand). Anders als bei Geräten gibt es hier
+            // KEINE Soft-Delete-Strecke — der Katalog kann daher Karteileichen enthalten, die in
+            // SKU-Katalog-Auswertungen (z. B. licenses_catalog/Kapazität) mitzählen. Akzeptiert, weil
+            // SKUs selten gekündigt werden und unit_price (manuell gepflegt) erhalten bleiben soll;
+            // ein späterer Soft-Delete bräuchte ein Schema-Feld + Reconcile analog reconcileDelete().
             foreach ($skus as $sku) {
                 $purchased = $sku['prepaidUnits']['enabled'] ?? 0;
                 $consumed  = $sku['consumedUnits'] ?? 0;

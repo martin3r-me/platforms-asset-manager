@@ -226,8 +226,7 @@ class Index extends Component
             $device->update(['lifecycle_status' => $this->bulkLifecycle]);
         }
 
-        $labels = ['in_use' => 'In Betrieb', 'spare' => 'Reserve / Lager', 'repair' => 'In Reparatur', 'defect' => 'Defekt / Kaputt', 'retired' => 'Ausgemustert', 'lost' => 'Verloren / Gestohlen'];
-        $this->bulkResult    = $devices->count() . ' Gerät(e) auf Lifecycle "' . ($labels[$this->bulkLifecycle] ?? $this->bulkLifecycle) . '" gesetzt.';
+        $this->bulkResult    = $devices->count() . ' Gerät(e) auf Lifecycle "' . AssetDevice::lifecycleLabelFor($this->bulkLifecycle) . '" gesetzt.';
         $this->selected      = [];
         $this->selectPage    = false;
         $this->bulkLifecycle = '';
@@ -265,40 +264,40 @@ class Index extends Component
         return $query;
     }
 
+    /**
+     * Schnellfilter-Presets als EINE Quelle (key => Query-Scope-Closure) — genutzt von applyPreset()
+     * (Listenfilter) UND den Chip-Zählern in render(), damit beide nie auseinanderlaufen (M10).
+     * 'all' ist bewusst NICHT enthalten (keine Einschränkung; Zähler = stats['total']).
+     *
+     * @return array<string, \Closure>
+     */
+    protected function presetScopes(): array
+    {
+        return [
+            'no_user' => fn ($q) => $q->where(function ($w) {
+                $w->whereNull('user_principal_name')->orWhere('user_principal_name', '');
+            }),
+            'inactive' => fn ($q) => $q->where(function ($w) {
+                $w->whereNull('last_check_in_at')
+                  ->orWhere('last_check_in_at', '<', now()->subDays(self::INACTIVE_DAYS));
+            }),
+            'noncompliant' => fn ($q) => $q->where('compliance_state', 'noncompliant'),
+            'issues'       => fn ($q) => $q->whereIn('compliance_state', ['error', 'conflict']),
+            'expiring'     => fn ($q) => $q->where(function ($w) {
+                $t = now()->addDays(AssetDevice::EXPIRY_SOON_DAYS);
+                $w->where(function ($x) use ($t) { $x->whereNotNull('warranty_until')->where('warranty_until', '<=', $t); })
+                  ->orWhere(function ($x) use ($t) { $x->whereNotNull('lease_until')->where('lease_until', '<=', $t); });
+            }),
+            'unencrypted' => fn ($q) => $q->where('is_encrypted', false),
+        ];
+    }
+
     /** Schnellfilter-Preset auf die Query anwenden (Daten liegen bereits vor — nur Sicht). */
     protected function applyPreset($query): void
     {
-        switch ($this->preset) {
-            case 'no_user':
-                $query->where(function ($q) {
-                    $q->whereNull('user_principal_name')->orWhere('user_principal_name', '');
-                });
-                return;
-            case 'inactive':
-                $query->where(function ($q) {
-                    $q->whereNull('last_check_in_at')
-                      ->orWhere('last_check_in_at', '<', now()->subDays(self::INACTIVE_DAYS));
-                });
-                return;
-            case 'noncompliant':
-                $query->where('compliance_state', 'noncompliant');
-                return;
-            case 'issues':
-                $query->whereIn('compliance_state', ['error', 'conflict']);
-                return;
-            case 'expiring':
-                $t = now()->addDays(AssetDevice::EXPIRY_SOON_DAYS);
-                $query->where(function ($q) use ($t) {
-                    $q->where(function ($w) use ($t) { $w->whereNotNull('warranty_until')->where('warranty_until', '<=', $t); })
-                      ->orWhere(function ($w) use ($t) { $w->whereNotNull('lease_until')->where('lease_until', '<=', $t); });
-                });
-                return;
-            case 'unencrypted':
-                $query->where('is_encrypted', false);
-                return;
-            case 'all':
-            default:
-                // keine Einschränkung
+        $scopes = $this->presetScopes();
+        if (isset($scopes[$this->preset])) {
+            $scopes[$this->preset]($query);
         }
     }
 
@@ -365,27 +364,13 @@ class Index extends Component
             'unknown'      => AssetDevice::where('team_id', $team->id)->forTenant($this->selectedTenantId)->whereIn('compliance_state', ['unknown', 'error', 'conflict'])->count(),
         ];
 
-        // Zähler für die Schnellfilter-Chips (immer team-weit, nicht durch Suche/Filter eingeschränkt)
-        $presetCounts = [
-            'all'          => $stats['total'],
-            'no_user'      => AssetDevice::where('team_id', $team->id)->forTenant($this->selectedTenantId)
-                                ->where(function ($q) { $q->whereNull('user_principal_name')->orWhere('user_principal_name', ''); })
-                                ->count(),
-            'inactive'     => AssetDevice::where('team_id', $team->id)->forTenant($this->selectedTenantId)
-                                ->where(function ($q) {
-                                    $q->whereNull('last_check_in_at')
-                                      ->orWhere('last_check_in_at', '<', now()->subDays(self::INACTIVE_DAYS));
-                                })->count(),
-            'noncompliant' => $stats['noncompliant'],
-            'issues'       => AssetDevice::where('team_id', $team->id)->forTenant($this->selectedTenantId)->whereIn('compliance_state', ['error', 'conflict'])->count(),
-            'expiring'     => AssetDevice::where('team_id', $team->id)->forTenant($this->selectedTenantId)
-                                ->where(function ($q) {
-                                    $t = now()->addDays(AssetDevice::EXPIRY_SOON_DAYS);
-                                    $q->where(function ($w) use ($t) { $w->whereNotNull('warranty_until')->where('warranty_until', '<=', $t); })
-                                      ->orWhere(function ($w) use ($t) { $w->whereNotNull('lease_until')->where('lease_until', '<=', $t); });
-                                })->count(),
-            'unencrypted'  => AssetDevice::where('team_id', $team->id)->forTenant($this->selectedTenantId)->where('is_encrypted', false)->count(),
-        ];
+        // Zähler für die Schnellfilter-Chips (immer team-weit, nicht durch Suche/Filter eingeschränkt) —
+        // aus DERSELBEN Preset-Map wie applyPreset() (M10: kein Drift zwischen Filter und Zähler).
+        $presetCounts = ['all' => $stats['total']];
+        foreach ($this->presetScopes() as $key => $scope) {
+            $base = AssetDevice::where('team_id', $team->id)->forTenant($this->selectedTenantId);
+            $presetCounts[$key] = $scope($base)->count();
+        }
 
         $osList = AssetDevice::where('team_id', $team->id)->forTenant($this->selectedTenantId)
             ->select('operating_system')
