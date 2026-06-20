@@ -68,6 +68,25 @@
                     <div class="text-[10px] text-emerald-600 text-center">Gespeichert.</div>
                 @endif
             </form>
+
+            {{-- DSGVO-Einzel-Anonymisierung (E2 / ADR 0005) — nur Owner/Admin, mit Bestätigung. --}}
+            @can('asset-manager.manage')
+                <div class="px-4 pb-4 -mt-1">
+                    <div class="pt-3 border-t border-[var(--ui-border)]/40">
+                        <div class="text-[10px] uppercase tracking-wider text-[var(--ui-muted)] mb-1.5">DSGVO</div>
+                        <button type="button"
+                                wire:click="anonymize"
+                                wire:confirm="Diese Person anonymisieren? Anzeigename, E-Mail und UPN werden pseudonymisiert und die verknüpften Geräte/Lizenzen maskiert. Das lässt sich nicht rückgängig machen."
+                                class="w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-red-600 bg-red-500/10 rounded-lg hover:bg-red-500/20 transition-all">
+                            @svg('heroicon-o-eye-slash', 'w-3.5 h-3.5')
+                            Anonymisieren
+                        </button>
+                        @if($anonymized)
+                            <div class="mt-1 text-[10px] text-emerald-600 text-center">Anonymisiert.</div>
+                        @endif
+                    </div>
+                </div>
+            @endcan
         </x-ui-page-sidebar>
     </x-slot>
 

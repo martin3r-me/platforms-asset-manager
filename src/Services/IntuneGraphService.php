@@ -176,10 +176,13 @@ class IntuneGraphService
                 if (!$response->successful()) {
                     $msg = $response->json('error.message', 'Unbekannter Fehler');
                     $this->lastError = "Graph-API Fehler (HTTP {$response->status()}): {$msg}";
+                    // Nur error.message/error.code loggen — NICHT den vollen Body (kann Geräte-/Personen-PII
+                    // wie UPN/Anzeigename/Seriennr. enthalten). PII-Hygiene (N9).
                     Log::error('AssetManager: Graph-API Fehler', [
                         'team_id' => $config->team_id,
                         'status'  => $response->status(),
-                        'body'    => $response->body(),
+                        'code'    => $response->json('error.code', ''),
+                        'message' => $msg,
                     ]);
                     return null;
                 }

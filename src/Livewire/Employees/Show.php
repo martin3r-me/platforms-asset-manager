@@ -12,6 +12,7 @@ use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetUserLicense;
 use Platform\AssetManager\Services\CostAggregationService;
+use Platform\AssetManager\Services\EmployeeService;
 
 class Show extends Component
 {
@@ -24,6 +25,7 @@ class Show extends Component
     public string  $jobTitle    = '';
     public bool    $isActive    = true;
     public bool    $saved       = false;
+    public bool    $anonymized  = false;
 
     public function mount(AssetEmployee $employee): void
     {
@@ -69,6 +71,24 @@ class Show extends Component
         ]);
 
         $this->saved = true;
+    }
+
+    /**
+     * DSGVO-Einzel-Anonymisierung (E2 / ADR 0005): pseudonymisiert die PII dieses Mitarbeiters und der
+     * über die UPN verknüpften Geräte/Lizenzen. Owner/Admin-gated, team-scoped. KEINE Auto-Anonymisierung.
+     */
+    public function anonymize(EmployeeService $service): void
+    {
+        Gate::authorize('asset-manager.manage');
+        abort_unless($this->employee->team_id === Auth::user()->currentTeam->id, 403);
+
+        $service->anonymize($this->employee);
+
+        $this->employee->refresh();
+        $this->displayName = $this->employee->display_name ?? '';
+        $this->email       = '';
+        $this->anonymized  = true;
+        $this->saved       = false;
     }
 
     public function render()

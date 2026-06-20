@@ -2,6 +2,7 @@
 
 namespace Platform\AssetManager\Services;
 
+use Illuminate\Support\Facades\DB;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetTenant;
@@ -35,12 +36,78 @@ class EmployeeService
             $employee->email        = $upn;
             $employee->is_active    = true;
             $employee->save();
-        } elseif ($displayName && empty($employee->display_name)) {
-            $employee->display_name = $displayName;
-            $employee->save();
+        } else {
+            $dirty = false;
+            if ($displayName && empty($employee->display_name)) {
+                $employee->display_name = $displayName;
+                $dirty = true;
+            }
+            // team_id defensiv nachziehen, falls abweichend (N14): tenant_id ist die Identitäts-Achse und
+            // ein Tenant gehört genau EINEM Team — bei Drift (z. B. historische Daten) gewinnt das aktuelle
+            // team_id, damit team-weite Auswertungen/Kostenmodell konsistent bleiben.
+            if ((int) $employee->team_id !== $teamId) {
+                $employee->team_id = $teamId;
+                $dirty = true;
+            }
+            if ($dirty) {
+                $employee->save();
+            }
         }
 
         return $employee;
+    }
+
+    /**
+     * Gezielte Einzel-Anonymisierung EINES Mitarbeiters (DSGVO Art. 17, Entscheidung E2 / ADR 0005).
+     *
+     * Pseudonymisiert die PII des Mitarbeiters (Anzeigename, E-Mail, UPN) und leert raw_data; maskiert
+     * begleitend die PII der über die UPN verknüpften Geräte UND Lizenz-Zuweisungen (team-/tenant-scoped),
+     * wobei die UPN auf denselben stabilen Pseudonym gesetzt wird, damit die Verknüpfung erhalten bleibt.
+     *
+     * Hinweis: KEINE Löschung des Datensatzes (Tenant-Purge bleibt die Komplett-Löschung). Existiert die
+     * Person noch im M365 des Tenants, legt der nächste Sync sie unter ihrer echten UPN neu an — sinnvoll
+     * nur für ausgeschiedene Personen. Aufrufer MUSS die Berechtigung (Owner/Admin) bereits geprüft haben.
+     */
+    public function anonymize(AssetEmployee $employee): void
+    {
+        $teamId   = (int) $employee->team_id;
+        $tenantId = $employee->tenant_id;
+        $oldUpn   = $employee->user_principal_name;
+
+        // Stabiler, kollisionsfreier Pseudonym je Mitarbeiter (id ist eindeutig; .invalid-TLD existiert nie).
+        $pseudoUpn  = 'anonymisiert-' . $employee->id . '@anonymized.invalid';
+        $pseudoName = 'Anonymisiert #' . $employee->id;
+
+        DB::transaction(function () use ($employee, $teamId, $tenantId, $oldUpn, $pseudoUpn, $pseudoName) {
+            if ($oldUpn) {
+                // Verknüpfte Geräte (per UPN) PII maskieren — UPN auf den Pseudonym setzen (Link bleibt).
+                AssetDevice::where('team_id', $teamId)
+                    ->where('tenant_id', $tenantId)
+                    ->where('user_principal_name', $oldUpn)
+                    ->update([
+                        'user_principal_name' => $pseudoUpn,
+                        'user_display_name'   => null,
+                        'raw_data'            => null,
+                    ]);
+
+                // Verknüpfte Lizenz-Zuweisungen ebenso (tragen dieselbe Personen-PII).
+                AssetUserLicense::where('team_id', $teamId)
+                    ->where('tenant_id', $tenantId)
+                    ->where('user_principal_name', $oldUpn)
+                    ->update([
+                        'user_principal_name' => $pseudoUpn,
+                        'display_name'        => null,
+                        'raw_data'            => null,
+                    ]);
+            }
+
+            $employee->update([
+                'user_principal_name' => $pseudoUpn,
+                'display_name'        => $pseudoName,
+                'email'               => null,
+                'raw_data'            => null,
+            ]);
+        });
     }
 
     /**

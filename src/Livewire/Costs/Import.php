@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Livewire\Costs;
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Platform\AssetManager\Concerns\AuthorizesTeamRole;
@@ -89,10 +90,17 @@ class Import extends Component
             $path = $this->file->getRealPath();
             $this->result = $service->import($this->teamId(), $path, 'excel-upload', $dryRun);
         } catch (\Throwable $e) {
-            $this->error = $e->getMessage();
-            if (str_contains($e->getMessage(), 'geöffnet werden')) {
-                $this->error .= ' — Hinweis: Es wird eine echte .xlsx-Datei erwartet (kein altes .xls/CSV, nicht passwortgeschützt).';
-            }
+            // Rohe Exception-Message ins Server-Log (kann Pfade/interne Details enthalten), dem Nutzer eine
+            // generische bzw. handhabbare Meldung zeigen (N8) — keine rohe Exception in die UI.
+            Log::error('AssetManager: Excel-Import fehlgeschlagen', [
+                'team_id' => $this->teamId(),
+                'dry_run' => $dryRun,
+                'error'   => $e->getMessage(),
+            ]);
+
+            $this->error = str_contains($e->getMessage(), 'geöffnet werden')
+                ? 'Die Datei konnte nicht geöffnet werden — es wird eine echte .xlsx-Datei erwartet (kein altes .xls/CSV, nicht passwortgeschützt).'
+                : 'Der Import ist fehlgeschlagen. Bitte Datei und Format prüfen; Details stehen im Server-Log.';
         } finally {
             $this->running = false;
         }
