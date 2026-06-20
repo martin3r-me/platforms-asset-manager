@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Default-Kosten je Geräte-Modell (Hersteller + Modell). Der Intune-Sync legt die real
@@ -29,17 +30,17 @@ class AssetDeviceModel extends Model
         'purchase_price' => 'decimal:2',
     ];
 
-    public function team()
+    public function team(): BelongsTo
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);
     }
 
-    public function costType()
+    public function costType(): BelongsTo
     {
         return $this->belongsTo(AssetCostType::class, 'cost_type_id');
     }
 
-    public function vendor()
+    public function vendor(): BelongsTo
     {
         return $this->belongsTo(AssetVendor::class, 'vendor_id');
     }

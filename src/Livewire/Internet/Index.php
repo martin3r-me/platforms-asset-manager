@@ -4,6 +4,7 @@ namespace Platform\AssetManager\Livewire\Internet;
 
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Concerns\ScopesToTenant;
 use Platform\AssetManager\Models\AssetCategory;
 use Platform\AssetManager\Models\AssetCostLine;
@@ -11,16 +12,12 @@ use Platform\AssetManager\Models\AssetItem;
 
 class Index extends Component
 {
+    use ResolvesCurrentTeam;
     use ScopesToTenant;
 
     public string $search = '';
     public string $filterProvider = '';
     public ?int   $selectedId = null;
-
-    protected function teamId(): int
-    {
-        return Auth::user()->currentTeam->id;
-    }
 
     public function selectItem(int $id): void
     {

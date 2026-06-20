@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\AssetManager\Concerns\TenantScopable;
 
@@ -77,34 +78,34 @@ class AssetDevice extends Model
     /** Erlaubte Lifecycle-Status (Reihenfolge = UI-Reihenfolge). */
     public const LIFECYCLE_STATUSES = ['in_use', 'spare', 'repair', 'defect', 'retired', 'lost'];
 
-    public function team()
+    public function team(): BelongsTo
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);
     }
 
     /** Tenant (Kundenkontext), zu dem dieses Gerät gehört. */
-    public function tenant()
+    public function tenant(): BelongsTo
     {
         return $this->belongsTo(AssetTenant::class, 'tenant_id');
     }
 
-    public function costType()
+    public function costType(): BelongsTo
     {
         return $this->belongsTo(AssetCostType::class, 'cost_type_id');
     }
 
-    public function costCenter()
+    public function costCenter(): BelongsTo
     {
         return $this->belongsTo(AssetCostCenter::class, 'cost_center_id');
     }
 
-    public function vendor()
+    public function vendor(): BelongsTo
     {
         return $this->belongsTo(AssetVendor::class, 'vendor_id');
     }
 
     /** Mitarbeiter über die UPN (Geräte tragen nur die UPN als String, keine echte FK). */
-    public function assignee()
+    public function assignee(): BelongsTo
     {
         return $this->belongsTo(AssetEmployee::class, 'user_principal_name', 'user_principal_name');
     }

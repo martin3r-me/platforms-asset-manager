@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Component;
+use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Jobs\ImportTenantUsersJob;
 use Platform\AssetManager\Jobs\SyncIntuneDevicesJob;
 use Platform\AssetManager\Jobs\SyncLicensesJob;
@@ -25,6 +26,8 @@ use Platform\AssetManager\Services\IntuneGraphService;
  */
 class Index extends Component
 {
+    use ResolvesCurrentTeam;
+
     public ?int $selectedTenantId = null;
 
     // Tenant anlegen/umbenennen (ein Inline-Editor, renameMode unterscheidet die beiden Fälle)
@@ -54,11 +57,6 @@ class Index extends Component
             ?? $tenants->first()?->id;
 
         $this->loadConnectorForm();
-    }
-
-    protected function teamId(): int
-    {
-        return Auth::user()->currentTeam->id;
     }
 
     // ---- Auswahl ----------------------------------------------------------

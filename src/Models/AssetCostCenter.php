@@ -3,6 +3,8 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AssetCostCenter extends Model
 {
@@ -22,22 +24,22 @@ class AssetCostCenter extends Model
         'is_active' => 'boolean',
     ];
 
-    public function team()
+    public function team(): BelongsTo
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);
     }
 
-    public function company()
+    public function company(): BelongsTo
     {
         return $this->belongsTo(AssetCompany::class, 'company_id');
     }
 
-    public function costLines()
+    public function costLines(): HasMany
     {
         return $this->hasMany(AssetCostLine::class, 'cost_center_id');
     }
 
-    public function employees()
+    public function employees(): HasMany
     {
         return $this->hasMany(AssetEmployee::class, 'cost_center_id');
     }

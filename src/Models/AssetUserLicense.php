@@ -3,6 +3,8 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Platform\AssetManager\Concerns\TenantScopable;
 
 class AssetUserLicense extends Model
@@ -27,14 +29,14 @@ class AssetUserLicense extends Model
         'assigned_at' => 'datetime',
     ];
 
-    public function sku()
+    public function sku(): HasOne
     {
         return $this->hasOne(AssetLicenseSku::class, 'sku_id', 'sku_id')
             ->where('team_id', $this->team_id);
     }
 
     /** Tenant (Kundenkontext), zu dem diese Lizenzzuweisung gehört. */
-    public function tenant()
+    public function tenant(): BelongsTo
     {
         return $this->belongsTo(AssetTenant::class, 'tenant_id');
     }

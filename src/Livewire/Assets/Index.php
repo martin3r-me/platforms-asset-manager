@@ -7,6 +7,7 @@ use Livewire\WithPagination;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Concerns\ScopesToTenant;
 use Platform\AssetManager\Models\AssetAssignment;
 use Platform\AssetManager\Models\AssetCategory;
@@ -16,6 +17,7 @@ use Platform\AssetManager\Services\TenantContext;
 
 class Index extends Component
 {
+    use ResolvesCurrentTeam;
     use WithPagination;
     use ScopesToTenant;
 
@@ -230,11 +232,6 @@ class Index extends Component
         $this->reset(['bcName', 'bcManufacturer', 'bcModel', 'bcQuantity', 'bcAssigneeId', 'bcPurchasePrice', 'bcDepreciationMonths', 'bcCategoryId', 'showBulkCreate']);
         $this->bcQuantity = 1;
         $this->resetPage();
-    }
-
-    protected function teamId(): int
-    {
-        return Auth::user()->currentTeam->id;
     }
 
     protected function filteredQuery()

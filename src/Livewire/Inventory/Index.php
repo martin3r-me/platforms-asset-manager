@@ -5,6 +5,7 @@ namespace Platform\AssetManager\Livewire\Inventory;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Concerns\ScopesToTenant;
 use Platform\AssetManager\Services\InventoryService;
 
@@ -15,6 +16,7 @@ use Platform\AssetManager\Services\InventoryService;
  */
 class Index extends Component
 {
+    use ResolvesCurrentTeam;
     use WithPagination;
     use ScopesToTenant;
 
@@ -54,11 +56,6 @@ class Index extends Component
     {
         $this->reset(['search', 'filterType', 'filterAssignment']);
         $this->resetPage();
-    }
-
-    protected function teamId(): int
-    {
-        return Auth::user()->currentTeam->id;
     }
 
     public function render()

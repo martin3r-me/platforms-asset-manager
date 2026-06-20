@@ -3,6 +3,8 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Platform\AssetManager\Concerns\TenantScopable;
 
 class AssetEmployee extends Model
@@ -35,23 +37,23 @@ class AssetEmployee extends Model
         'synced_at' => 'datetime',
     ];
 
-    public function team()
+    public function team(): BelongsTo
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);
     }
 
     /** Tenant (Kundenkontext), zu dem dieser Mitarbeiter gehört. */
-    public function tenant()
+    public function tenant(): BelongsTo
     {
         return $this->belongsTo(AssetTenant::class, 'tenant_id');
     }
 
-    public function costCenter()
+    public function costCenter(): BelongsTo
     {
         return $this->belongsTo(AssetCostCenter::class, 'cost_center_id');
     }
 
-    public function costLines()
+    public function costLines(): HasMany
     {
         return $this->hasMany(AssetCostLine::class, 'assignee_id');
     }
@@ -62,19 +64,19 @@ class AssetEmployee extends Model
         return $this->account_type === 'function';
     }
 
-    public function items()
+    public function items(): HasMany
     {
         return $this->hasMany(AssetItem::class, 'assignee_id')
             ->whereNull('asset_items.deleted_at');
     }
 
-    public function licenses()
+    public function licenses(): HasMany
     {
         return $this->hasMany(AssetUserLicense::class, 'user_principal_name', 'user_principal_name')
             ->where('asset_user_licenses.team_id', $this->team_id);
     }
 
-    public function devices()
+    public function devices(): HasMany
     {
         return $this->hasMany(AssetDevice::class, 'user_principal_name', 'user_principal_name')
             ->where('asset_devices.team_id', $this->team_id);

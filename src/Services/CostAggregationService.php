@@ -58,9 +58,9 @@ class CostAggregationService
     protected function bucketForSource(?string $source): string
     {
         return match ($source) {
-            'hardware_afa', 'asset_device' => 'hardware',
-            'ms_license'                   => 'licenses',
-            default                        => 'costlines', // cost_line + Fallback
+            AssetCostType::SOURCE_HARDWARE_AFA, AssetCostType::SOURCE_ASSET_DEVICE => 'hardware',
+            AssetCostType::SOURCE_MS_LICENSE                                       => 'licenses',
+            default                                                               => 'costlines', // cost_line + Fallback
         };
     }
 
@@ -124,7 +124,7 @@ class CostAggregationService
             ->validOn(now())
             ->where('team_id', $teamId)
             ->whereNotNull('assignee_id')
-            ->whereHas('costType', fn($q) => $q->where('aggregation_source', 'cost_line'))
+            ->whereHas('costType', fn($q) => $q->where('aggregation_source', AssetCostType::SOURCE_COST_LINE))
             ->get(['assignee_id', 'monthly_amount'])
             ->groupBy('assignee_id')
             ->map(fn($g) => (float) $g->sum('monthly_amount'));
@@ -358,7 +358,7 @@ class CostAggregationService
         $rows  = collect();
 
         // 1) cost_line
-        $lineTypeIds = $types->where('aggregation_source', 'cost_line')->keys();
+        $lineTypeIds = $types->where('aggregation_source', AssetCostType::SOURCE_COST_LINE)->keys();
         if ($lineTypeIds->isNotEmpty()) {
             AssetCostLine::active()
                 ->validOn(now())
@@ -378,7 +378,7 @@ class CostAggregationService
         $ccByUpn      = $employees->pluck('cost_center_id', 'user_principal_name');
 
         // 2) hardware_afa
-        $afaType = $types->firstWhere('aggregation_source', 'hardware_afa');
+        $afaType = $types->firstWhere('aggregation_source', AssetCostType::SOURCE_HARDWARE_AFA);
         if ($afaType) {
             // Items, die bereits eine eigene Kostenposition (cost_line) tragen, NICHT zusätzlich als AfA
             // zählen — sonst Doppelzählung (z. B. Drucker/Internet mit cost_line UND gesetztem Kaufpreis).
@@ -400,7 +400,7 @@ class CostAggregationService
         }
 
         // 3) ms_license
-        $msType = $types->firstWhere('aggregation_source', 'ms_license');
+        $msType = $types->firstWhere('aggregation_source', AssetCostType::SOURCE_MS_LICENSE);
         if ($msType) {
             $skuPrices = AssetLicenseSku::where('team_id', $teamId)
                 ->whereNotNull('unit_price')
@@ -447,7 +447,7 @@ class CostAggregationService
     public function deviceCostRows(int $teamId): Collection
     {
         $deviceTypeIds = AssetCostType::where('team_id', $teamId)
-            ->where('aggregation_source', 'asset_device')
+            ->where('aggregation_source', AssetCostType::SOURCE_ASSET_DEVICE)
             ->pluck('id')
             ->map(fn($id) => (int) $id);
 

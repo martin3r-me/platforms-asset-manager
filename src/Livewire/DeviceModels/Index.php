@@ -5,6 +5,7 @@ namespace Platform\AssetManager\Livewire\DeviceModels;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Platform\AssetManager\Concerns\AuthorizesTeamRole;
+use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceModel;
@@ -12,6 +13,7 @@ use Platform\AssetManager\Models\AssetVendor;
 
 class Index extends Component
 {
+    use ResolvesCurrentTeam;
     use AuthorizesTeamRole;
 
     public ?int    $editId    = null;
@@ -25,11 +27,6 @@ class Index extends Component
     public string  $newManufacturer = '';
     public string  $newModel        = '';
     public ?string $flash           = null;
-
-    protected function teamId(): int
-    {
-        return Auth::user()->currentTeam->id;
-    }
 
     /** owner/admin im aktiven Team? (analog Devices/Show — Preise pflegen ist eine Verwaltungsaktion) */
     protected function canManage(): bool

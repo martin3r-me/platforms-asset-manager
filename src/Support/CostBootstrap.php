@@ -2,6 +2,8 @@
 
 namespace Platform\AssetManager\Support;
 
+use Platform\AssetManager\Models\AssetCostType;
+
 /**
  * Stammdaten-Definitionen für die Kostenaufteilung.
  *
@@ -21,12 +23,12 @@ class CostBootstrap
      * (CostAggregationService) eine passende Kostenart-Zeile als Spalte brauchen — beides universell.
      */
     public const NEUTRAL_COST_TYPES = [
-        ['key' => 'hardware_afa', 'name' => 'Hardware (AfA)', 'vendor' => null, 'system' => null, 'frequency' => 'monthly', 'per_employee' => true,  'aggregation_source' => 'hardware_afa', 'allow_negative' => false],
-        ['key' => 'ms_lizenz',    'name' => 'MS Lizenz',      'vendor' => null, 'system' => null, 'frequency' => 'monthly', 'per_employee' => true,  'aggregation_source' => 'ms_license',   'allow_negative' => false],
-        ['key' => 'software_abo', 'name' => 'Software-Abo',   'vendor' => null, 'system' => null, 'frequency' => 'monthly', 'per_employee' => false, 'aggregation_source' => 'cost_line',    'allow_negative' => false],
-        ['key' => 'mobilfunk',    'name' => 'Mobilfunk',      'vendor' => null, 'system' => null, 'frequency' => 'monthly', 'per_employee' => true,  'aggregation_source' => 'cost_line',    'allow_negative' => false],
-        ['key' => 'internet',     'name' => 'Internet',       'vendor' => null, 'system' => null, 'frequency' => 'monthly', 'per_employee' => false, 'aggregation_source' => 'cost_line',    'allow_negative' => false],
-        ['key' => 'telefonie',    'name' => 'Telefonie',      'vendor' => null, 'system' => null, 'frequency' => 'monthly', 'per_employee' => false, 'aggregation_source' => 'cost_line',    'allow_negative' => false],
+        ['key' => 'hardware_afa', 'name' => 'Hardware (AfA)', 'vendor' => null, 'system' => null, 'frequency' => 'monthly', 'per_employee' => true,  'aggregation_source' => AssetCostType::SOURCE_HARDWARE_AFA, 'allow_negative' => false],
+        ['key' => 'ms_lizenz',    'name' => 'MS Lizenz',      'vendor' => null, 'system' => null, 'frequency' => 'monthly', 'per_employee' => true,  'aggregation_source' => AssetCostType::SOURCE_MS_LICENSE,   'allow_negative' => false],
+        ['key' => 'software_abo', 'name' => 'Software-Abo',   'vendor' => null, 'system' => null, 'frequency' => 'monthly', 'per_employee' => false, 'aggregation_source' => AssetCostType::SOURCE_COST_LINE,    'allow_negative' => false],
+        ['key' => 'mobilfunk',    'name' => 'Mobilfunk',      'vendor' => null, 'system' => null, 'frequency' => 'monthly', 'per_employee' => true,  'aggregation_source' => AssetCostType::SOURCE_COST_LINE,    'allow_negative' => false],
+        ['key' => 'internet',     'name' => 'Internet',       'vendor' => null, 'system' => null, 'frequency' => 'monthly', 'per_employee' => false, 'aggregation_source' => AssetCostType::SOURCE_COST_LINE,    'allow_negative' => false],
+        ['key' => 'telefonie',    'name' => 'Telefonie',      'vendor' => null, 'system' => null, 'frequency' => 'monthly', 'per_employee' => false, 'aggregation_source' => AssetCostType::SOURCE_COST_LINE,    'allow_negative' => false],
     ];
 
     /** Gesellschaften: slug => Anzeigename (Reihenfolge wie in der Excel-Pivot). */
@@ -94,29 +96,29 @@ class CostBootstrap
      *  allow_negative      true = negative Beträge erlaubt (Rabatt)
      */
     public const COST_TYPES = [
-        ['key' => 'ms_lizenz',        'name' => 'MS Lizenz',            'vendor' => 'Vodafone',                       'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => 'ms_license', 'allow_negative' => false],
-        ['key' => 'vf_lizenz_rc',     'name' => 'VF Lizenz RC',         'vendor' => 'VODAFONE HANDYZUBEHOER NL WEST', 'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => 'cost_line',  'allow_negative' => false],
-        ['key' => 'vf_lizenz_rc_rab', 'name' => 'VF Lizenz RC Rabatt',  'vendor' => 'VODAFONE HANDYZUBEHOER NL WEST', 'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => 'cost_line',  'allow_negative' => true],
-        ['key' => 'lap_dock',         'name' => 'Lap+Dock',             'vendor' => 'CSI LEASING',                    'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => 'cost_line',  'allow_negative' => false],
-        ['key' => 'o365_backup',      'name' => 'O365 Backup Preise',   'vendor' => 'EXO3',                           'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => 'cost_line',  'allow_negative' => false],
-        ['key' => 'mobilfunk',        'name' => 'Mobilfunk',            'vendor' => 'Vodafone',                       'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => 'cost_line',  'allow_negative' => false],
-        ['key' => 'adobe_indesign',   'name' => 'Adobe InDesign',       'vendor' => 'InDesign',                       'system' => 'Moss', 'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => 'cost_line',  'allow_negative' => false],
-        ['key' => 'optisigns',        'name' => 'OptiSigns',            'vendor' => 'OPTISIGNS DIGITAL SIGN',         'system' => 'Moss', 'frequency' => 'monthly',   'per_employee' => false, 'aggregation_source' => 'cost_line',  'allow_negative' => false],
-        ['key' => 'firstinvision',    'name' => 'FirstInVision',        'vendor' => 'FIRSTINVISION SOFTWARE',         'system' => 'HGK',  'frequency' => 'yearly',    'per_employee' => false, 'aggregation_source' => 'cost_line',  'allow_negative' => false],
-        ['key' => 'mobileiron',       'name' => 'MobileIron',           'vendor' => 'VODAFONE HANDYZUBEHOER NL WEST', 'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => 'cost_line',  'allow_negative' => false],
-        ['key' => 'bpevent',          'name' => 'BPEvent',              'vendor' => 'BANKETTPROFI (A)',               'system' => 'HGK',  'frequency' => 'quarterly', 'per_employee' => false, 'aggregation_source' => 'cost_line',  'allow_negative' => false],
-        ['key' => 'druckerwartung',   'name' => 'Druckerwartung',       'vendor' => 'PK OFFICE',                      'system' => 'HGK',  'frequency' => 'quarterly', 'per_employee' => false, 'aggregation_source' => 'cost_line',  'allow_negative' => false],
-        ['key' => 'druckerleasing',   'name' => 'Druckerleasing',       'vendor' => 'GRENKE',                         'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => false, 'aggregation_source' => 'cost_line',  'allow_negative' => false],
-        ['key' => 'internet',         'name' => 'Internet',             'vendor' => null,                             'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => false, 'aggregation_source' => 'cost_line',  'allow_negative' => false],
-        ['key' => 'hgk',              'name' => 'HGK',                  'vendor' => 'HGK',                            'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => false, 'aggregation_source' => 'cost_line',  'allow_negative' => false],
-        ['key' => 'necta',            'name' => 'necta',                'vendor' => 'NECTA',                          'system' => 'HGK',  'frequency' => 'quarterly', 'per_employee' => false, 'aggregation_source' => 'cost_line',  'allow_negative' => false],
-        ['key' => 'chatgpt',          'name' => 'ChatGPT',              'vendor' => 'OPENAI',                         'system' => 'Moss', 'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => 'cost_line',  'allow_negative' => false],
-        ['key' => 'canva',            'name' => 'Canva',                'vendor' => 'Canva',                          'system' => 'Moss', 'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => 'cost_line',  'allow_negative' => false],
+        ['key' => 'ms_lizenz',        'name' => 'MS Lizenz',            'vendor' => 'Vodafone',                       'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => AssetCostType::SOURCE_MS_LICENSE, 'allow_negative' => false],
+        ['key' => 'vf_lizenz_rc',     'name' => 'VF Lizenz RC',         'vendor' => 'VODAFONE HANDYZUBEHOER NL WEST', 'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => AssetCostType::SOURCE_COST_LINE,  'allow_negative' => false],
+        ['key' => 'vf_lizenz_rc_rab', 'name' => 'VF Lizenz RC Rabatt',  'vendor' => 'VODAFONE HANDYZUBEHOER NL WEST', 'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => AssetCostType::SOURCE_COST_LINE,  'allow_negative' => true],
+        ['key' => 'lap_dock',         'name' => 'Lap+Dock',             'vendor' => 'CSI LEASING',                    'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => AssetCostType::SOURCE_COST_LINE,  'allow_negative' => false],
+        ['key' => 'o365_backup',      'name' => 'O365 Backup Preise',   'vendor' => 'EXO3',                           'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => AssetCostType::SOURCE_COST_LINE,  'allow_negative' => false],
+        ['key' => 'mobilfunk',        'name' => 'Mobilfunk',            'vendor' => 'Vodafone',                       'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => AssetCostType::SOURCE_COST_LINE,  'allow_negative' => false],
+        ['key' => 'adobe_indesign',   'name' => 'Adobe InDesign',       'vendor' => 'InDesign',                       'system' => 'Moss', 'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => AssetCostType::SOURCE_COST_LINE,  'allow_negative' => false],
+        ['key' => 'optisigns',        'name' => 'OptiSigns',            'vendor' => 'OPTISIGNS DIGITAL SIGN',         'system' => 'Moss', 'frequency' => 'monthly',   'per_employee' => false, 'aggregation_source' => AssetCostType::SOURCE_COST_LINE,  'allow_negative' => false],
+        ['key' => 'firstinvision',    'name' => 'FirstInVision',        'vendor' => 'FIRSTINVISION SOFTWARE',         'system' => 'HGK',  'frequency' => 'yearly',    'per_employee' => false, 'aggregation_source' => AssetCostType::SOURCE_COST_LINE,  'allow_negative' => false],
+        ['key' => 'mobileiron',       'name' => 'MobileIron',           'vendor' => 'VODAFONE HANDYZUBEHOER NL WEST', 'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => AssetCostType::SOURCE_COST_LINE,  'allow_negative' => false],
+        ['key' => 'bpevent',          'name' => 'BPEvent',              'vendor' => 'BANKETTPROFI (A)',               'system' => 'HGK',  'frequency' => 'quarterly', 'per_employee' => false, 'aggregation_source' => AssetCostType::SOURCE_COST_LINE,  'allow_negative' => false],
+        ['key' => 'druckerwartung',   'name' => 'Druckerwartung',       'vendor' => 'PK OFFICE',                      'system' => 'HGK',  'frequency' => 'quarterly', 'per_employee' => false, 'aggregation_source' => AssetCostType::SOURCE_COST_LINE,  'allow_negative' => false],
+        ['key' => 'druckerleasing',   'name' => 'Druckerleasing',       'vendor' => 'GRENKE',                         'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => false, 'aggregation_source' => AssetCostType::SOURCE_COST_LINE,  'allow_negative' => false],
+        ['key' => 'internet',         'name' => 'Internet',             'vendor' => null,                             'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => false, 'aggregation_source' => AssetCostType::SOURCE_COST_LINE,  'allow_negative' => false],
+        ['key' => 'hgk',              'name' => 'HGK',                  'vendor' => 'HGK',                            'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => false, 'aggregation_source' => AssetCostType::SOURCE_COST_LINE,  'allow_negative' => false],
+        ['key' => 'necta',            'name' => 'necta',                'vendor' => 'NECTA',                          'system' => 'HGK',  'frequency' => 'quarterly', 'per_employee' => false, 'aggregation_source' => AssetCostType::SOURCE_COST_LINE,  'allow_negative' => false],
+        ['key' => 'chatgpt',          'name' => 'ChatGPT',              'vendor' => 'OPENAI',                         'system' => 'Moss', 'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => AssetCostType::SOURCE_COST_LINE,  'allow_negative' => false],
+        ['key' => 'canva',            'name' => 'Canva',                'vendor' => 'Canva',                          'system' => 'Moss', 'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => AssetCostType::SOURCE_COST_LINE,  'allow_negative' => false],
 
         // Zusätze, die in der Excel als Spalten in „Übersicht" auftauchen bzw. das Modul ergänzt
-        ['key' => 'versicherung',     'name' => 'Versicherung',         'vendor' => null,                             'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => 'cost_line',  'allow_negative' => false],
-        ['key' => 'brevo',            'name' => 'Brevo',                'vendor' => null,                             'system' => 'Moss', 'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => 'cost_line',  'allow_negative' => false],
-        ['key' => 'hardware_afa',     'name' => 'Hardware (AfA)',       'vendor' => null,                             'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => 'hardware_afa', 'allow_negative' => false],
+        ['key' => 'versicherung',     'name' => 'Versicherung',         'vendor' => null,                             'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => AssetCostType::SOURCE_COST_LINE,  'allow_negative' => false],
+        ['key' => 'brevo',            'name' => 'Brevo',                'vendor' => null,                             'system' => 'Moss', 'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => AssetCostType::SOURCE_COST_LINE,  'allow_negative' => false],
+        ['key' => 'hardware_afa',     'name' => 'Hardware (AfA)',       'vendor' => null,                             'system' => 'HGK',  'frequency' => 'monthly',   'per_employee' => true,  'aggregation_source' => AssetCostType::SOURCE_HARDWARE_AFA, 'allow_negative' => false],
     ];
 
     /** Kreditoren (Kreditor-Namen, wie sie in der Excel stehen). */

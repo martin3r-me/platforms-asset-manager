@@ -3,6 +3,8 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AssetCompany extends Model
 {
@@ -15,12 +17,12 @@ class AssetCompany extends Model
         'sort_order',
     ];
 
-    public function team()
+    public function team(): BelongsTo
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);
     }
 
-    public function costCenters()
+    public function costCenters(): HasMany
     {
         return $this->hasMany(AssetCostCenter::class, 'company_id');
     }

@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 
@@ -164,13 +165,13 @@ class AssetConnectorConfig extends Model
         return 'active';
     }
 
-    public function team()
+    public function team(): BelongsTo
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);
     }
 
     /** Tenant (Kundenkontext), zu dem diese Microsoft-Anbindung gehört. */
-    public function tenant()
+    public function tenant(): BelongsTo
     {
         return $this->belongsTo(AssetTenant::class, 'tenant_id');
     }

@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Tools\Employees;
 
 use Platform\AssetManager\Models\AssetCostLine;
+use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Services\CostAggregationService;
@@ -131,7 +132,7 @@ class GetEmployeeTool implements ToolContract, ToolMetadataContract
             $licCost    = $emp->licenses()->get()->sum(fn ($l) => (float) ($skuPrices[$l->sku_id] ?? 0));
             $clCost     = (float) AssetCostLine::active()->validOn(now())->where('team_id', $teamId)
                 ->where('assignee_id', $emp->id)
-                ->whereHas('costType', fn ($q) => $q->where('aggregation_source', 'cost_line'))
+                ->whereHas('costType', fn ($q) => $q->where('aggregation_source', AssetCostType::SOURCE_COST_LINE))
                 ->sum('monthly_amount');
 
             $hardware = round($itemsCost + $deviceCost, 2);

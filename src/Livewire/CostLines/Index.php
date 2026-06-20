@@ -5,6 +5,7 @@ namespace Platform\AssetManager\Livewire\CostLines;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetCostType;
@@ -13,6 +14,7 @@ use Platform\AssetManager\Services\CostBootstrapService;
 
 class Index extends Component
 {
+    use ResolvesCurrentTeam;
     use WithPagination;
 
     public string $search        = '';
@@ -51,11 +53,6 @@ class Index extends Component
     public function updatingFilterCenter(): void { $this->resetPage(); }
     public function updatingFilterVendor(): void { $this->resetPage(); }
     public function updatingFilterActive(): void { $this->resetPage(); }
-
-    protected function teamId(): int
-    {
-        return Auth::user()->currentTeam->id;
-    }
 
     /** Spaltensortierung umschalten: gleiches Feld → Richtung kippen, sonst aufsteigend. */
     public function sortBy(string $field): void

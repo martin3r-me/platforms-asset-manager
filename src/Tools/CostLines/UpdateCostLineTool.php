@@ -81,7 +81,7 @@ class UpdateCostLineTool implements ToolContract, ToolMetadataContract
                 if (!$costType) {
                     return ToolResult::error('VALIDATION_ERROR', 'cost_type_id gehört nicht zum Team.');
                 }
-                if ($costType->aggregation_source !== 'cost_line') {
+                if ($costType->aggregation_source !== AssetCostType::SOURCE_COST_LINE) {
                     return ToolResult::error('INVALID_COST_TYPE', "Kostenart '{$costType->name}' ist nicht cost_line — sie würde aus der Aufteilung fallen.");
                 }
                 $line->cost_type_id = $costType->id;

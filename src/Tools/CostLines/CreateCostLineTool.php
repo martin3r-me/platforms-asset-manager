@@ -81,8 +81,8 @@ class CreateCostLineTool implements ToolContract, ToolMetadataContract
             if (!$costType) {
                 return ToolResult::error('VALIDATION_ERROR', 'cost_type_id gehört nicht zum Team. Nutze asset-manager.cost-types.GET.');
             }
-            if ($costType->aggregation_source !== 'cost_line') {
-                $valid = AssetCostType::where('team_id', $teamId)->where('aggregation_source', 'cost_line')
+            if ($costType->aggregation_source !== AssetCostType::SOURCE_COST_LINE) {
+                $valid = AssetCostType::where('team_id', $teamId)->where('aggregation_source', AssetCostType::SOURCE_COST_LINE)
                     ->pluck('name', 'id')->map(fn ($n, $id) => "$id=$n")->values()->implode(', ');
                 return ToolResult::error('INVALID_COST_TYPE', "Kostenart '{$costType->name}' hat aggregation_source='{$costType->aggregation_source}'. "
                     . "Manuelle Kostenpositionen sind nur für cost_line-Kostenarten zulässig (sonst unsichtbar im Pivot). Gültig: {$valid}");

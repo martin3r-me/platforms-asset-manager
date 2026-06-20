@@ -9,6 +9,7 @@ use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Models\AssetCompany;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostType;
@@ -26,6 +27,8 @@ use Platform\AssetManager\Services\CostBootstrapService;
  */
 class Index extends Component
 {
+    use ResolvesCurrentTeam;
+
     /** Aktiver Bereich; per #[Url] deep-linkbar (?bereich=...). */
     #[Url(as: 'bereich')]
     public string $active = 'companies';
@@ -58,11 +61,6 @@ class Index extends Component
         if (! in_array($this->active, self::AREAS, true)) {
             $this->active = 'companies';
         }
-    }
-
-    protected function teamId(): int
-    {
-        return Auth::user()->currentTeam->id;
     }
 
     // ---- Navigation -------------------------------------------------------
@@ -134,7 +132,7 @@ class Index extends Component
         return match ($this->active) {
             'companies'    => ['name' => '', 'sort_order' => null],
             'cost-centers' => ['code' => '', 'name' => '', 'company_id' => null, 'is_active' => true],
-            'cost-types'   => ['name' => '', 'vendor_default_id' => null, 'system_default' => '', 'frequency_default' => 'monthly', 'aggregation_source' => 'cost_line', 'is_per_employee' => false],
+            'cost-types'   => ['name' => '', 'vendor_default_id' => null, 'system_default' => '', 'frequency_default' => 'monthly', 'aggregation_source' => AssetCostType::SOURCE_COST_LINE, 'is_per_employee' => false],
             'vendors'      => ['name' => '', 'creditor_no' => ''],
         };
     }
@@ -171,7 +169,7 @@ class Index extends Component
                 'form.vendor_default_id'  => 'nullable',
                 'form.system_default'     => 'nullable|in:HGK,Moss',
                 'form.frequency_default'  => 'required|in:monthly,quarterly,yearly,once',
-                'form.aggregation_source' => 'required|in:cost_line,hardware_afa,ms_license,asset_device',
+                'form.aggregation_source' => ['required', Rule::in(AssetCostType::SOURCES)],
                 'form.is_per_employee'    => 'boolean',
             ],
             'vendors' => [
@@ -214,7 +212,7 @@ class Index extends Component
     protected function assertSingleSourceCostType(): bool
     {
         $source = $this->form['aggregation_source'] ?? null;
-        if (! in_array($source, ['hardware_afa', 'ms_license'], true)) {
+        if (! in_array($source, [AssetCostType::SOURCE_HARDWARE_AFA, AssetCostType::SOURCE_MS_LICENSE], true)) {
             return true;
         }
 
@@ -387,7 +385,7 @@ class Index extends Component
         // Virtuelle Quellen (hardware_afa/ms_license/asset_device) haben NIE cost_lines (cost_lines_count=0),
         // tragen ihre Kosten aber aus Inventar-AfA / bepreisten Lizenz-Zuweisungen / Geräten. Löschen würde
         // diese Beträge still aus dem Pivot kippen → blockieren, solange die Kostenart aktiv Kosten trägt.
-        if (in_array($t->aggregation_source, ['hardware_afa', 'ms_license', 'asset_device'], true)) {
+        if (in_array($t->aggregation_source, [AssetCostType::SOURCE_HARDWARE_AFA, AssetCostType::SOURCE_MS_LICENSE, AssetCostType::SOURCE_ASSET_DEVICE], true)) {
             $contributes = app(CostAggregationService::class)
                 ->normalizedLines($this->teamId())
                 ->contains(fn ($l) => (int) $l['cost_type_id'] === (int) $t->id && (float) $l['amount'] != 0.0);

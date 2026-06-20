@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Platform\AssetManager\Concerns\TenantScopable;
 
 class AssetLicenseSyncLog extends Model
@@ -31,7 +32,7 @@ class AssetLicenseSyncLog extends Model
     ];
 
     /** Tenant (Kundenkontext), für den dieser Sync-Lauf erfolgte. */
-    public function tenant()
+    public function tenant(): BelongsTo
     {
         return $this->belongsTo(AssetTenant::class, 'tenant_id');
     }

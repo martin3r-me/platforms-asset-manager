@@ -3,25 +3,20 @@
 namespace Platform\AssetManager\Concerns;
 
 use Illuminate\Contracts\Auth\Authenticatable;
-use Platform\Core\Enums\StandardRole;
+use Platform\AssetManager\Support\TeamRole;
 
 /**
- * Single source of truth for the "is this user an owner/admin of their current team?" check
- * that was previously copied inline across policies and Livewire components.
+ * Convenience wrapper around the "is this user an owner/admin of their current team?" check for
+ * policies and Livewire components.
  *
- * Keeps the module's proven current-team pivot lookup: the role lives on the team_user pivot,
- * and Core's HasRoleAccess::getUserRole reads $relation?->role (not ?->pivot?->role), so reusing
- * that trait would resolve null and deny everyone. Only the admin role SET is reused from Core's
- * enum (StandardRole::getAdminRoles() === ['owner', 'admin']) instead of being hardcoded.
+ * The actual logic lives in {@see TeamRole::isOwnerOrAdmin()} so the exact same rule backs the
+ * `asset-manager.manage` Gate ability (which has no $this and so cannot use a trait). This trait
+ * just keeps the terser, $this-style call site the policies/components already use.
  */
 trait AuthorizesTeamRole
 {
     protected function isTeamOwnerOrAdmin(Authenticatable $user): bool
     {
-        $role = $user->teams()
-            ->where('team_id', $user->currentTeam?->id)
-            ->first()?->pivot?->role;
-
-        return $role !== null && in_array($role, StandardRole::getAdminRoles(), true);
+        return TeamRole::isOwnerOrAdmin($user);
     }
 }

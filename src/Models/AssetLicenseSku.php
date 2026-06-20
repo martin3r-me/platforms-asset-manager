@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Platform\AssetManager\Concerns\TenantScopable;
 
 class AssetLicenseSku extends Model
@@ -31,13 +32,13 @@ class AssetLicenseSku extends Model
         'unit_price' => 'decimal:2',
     ];
 
-    public function team()
+    public function team(): BelongsTo
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);
     }
 
     /** Tenant (Kundenkontext), zu dem diese SKU gehört. */
-    public function tenant()
+    public function tenant(): BelongsTo
     {
         return $this->belongsTo(AssetTenant::class, 'tenant_id');
     }

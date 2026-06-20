@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Platform\AssetManager\Concerns\TenantScopable;
 
 class AssetDeviceSyncLog extends Model
@@ -32,13 +33,13 @@ class AssetDeviceSyncLog extends Model
         'completed_at' => 'datetime',
     ];
 
-    public function team()
+    public function team(): BelongsTo
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);
     }
 
     /** Tenant (Kundenkontext), für den dieser Sync-Lauf erfolgte. */
-    public function tenant()
+    public function tenant(): BelongsTo
     {
         return $this->belongsTo(AssetTenant::class, 'tenant_id');
     }

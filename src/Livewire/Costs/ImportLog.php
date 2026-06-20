@@ -5,6 +5,7 @@ namespace Platform\AssetManager\Livewire\Costs;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Models\AssetCostLine;
 
 /**
@@ -13,6 +14,7 @@ use Platform\AssetManager\Models\AssetCostLine;
  */
 class ImportLog extends Component
 {
+    use ResolvesCurrentTeam;
     use WithPagination;
 
     public string $filterSheet = '';
@@ -26,11 +28,6 @@ class ImportLog extends Component
 
     public function updatingFilterSheet(): void { $this->resetPage(); }
     public function updatingFilterBatch(): void { $this->resetPage(); }
-
-    protected function teamId(): int
-    {
-        return Auth::user()->currentTeam->id;
-    }
 
     public function render()
     {

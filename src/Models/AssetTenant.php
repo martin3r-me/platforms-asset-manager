@@ -3,6 +3,8 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Tenant = vom Team verwalteter Kundenkontext (siehe CONTEXT.md / docs/adr/0003).
@@ -23,13 +25,13 @@ class AssetTenant extends Model
         'is_default' => 'boolean',
     ];
 
-    public function team()
+    public function team(): BelongsTo
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);
     }
 
     /** Optionale Microsoft-/Intune-Anbindung dieses Tenants (0..1). */
-    public function connector()
+    public function connector(): HasOne
     {
         return $this->hasOne(AssetConnectorConfig::class, 'tenant_id');
     }

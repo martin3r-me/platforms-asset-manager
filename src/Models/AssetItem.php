@@ -3,6 +3,8 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\AssetManager\Concerns\TenantScopable;
 
@@ -40,28 +42,28 @@ class AssetItem extends Model
         'raw_data'       => 'array',
     ];
 
-    public function team()
+    public function team(): BelongsTo
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);
     }
 
     /** Tenant (Kundenkontext), zu dem dieses Asset gehört. */
-    public function tenant()
+    public function tenant(): BelongsTo
     {
         return $this->belongsTo(AssetTenant::class, 'tenant_id');
     }
 
-    public function category()
+    public function category(): BelongsTo
     {
         return $this->belongsTo(AssetCategory::class);
     }
 
-    public function assignee()
+    public function assignee(): BelongsTo
     {
         return $this->belongsTo(AssetEmployee::class, 'assignee_id');
     }
 
-    public function assignments()
+    public function assignments(): HasMany
     {
         return $this->hasMany(AssetAssignment::class)->orderByDesc('assigned_at');
     }

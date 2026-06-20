@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Platform\AssetManager\Concerns\TenantScopable;
 
 class AssetDeviceEvent extends Model
@@ -21,13 +22,13 @@ class AssetDeviceEvent extends Model
         'new_value',
     ];
 
-    public function device()
+    public function device(): BelongsTo
     {
         return $this->belongsTo(AssetDevice::class, 'asset_device_id');
     }
 
     /** Tenant (Kundenkontext), zu dem dieses Geräte-Event gehört. */
-    public function tenant()
+    public function tenant(): BelongsTo
     {
         return $this->belongsTo(AssetTenant::class, 'tenant_id');
     }

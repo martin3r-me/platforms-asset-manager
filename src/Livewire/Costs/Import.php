@@ -6,11 +6,13 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Platform\AssetManager\Concerns\AuthorizesTeamRole;
+use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Services\CostExcelImportService;
 use Platform\AssetManager\Services\CostResetService;
 
 class Import extends Component
 {
+    use ResolvesCurrentTeam;
     use WithFileUploads;
     use AuthorizesTeamRole;
 
@@ -20,11 +22,6 @@ class Import extends Component
     public ?string $error = null;
     public bool $wasDryRun = true;
     public bool $running = false;
-
-    protected function teamId(): int
-    {
-        return Auth::user()->currentTeam->id;
-    }
 
     /** owner/admin im aktiven Team? (analog AssetDevicePolicy) */
     protected function canManage(): bool

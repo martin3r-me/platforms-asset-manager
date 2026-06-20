@@ -4,11 +4,14 @@ namespace Platform\AssetManager\Livewire\Costs;
 
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Services\CostAggregationService;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class Allocation extends Component
 {
+    use ResolvesCurrentTeam;
+
     public string $period = 'monthly'; // monthly|quarterly
 
     protected $queryString = [
@@ -18,11 +21,6 @@ class Allocation extends Component
     public function setPeriod(string $period): void
     {
         $this->period = in_array($period, ['monthly', 'quarterly'], true) ? $period : 'monthly';
-    }
-
-    protected function teamId(): int
-    {
-        return Auth::user()->currentTeam->id;
     }
 
     public function exportCsv(CostAggregationService $service)

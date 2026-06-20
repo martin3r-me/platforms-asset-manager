@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Gespeicherte Tenant-Auswahl je (User × Team) — die Persistenz hinter dem Tenant-Selektor (M3).
@@ -20,7 +21,7 @@ class AssetTenantSelection extends Model
         'selected_tenant_id',
     ];
 
-    public function tenant()
+    public function tenant(): BelongsTo
     {
         return $this->belongsTo(AssetTenant::class, 'selected_tenant_id');
     }

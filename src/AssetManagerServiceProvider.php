@@ -64,6 +64,12 @@ class AssetManagerServiceProvider extends ServiceProvider
         Gate::policy(AssetDevice::class, AssetDevicePolicy::class);
         Gate::policy(AssetItem::class, AssetItemPolicy::class);
 
+        // Zentrale Schreibrechte-Ability (ADR 0004): jeder mutierende Pfad — UI UND MCP — verlangt
+        // einheitlich Owner/Admin des aktuellen Teams. Eine Wahrheitsquelle (TeamRole::isOwnerOrAdmin),
+        // die UI (Gate::authorize / canManage) und Tools (Gate::forUser($context->user)->allows(...))
+        // teilen, damit die Berechtigungsgrenze nicht vom Kanal abhängt.
+        Gate::define('asset-manager.manage', fn ($user) => \Platform\AssetManager\Support\TeamRole::isOwnerOrAdmin($user));
+
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
 
         $this->publishes([

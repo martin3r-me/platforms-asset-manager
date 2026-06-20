@@ -4,6 +4,7 @@ namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Log;
 
@@ -112,32 +113,32 @@ class AssetCostLine extends Model
             ->where(fn (Builder $q) => $q->whereNull('valid_to')->orWhereDate('valid_to', '>=', $day));
     }
 
-    public function team()
+    public function team(): BelongsTo
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);
     }
 
-    public function costType()
+    public function costType(): BelongsTo
     {
         return $this->belongsTo(AssetCostType::class, 'cost_type_id');
     }
 
-    public function vendor()
+    public function vendor(): BelongsTo
     {
         return $this->belongsTo(AssetVendor::class, 'vendor_id');
     }
 
-    public function costCenter()
+    public function costCenter(): BelongsTo
     {
         return $this->belongsTo(AssetCostCenter::class, 'cost_center_id');
     }
 
-    public function assignee()
+    public function assignee(): BelongsTo
     {
         return $this->belongsTo(AssetEmployee::class, 'assignee_id');
     }
 
-    public function assetItem()
+    public function assetItem(): BelongsTo
     {
         return $this->belongsTo(AssetItem::class, 'asset_item_id');
     }
