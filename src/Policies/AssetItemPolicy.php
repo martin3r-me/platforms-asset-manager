@@ -22,12 +22,15 @@ class AssetItemPolicy
 
     public function create(Authenticatable $user): bool
     {
-        return true;
+        // E1/ADR 0004: Schreibzugriffe (auch Asset-Anlage) erfordern Owner/Admin — dieselbe Regel
+        // wie delete() und die zentrale asset-manager.manage-Gate-Ability.
+        return $this->isTeamOwnerOrAdmin($user);
     }
 
     public function update(Authenticatable $user, AssetItem $item): bool
     {
-        return $item->team_id === $user->currentTeam?->id;
+        return $item->team_id === $user->currentTeam?->id
+            && $this->isTeamOwnerOrAdmin($user);
     }
 
     public function delete(Authenticatable $user, AssetItem $item): bool

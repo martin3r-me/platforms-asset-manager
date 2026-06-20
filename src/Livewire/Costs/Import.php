@@ -69,6 +69,12 @@ class Import extends Component
 
     protected function run(CostExcelImportService $service, bool $dryRun): void
     {
+        // Schreibrechte (ADR 0004): Import/Vorschau ist eine Verwaltungsaktion — nur Owner/Admin.
+        // Zentral in run(), deckt preview() (Dry-Run) und runImport() gleichermaßen. runImport()
+        // löscht via pruneStaleLines() Import-Cost-Lines hart und überschreibt Stammdaten — vorher
+        // war nur resetImport() gegated, dieser destruktivere Pfad nicht.
+        abort_unless($this->canManage(), 403);
+
         $this->error  = null;
         $this->result = null;
 

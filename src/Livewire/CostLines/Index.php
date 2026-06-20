@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Livewire\CostLines;
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -120,6 +121,8 @@ class Index extends Component
 
     public function save(CostBootstrapService $bootstrap): void
     {
+        Gate::authorize('asset-manager.manage');
+
         $teamId = $this->teamId();
 
         // FK-Refs team-scopen: eine Fremd-Team-Kostenart/-Kreditor wird als Validierungsfehler (422)
@@ -183,6 +186,8 @@ class Index extends Component
 
     public function delete(int $id): void
     {
+        Gate::authorize('asset-manager.manage');
+
         $line = AssetCostLine::where('team_id', $this->teamId())->findOrFail($id);
         $line->delete();
         // Wird gerade diese Zeile im rechten Panel bearbeitet → Editor schließen.
@@ -195,6 +200,8 @@ class Index extends Component
 
     public function toggleActive(int $id): void
     {
+        Gate::authorize('asset-manager.manage');
+
         $line = AssetCostLine::where('team_id', $this->teamId())->findOrFail($id);
         $line->update(['active' => !$line->active]);
     }

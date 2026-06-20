@@ -4,6 +4,7 @@ namespace Platform\AssetManager\Livewire\MasterData;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
@@ -183,6 +184,8 @@ class Index extends Component
 
     public function save(): void
     {
+        Gate::authorize('asset-manager.manage');
+
         // Leeren Select-Wert ('') zu null normalisieren, damit nullable|integer|exists greift
         // (ein '' würde sonst an der integer-Regel scheitern, obwohl „keine Gesellschaft" gültig ist).
         if (array_key_exists('company_id', $this->form) && $this->form['company_id'] === '') {
@@ -340,6 +343,8 @@ class Index extends Component
 
     public function delete(int $id): void
     {
+        Gate::authorize('asset-manager.manage');
+
         match ($this->active) {
             'companies'    => $this->deleteCompany($id),
             'cost-centers' => $this->deleteCostCenter($id),

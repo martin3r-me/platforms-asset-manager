@@ -4,6 +4,7 @@ namespace Platform\AssetManager\Livewire\Employees;
 
 use Livewire\Component;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetEmployee;
@@ -38,6 +39,8 @@ class Show extends Component
 
     public function save(): void
     {
+        Gate::authorize('asset-manager.manage');
+
         $this->validate([
             'displayName' => 'nullable|string|max:255',
             'email'       => 'nullable|email|max:255',

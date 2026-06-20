@@ -2,6 +2,7 @@
 
 namespace Platform\AssetManager\Tools\Employees;
 
+use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Services\CostBootstrapService;
@@ -57,6 +58,11 @@ class UpdateEmployeeTool implements ToolContract, ToolMetadataContract
             $teamId = $this->teamId($context);
             if (!$teamId) {
                 return ToolResult::error('MISSING_TEAM', 'Kein aktives Team im Kontext. Nutze core__context__GET / core__team__switch.');
+            }
+
+            // Schreibrechte (ADR 0004): kanal-übergreifend Owner/Admin — identische Grenze wie im UI.
+            if (!Gate::forUser($context->user)->allows('asset-manager.manage')) {
+                return ToolResult::error('ACCESS_DENIED', 'Diese Aktion erfordert die Rolle Owner oder Admin im Team.');
             }
 
             $query = AssetEmployee::where('team_id', $teamId);
