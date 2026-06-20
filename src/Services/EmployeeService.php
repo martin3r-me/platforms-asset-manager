@@ -49,38 +49,56 @@ class EmployeeService
      */
     public function backfillForTenant(int $teamId, int $tenantId): int
     {
+        // Bestehende Employees des Tenants EINMAL vorladen — statt je UPN ein exists() PLUS ein
+        // firstOrNew (~2 Queries je UPN in einer Schleife, die nach jedem Sync läuft).
+        $existing = AssetEmployee::where('tenant_id', $tenantId)
+            ->whereNotNull('user_principal_name')
+            ->get(['id', 'user_principal_name', 'display_name'])
+            ->keyBy('user_principal_name');
+
+        // Kandidaten (UPN → bester Anzeigename) aus Geräten + Lizenz-Zuweisungen dedupliziert sammeln.
+        // Erster nicht-leerer Name gewinnt (Geräte zuerst), damit eine UPN nur EINMAL angelegt wird.
+        $candidates = [];
+        $collect = function ($rows, string $nameField) use (&$candidates) {
+            foreach ($rows as $row) {
+                $upn = $row->user_principal_name;
+                if (!$upn) continue;
+                if (!array_key_exists($upn, $candidates) || empty($candidates[$upn])) {
+                    $candidates[$upn] = $row->{$nameField} ?: ($candidates[$upn] ?? null);
+                }
+            }
+        };
+
+        $collect(
+            AssetDevice::where('tenant_id', $tenantId)->whereNotNull('user_principal_name')
+                ->select('user_principal_name', 'user_display_name')->distinct()->get(),
+            'user_display_name'
+        );
+        $collect(
+            AssetUserLicense::where('tenant_id', $tenantId)->whereNotNull('user_principal_name')
+                ->select('user_principal_name', 'display_name')->distinct()->get(),
+            'display_name'
+        );
+
         $created = 0;
-
-        // UPNs + Names aus Devices
-        $deviceRows = AssetDevice::where('tenant_id', $tenantId)
-            ->whereNotNull('user_principal_name')
-            ->select('user_principal_name', 'user_display_name')
-            ->distinct()
-            ->get();
-
-        foreach ($deviceRows as $row) {
-            if (!$row->user_principal_name) continue;
-            $existed = AssetEmployee::where('tenant_id', $tenantId)
-                ->where('user_principal_name', $row->user_principal_name)
-                ->exists();
-            $this->findOrCreateByUpn($teamId, $tenantId, $row->user_principal_name, $row->user_display_name);
-            if (!$existed) $created++;
-        }
-
-        // UPNs + Names aus User-Licenses
-        $licenseRows = AssetUserLicense::where('tenant_id', $tenantId)
-            ->whereNotNull('user_principal_name')
-            ->select('user_principal_name', 'display_name')
-            ->distinct()
-            ->get();
-
-        foreach ($licenseRows as $row) {
-            if (!$row->user_principal_name) continue;
-            $existed = AssetEmployee::where('tenant_id', $tenantId)
-                ->where('user_principal_name', $row->user_principal_name)
-                ->exists();
-            $this->findOrCreateByUpn($teamId, $tenantId, $row->user_principal_name, $row->display_name);
-            if (!$existed) $created++;
+        foreach ($candidates as $upn => $displayName) {
+            $emp = $existing->get($upn);
+            if ($emp === null) {
+                // Neu anlegen (verhaltensgleich zu findOrCreateByUpn: source=derived, email=upn, aktiv).
+                AssetEmployee::create([
+                    'team_id'             => $teamId,
+                    'tenant_id'           => $tenantId,
+                    'user_principal_name' => $upn,
+                    'email'               => $upn,
+                    'display_name'        => $displayName,
+                    'is_active'           => true,
+                    'source'              => 'derived',
+                ]);
+                $created++;
+            } elseif ($displayName && empty($emp->display_name)) {
+                // Anzeigename nur ergänzen, wenn bisher leer (wie findOrCreateByUpn).
+                $emp->update(['display_name' => $displayName]);
+            }
         }
 
         return $created;

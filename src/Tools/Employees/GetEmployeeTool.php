@@ -95,8 +95,13 @@ class GetEmployeeTool implements ToolContract, ToolMetadataContract
                 'enrolled_at'      => $d->enrolled_at?->toIso8601String(),
             ])->values()->all();
 
+            // Items + Lizenzen je EINMAL laden (mit Eager-Loading) und für Anzeige UND Kostensumme
+            // wiederverwenden — vorher 2× items()/licenses() geladen + sku-N+1 je Lizenz.
+            $itemModels    = $emp->items()->with('category')->get();
+            $licenseModels = $emp->licenses()->with('sku')->get();
+
             // Inventar-Items (Drucker, Internet, Laptops …)
-            $items = $emp->items()->with('category')->get()->map(fn ($i) => [
+            $items = $itemModels->map(fn ($i) => [
                 'id'           => $i->id,
                 'name'         => $i->name,
                 'category'     => $i->category?->name,
@@ -106,7 +111,7 @@ class GetEmployeeTool implements ToolContract, ToolMetadataContract
             ])->values()->all();
 
             // Lizenzen
-            $licenses = $emp->licenses()->get()->map(fn ($l) => [
+            $licenses = $licenseModels->map(fn ($l) => [
                 'sku_part_number' => $l->sku_part_number,
                 'display_name'    => $l->display_name ?? $l->sku?->display_name,
                 'unit_price'      => $l->sku?->unit_price !== null ? (float) $l->sku->unit_price : null,
@@ -124,12 +129,13 @@ class GetEmployeeTool implements ToolContract, ToolMetadataContract
                 'monthly_amount' => (float) $c->monthly_amount,
             ])->values()->all();
 
-            // Monatskosten-Aufschlüsselung (konsistent zu topEmployees / Reports)
-            $itemsCost  = $emp->items()->get()->sum(fn ($i) => $i->monthlyCost());
+            // Monatskosten-Aufschlüsselung (konsistent zu topEmployees / Reports) — Items/Lizenzen aus den
+            // bereits geladenen Collections (keine zweite items()/licenses()-Query).
+            $itemsCost  = $itemModels->sum(fn ($i) => $i->monthlyCost());
             $deviceCost = (float) $agg->deviceCostRows($teamId)
                 ->where('upn', $emp->user_principal_name)->sum('amount');
             $skuPrices  = AssetLicenseSku::where('team_id', $teamId)->whereNotNull('unit_price')->pluck('unit_price', 'sku_id');
-            $licCost    = $emp->licenses()->get()->sum(fn ($l) => (float) ($skuPrices[$l->sku_id] ?? 0));
+            $licCost    = $licenseModels->sum(fn ($l) => (float) ($skuPrices[$l->sku_id] ?? 0));
             $clCost     = (float) AssetCostLine::active()->validOn(now())->where('team_id', $teamId)
                 ->where('assignee_id', $emp->id)
                 ->whereHas('costType', fn ($q) => $q->where('aggregation_source', AssetCostType::SOURCE_COST_LINE))

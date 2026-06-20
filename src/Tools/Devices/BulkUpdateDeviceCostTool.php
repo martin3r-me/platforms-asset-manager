@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetDevice;
+use Platform\AssetManager\Models\AssetDeviceModel;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolContract;
@@ -101,14 +102,20 @@ class BulkUpdateDeviceCostTool implements ToolContract, ToolMetadataContract
             $found   = $devices->pluck('id')->all();
             $missing = array_values(array_diff($ids, $found));
 
+            // Modell-Katalog EINMAL laden statt resolvedMonthlyCost() → deviceModel() je Gerät (N+1).
+            $modelByKey = [];
+            foreach (AssetDeviceModel::where('team_id', $teamId)->get() as $m) {
+                $modelByKey[AssetDeviceModel::normalizeKey($m->manufacturer, $m->model)] = $m;
+            }
+
             $results = [];
             $updated = 0;
             foreach ($devices as $d) {
-                $before = $d->resolvedMonthlyCost();
+                $before = $this->monthlyFromCatalog($d, $modelByKey);
                 foreach ($changes as $k => $v) {
                     $d->{$k} = $v;
                 }
-                $after = $d->resolvedMonthlyCost();
+                $after = $this->monthlyFromCatalog($d, $modelByKey);
                 if (!$dryRun) {
                     $d->save();
                 }
@@ -134,6 +141,26 @@ class BulkUpdateDeviceCostTool implements ToolContract, ToolMetadataContract
         } catch (\Throwable $e) {
             return ToolResult::error('EXECUTION_ERROR', 'Fehler beim Bulk-Update der Gerätekosten: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Aufgelöste Monatskosten (Override → Modell-Default) gegen den EINMAL vorgeladenen Katalog —
+     * identische Logik wie AssetDevice::resolvedMonthlyCost(), aber ohne Per-Gerät-deviceModel()-Query.
+     */
+    private function monthlyFromCatalog(AssetDevice $d, array $modelByKey): float
+    {
+        $own = AssetDevice::computeMonthlyFrom($d->monthly_cost, $d->purchase_price, $d->depreciation_months, $d->purchase_date);
+        if ($own !== null) {
+            return $own;
+        }
+        $model = $modelByKey[AssetDeviceModel::normalizeKey($d->manufacturer, $d->model)] ?? null;
+        if ($model) {
+            $fromModel = AssetDevice::computeMonthlyFrom($model->monthly_cost, $model->purchase_price, $model->depreciation_months, null);
+            if ($fromModel !== null) {
+                return $fromModel;
+            }
+        }
+        return 0.0;
     }
 
     public function getMetadata(): array

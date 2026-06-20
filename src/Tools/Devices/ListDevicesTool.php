@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Tools\Devices;
 
 use Platform\AssetManager\Models\AssetDevice;
+use Platform\AssetManager\Models\AssetDeviceModel;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolContract;
@@ -56,9 +57,17 @@ class ListDevicesTool implements ToolContract, ToolMetadataContract
 
             $result  = $this->applyStandardPaginationResult($query, $arguments);
 
-            $rows = $result['data']->map(function (AssetDevice $d) {
+            // Modell-Katalog EINMAL laden und nach normalisiertem (Hersteller|Modell)-Schlüssel indexieren —
+            // sonst löst deviceModel()/resolvedMonthlyCost() je Gerät den ganzen Katalog neu (N+1).
+            // Muster: InventoryService. Ergebnis identisch zur Per-Zeile-Auflösung.
+            $modelByKey = [];
+            foreach (AssetDeviceModel::where('team_id', $teamId)->get() as $m) {
+                $modelByKey[AssetDeviceModel::normalizeKey($m->manufacturer, $m->model)] = $m;
+            }
+
+            $rows = $result['data']->map(function (AssetDevice $d) use ($modelByKey) {
                 $own   = AssetDevice::computeMonthlyFrom($d->monthly_cost, $d->purchase_price, $d->depreciation_months, $d->purchase_date);
-                $model = $d->deviceModel();
+                $model = $modelByKey[AssetDeviceModel::normalizeKey($d->manufacturer, $d->model)] ?? null;
                 $fromModel = $model ? AssetDevice::computeMonthlyFrom($model->monthly_cost, $model->purchase_price, $model->depreciation_months, null) : null;
                 $source = $own !== null ? 'override' : ($fromModel !== null ? 'model' : 'none');
 
@@ -74,7 +83,7 @@ class ListDevicesTool implements ToolContract, ToolMetadataContract
                     'compliance_state'    => $d->compliance_state,
                     'user_principal_name' => $d->user_principal_name,
                     'assignee'            => $d->assignee?->name,
-                    'monthly_cost'        => $d->resolvedMonthlyCost(),
+                    'monthly_cost'        => round($own ?? $fromModel ?? 0.0, 2),
                     'cost_source'         => $source,
                     'cost_type'           => $d->costType?->name,
                     'cost_center'         => $d->costCenter?->label,

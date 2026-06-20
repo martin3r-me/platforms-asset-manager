@@ -7,6 +7,7 @@ use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceEvent;
 use Platform\AssetManager\Models\AssetDeviceModel;
 use Platform\AssetManager\Models\AssetDeviceSyncLog;
+use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Concerns\RunsTeamSync;
 use Platform\AssetManager\Services\EmployeeService;
 use Platform\AssetManager\Services\IntuneGraphService;
@@ -103,16 +104,31 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
             $updated   = 0;
             $intuneIds = [];
 
+            // N+1-Vermeidung: bestehende Geräte (inkl. soft-deleted), Modell-Schlüssel und Employee-UPNs
+            // des Tenants EINMAL vorladen statt je Gerät zu queryen. ShouldBeUnique pro Connector schließt
+            // nebenläufige Syncs desselben Tenants aus → der vorgeladene Stand bleibt während des Laufs gültig.
+            $existingByIntuneId = AssetDevice::withTrashed()
+                ->where('tenant_id', $this->tenantId)
+                ->get()
+                ->keyBy('intune_id');
+
+            $knownModelKeys = [];
+            foreach (AssetDeviceModel::where('team_id', $this->teamId)->get(['manufacturer', 'model']) as $m) {
+                $knownModelKeys[($m->manufacturer ?? '') . "\0" . ($m->model ?? '')] = true;
+            }
+
+            $knownUpns = AssetEmployee::where('tenant_id', $this->tenantId)
+                ->whereNotNull('user_principal_name')
+                ->pluck('user_principal_name')
+                ->flip();
+
             foreach ($devices as $device) {
                 $intuneIds[] = $device['id'];
 
                 // withTrashed: ein zuvor verschwundenes (soft-deleted) Gerät wird restored statt neu
                 // angelegt — so bleiben seine Kosten-Overrides (monthly_cost, cost_type_id …) erhalten.
                 // Lookup strikt pro Tenant (Multi-Tenant: intune_id ist nur innerhalb eines Tenants eindeutig).
-                $existing = AssetDevice::withTrashed()
-                    ->where('tenant_id', $this->tenantId)
-                    ->where('intune_id', $device['id'])
-                    ->first();
+                $existing = $existingByIntuneId->get($device['id']);
 
                 $data = $this->mapDevice($device);
 
@@ -137,16 +153,23 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                 }
 
                 // Geräte-Modell-Katalog pflegen — team-weit (Teil des Kostenmodells, NICHT tenant-skopiert).
+                // Nur anlegen, wenn der (exakte) Schlüssel noch nicht bekannt ist → kein firstOrCreate-SELECT
+                // je Gerät. Neu angelegte Schlüssel sofort merken (mehrere Geräte desselben Modells im Lauf).
                 if (!empty($data['manufacturer']) || !empty($data['model'])) {
-                    AssetDeviceModel::firstOrCreate([
-                        'team_id'      => $this->teamId,
-                        'manufacturer' => $data['manufacturer'],
-                        'model'        => $data['model'],
-                    ]);
+                    $modelKey = ($data['manufacturer'] ?? '') . "\0" . ($data['model'] ?? '');
+                    if (!isset($knownModelKeys[$modelKey])) {
+                        AssetDeviceModel::firstOrCreate([
+                            'team_id'      => $this->teamId,
+                            'manufacturer' => $data['manufacturer'],
+                            'model'        => $data['model'],
+                        ]);
+                        $knownModelKeys[$modelKey] = true;
+                    }
                 }
 
-                // Employee aus UPN ableiten (Intune liefert userPrincipalName)
-                if (!empty($device['userPrincipalName'])) {
+                // Employee aus UPN ableiten (Intune liefert userPrincipalName). Nur für noch unbekannte UPNs
+                // inline anlegen — bestehende werden vom backfillForTenant-Safety-Net (unten) nachgepflegt.
+                if (!empty($device['userPrincipalName']) && !$knownUpns->has($device['userPrincipalName'])) {
                     $employeeService->findOrCreateByUpn(
                         $this->teamId,
                         $this->tenantId,
@@ -154,6 +177,7 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                         $device['userDisplayName'] ?? null,
                         'derived'
                     );
+                    $knownUpns->put($device['userPrincipalName'], true);
                 }
             }
 

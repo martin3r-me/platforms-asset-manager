@@ -18,6 +18,15 @@ use Platform\AssetManager\Models\AssetUserLicense;
 class CostAggregationService
 {
     /**
+     * Per-Instanz-Memoization von normalizedLines()/deviceCostRows() je teamId. Beide sind reine
+     * Funktionen von (teamId, DB-Stand) und werden pro Dashboard-/Pivot-Render 3–5× aufgerufen (über
+     * totalMonthly/byCostCenter/costCenterByType). Der Service ist transient (kein Singleton) → der
+     * Cache lebt nur für die Render-Dauer einer Instanz → korrektheitsneutral (keine Mid-Request-Mutation).
+     */
+    protected array $normalizedLinesCache = [];
+    protected array $deviceCostRowsCache  = [];
+
+    /**
      * Gesamt-Monatskosten (Hardware AfA + Geräte + MS-Lizenzen + sonstige Kostenpositionen).
      *
      * KANONISCH: leitet die Spend-Buckets aus DERSELBEN Postenliste wie der Pivot ab (normalizedLines),
@@ -354,6 +363,10 @@ class CostAggregationService
      */
     public function normalizedLines(int $teamId): Collection
     {
+        if (isset($this->normalizedLinesCache[$teamId])) {
+            return $this->normalizedLinesCache[$teamId];
+        }
+
         $types = AssetCostType::where('team_id', $teamId)->get()->keyBy('id');
         $rows  = collect();
 
@@ -429,7 +442,7 @@ class CostAggregationService
             'amount'         => $r['amount'],
         ]));
 
-        return $rows;
+        return $this->normalizedLinesCache[$teamId] = $rows;
     }
 
     /**
@@ -446,13 +459,17 @@ class CostAggregationService
      */
     public function deviceCostRows(int $teamId): Collection
     {
+        if (isset($this->deviceCostRowsCache[$teamId])) {
+            return $this->deviceCostRowsCache[$teamId];
+        }
+
         $deviceTypeIds = AssetCostType::where('team_id', $teamId)
             ->where('aggregation_source', AssetCostType::SOURCE_ASSET_DEVICE)
             ->pluck('id')
             ->map(fn($id) => (int) $id);
 
         if ($deviceTypeIds->isEmpty()) {
-            return collect();
+            return $this->deviceCostRowsCache[$teamId] = collect();
         }
 
         $ccByUpn = AssetEmployee::where('team_id', $teamId)->pluck('cost_center_id', 'user_principal_name');
@@ -474,7 +491,7 @@ class CostAggregationService
                     ?? $group->sortBy('id')->first();
             });
 
-        return AssetDevice::where('team_id', $teamId)->get()
+        return $this->deviceCostRowsCache[$teamId] = AssetDevice::where('team_id', $teamId)->get()
             ->map(function ($d) use ($deviceTypeIds, $models, $ccByUpn) {
                 $model  = $models[$this->deviceModelKey($d->manufacturer, $d->model)] ?? null;
                 $typeId = $d->cost_type_id ?? $model?->cost_type_id;
