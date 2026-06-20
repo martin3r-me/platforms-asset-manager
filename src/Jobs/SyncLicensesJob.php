@@ -26,6 +26,10 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
     public int $timeout = 300;
     public int $tries   = 1;
 
+    /** Eindeutigkeits-Sperre nach 10 Min automatisch freigeben (> $timeout=300s). Verhindert, dass eine
+     *  geleakte Sperre — etwa nach einem Worker-Neustart mitten im Job — künftige Dispatches stillschweigend verschluckt. */
+    public int $uniqueFor = 600;
+
     /** Team-/Tenant-Kontext des Connectors — in handle() gesetzt (nicht serialisiert). */
     protected ?int $teamId   = null;
     protected ?int $tenantId = null;

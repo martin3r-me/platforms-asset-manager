@@ -27,6 +27,11 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
     public int $timeout = 300;
     public int $tries   = 1;
 
+    /** Eindeutigkeits-Sperre nach 10 Min automatisch freigeben (> $timeout=300s, damit ein laufender
+     *  Job nie vorzeitig dedupliziert wird). Verhindert, dass eine geleakte Sperre — etwa nach einem
+     *  Worker-Neustart/Deploy mitten im Job — künftige Dispatches dauerhaft stillschweigend verschluckt. */
+    public int $uniqueFor = 600;
+
     /** Team-/Tenant-Kontext des Connectors — in handle() gesetzt, von den Helfern genutzt (nicht serialisiert). */
     protected ?int $teamId   = null;
     protected ?int $tenantId = null;
@@ -218,8 +223,8 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
             'manufacturer'        => $d['manufacturer'] ?? null,
             'model'               => $d['model'] ?? null,
             'serial_number'       => $d['serialNumber'] ?? null,
-            'enrolled_at'         => isset($d['enrolledDateTime']) ? \Carbon\Carbon::parse($d['enrolledDateTime']) : null,
-            'last_check_in_at'    => isset($d['lastSyncDateTime']) ? \Carbon\Carbon::parse($d['lastSyncDateTime']) : null,
+            'enrolled_at'         => $this->graphDateTime($d['enrolledDateTime'] ?? null),
+            'last_check_in_at'    => $this->graphDateTime($d['lastSyncDateTime'] ?? null),
             'is_encrypted'          => $d['isEncrypted'] ?? null,
             'enrollment_type'       => $d['deviceEnrollmentType'] ?? null,
             'free_storage_bytes'    => $d['freeStorageSpaceInBytes'] ?? null,
@@ -227,6 +232,27 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
             'physical_memory_bytes' => $d['physicalMemoryInBytes'] ?? null,
             'raw_data'            => $d,
         ];
+    }
+
+    /**
+     * Microsoft Graph liefert für „nie gesetzt" das Sentinel-Datum 0001-01-01T00:00:00Z
+     * (z. B. lastSyncDateTime bei nie eingecheckten Geräten). Eine MySQL-TIMESTAMP-Spalte
+     * (gültig 1970–2038) lehnt das mit Fehler 1292 ab und würde den GANZEN Sync sprengen.
+     * Solche Sentinel-/Vor-Epoch-Werte sowie unparsbare Strings daher zu NULL normalisieren.
+     */
+    protected function graphDateTime(?string $value): ?\Carbon\Carbon
+    {
+        if (empty($value)) {
+            return null;
+        }
+
+        try {
+            $dt = \Carbon\Carbon::parse($value);
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        return $dt->year < 1970 ? null : $dt;
     }
 
     /**
