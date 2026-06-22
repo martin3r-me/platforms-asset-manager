@@ -31,7 +31,8 @@ class OverviewTool implements ToolContract, ToolMetadataContract
     {
         return 'GET /asset-manager/overview - Kompaktes Dashboard für das aktive Team: monatliche '
             . 'Gesamtkosten (Hardware/Lizenzen/Kostenpositionen/gesamt), Mengengerüst (Mitarbeiter, '
-            . 'Intune-Geräte, Lizenz-SKUs, Inventar-Items, Kostenpositionen), die teuersten Mitarbeiter '
+            . 'Intune-Geräte, Geräte mit ablaufender Garantie/Leasing, Lizenz-SKUs, Inventar-Items, '
+            . 'Kostenpositionen), die teuersten Mitarbeiter '
             . 'sowie Anomalien (Pool-Hardware, ungenutzte Lizenzen, Hardware bei inaktiven Mitarbeitern). '
             . 'Idealer Startpunkt, um den Zustand des Asset-Managers zu erfassen.';
     }
@@ -53,10 +54,21 @@ class OverviewTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('MISSING_TEAM', 'Kein aktives Team im Kontext. Nutze core__context__GET / core__team__switch.');
             }
 
+            // Geräte mit in <= EXPIRY_SOON_DAYS ablaufender (oder bereits abgelaufener) Garantie/Leasing —
+            // IT-Lifecycle-Kennzahl, daher Teil des immer sichtbaren Mengengerüsts (nicht der controlling-
+            // gateten Anomalien). Gleiche Logik wie die Dashboard-Kachel „Garantie/Leasing läuft ab".
+            $expiringThreshold = now()->addDays(AssetDevice::EXPIRY_SOON_DAYS);
+            $expiringDevices = AssetDevice::where('team_id', $teamId)
+                ->where(function ($q) use ($expiringThreshold) {
+                    $q->where(fn ($w) => $w->whereNotNull('warranty_until')->where('warranty_until', '<=', $expiringThreshold))
+                      ->orWhere(fn ($w) => $w->whereNotNull('lease_until')->where('lease_until', '<=', $expiringThreshold));
+                })->count();
+
             $counts = [
                 'employees'        => AssetEmployee::where('team_id', $teamId)->count(),
                 'employees_active' => AssetEmployee::where('team_id', $teamId)->where('is_active', true)->count(),
                 'devices'          => AssetDevice::where('team_id', $teamId)->count(),
+                'expiring_devices' => $expiringDevices,
                 'license_skus'     => AssetLicenseSku::where('team_id', $teamId)->count(),
                 'items'            => AssetItem::where('team_id', $teamId)->count(),
                 'cost_lines'       => AssetCostLine::where('team_id', $teamId)->count(),
