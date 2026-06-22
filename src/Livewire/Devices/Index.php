@@ -223,7 +223,20 @@ class Index extends Component
         $teamId  = Auth::user()->currentTeam->id;
         $devices = AssetDevice::where('team_id', $teamId)->forTenant($this->selectedTenantId)->whereIn('id', $this->selected)->get();
         foreach ($devices as $device) {
+            $oldStatus = $device->lifecycle_status;
+            if ($oldStatus === $this->bulkLifecycle) {
+                continue; // kein Wechsel → kein Event
+            }
             $device->update(['lifecycle_status' => $this->bulkLifecycle]);
+            // Audit (Track B 2a): Status-Wechsel je Gerät mit Akteur festhalten.
+            AssetDeviceEvent::record(
+                $device,
+                'lifecycle_changed',
+                'Lifecycle-Status per Sammelaktion geändert',
+                AssetDevice::lifecycleLabelFor($oldStatus),
+                AssetDevice::lifecycleLabelFor($this->bulkLifecycle),
+                Auth::id(),
+            );
         }
 
         $this->bulkResult    = $devices->count() . ' Gerät(e) auf Lifecycle "' . AssetDevice::lifecycleLabelFor($this->bulkLifecycle) . '" gesetzt.';

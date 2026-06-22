@@ -147,7 +147,9 @@
                         @if($ev->old_value !== null || $ev->new_value !== null)
                             <div class="text-[10px] text-[var(--ui-muted)] break-words pl-3">{{ $ev->old_value ?: '—' }} → {{ $ev->new_value ?: '—' }}</div>
                         @endif
-                        <div class="text-[10px] text-[var(--ui-muted)] pl-3 mt-0.5">{{ $ev->created_at?->diffForHumans() }}</div>
+                        <div class="text-[10px] text-[var(--ui-muted)] pl-3 mt-0.5">
+                            {{ $ev->created_at?->diffForHumans() }}@if($ev->actor) · {{ $ev->actor->name }}@endif
+                        </div>
                     </div>
                 @empty
                     <div class="p-3 text-center text-[11px] text-[var(--ui-muted)]">Noch keine Änderungen erfasst.</div>

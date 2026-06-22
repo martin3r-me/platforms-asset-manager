@@ -188,6 +188,8 @@ class Show extends Component
             'lLocation'  => 'nullable|string|max:255',
         ]);
 
+        $oldStatus = $this->device->lifecycle_status;
+
         $this->device->update([
             'lifecycle_status' => $this->lStatus ?: null,
             'warranty_until'   => $this->lWarranty ?: null,
@@ -198,6 +200,21 @@ class Show extends Component
             'location'         => $this->lLocation ?: null,
         ]);
         $this->device->refresh();
+
+        // Audit (Track B 2a): Status-Wechsel mit Akteur festhalten — Intune liefert den Lifecycle nicht,
+        // er wird hier manuell gepflegt, also ist „wer/wann" sonst nirgends nachvollziehbar.
+        $newStatus = $this->device->lifecycle_status;
+        if ($oldStatus !== $newStatus) {
+            AssetDeviceEvent::record(
+                $this->device,
+                'lifecycle_changed',
+                'Lifecycle-Status geändert',
+                AssetDevice::lifecycleLabelFor($oldStatus),
+                AssetDevice::lifecycleLabelFor($newStatus),
+                Auth::id(),
+            );
+        }
+
         $this->editingLifecycle = false;
         $this->lifecycleFlash = 'Lifecycle gespeichert.';
     }
@@ -212,6 +229,7 @@ class Show extends Component
             ->get();
 
         $events = AssetDeviceEvent::where('asset_device_id', $this->device->id)
+            ->with('actor')
             ->orderByDesc('created_at')
             ->limit(20)
             ->get();
