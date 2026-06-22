@@ -100,6 +100,37 @@ class AssetDevice extends Model
         return self::LIFECYCLE_LABELS[$status] ?? '—';
     }
 
+    /**
+     * Lifecycle-Status, die ein Gerät bewusst end-of-life setzen → vor dem Intune-Reconcile-Delete
+     * geschützt (ADR 0007): das Gerät bleibt als getrackter Inventar-Datensatz erhalten, auch wenn es
+     * aus Intune verschwindet. Nicht-terminale (in_use/spare/repair) und NULL folgen der Intune-Präsenz.
+     */
+    public const TERMINAL_LIFECYCLE = ['retired', 'lost', 'defect'];
+
+    /** Bekannte Schrott-/Platzhalter-Seriennummern (uppercased), die NICHT als Identität taugen. */
+    protected const SERIAL_JUNK = [
+        '0', '00000000', '000000000', '0000000000', 'TO BE FILLED BY O.E.M.',
+        'SYSTEM SERIAL NUMBER', 'DEFAULT STRING', 'NONE', 'N/A', 'NOT APPLICABLE',
+        'NOT SPECIFIED', 'O.E.M.', 'OEM', 'SERIAL', 'XXXXXXX', 'UNKNOWN',
+    ];
+
+    /**
+     * Normalisiert eine Seriennummer für die serial-first-Identität (ADR 0006): trim + uppercase.
+     * Gibt null für leere oder bekannte Schrott-Platzhalter zurück → der Caller fällt dann auf die
+     * (flüchtige) intune_id zurück. Stil analog {@see AssetDeviceModel::normalizeKey()}.
+     */
+    public static function normalizeSerial(?string $serial): ?string
+    {
+        if ($serial === null) {
+            return null;
+        }
+        $s = strtoupper(trim($serial));
+        if ($s === '' || in_array($s, self::SERIAL_JUNK, true)) {
+            return null;
+        }
+        return $s;
+    }
+
     public function team(): BelongsTo
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);

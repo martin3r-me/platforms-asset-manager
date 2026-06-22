@@ -165,4 +165,40 @@ class GraphReconcileDeleteTest extends TestCase
         $this->assertSame(1, AssetDevice::withTrashed()
             ->where('tenant_id', $tenant->id)->where('intune_id', 'roundtrip-1')->count());
     }
+
+    /**
+     * ADR 0007: Geräte mit terminalem Lifecycle (retired/lost/defect) sind vom Reconcile-Delete
+     * ausgenommen, auch wenn sie aus dem Intune-Payload verschwinden. NULL und nicht-terminale Status
+     * (in_use/spare/repair) folgen weiter der Präsenz — NULL muss dafür explizit löschbar bleiben
+     * (ein nacktes whereNotIn schlösse NULL-Zeilen aus → reconcile liefe leer). Identisch zur Basis-Query
+     * in SyncIntuneDevicesJob::handle().
+     */
+    public function test_terminal_lifecycle_devices_are_pinned_against_reconcile(): void
+    {
+        $team   = Team::factory()->create();
+        $tenant = AssetTenant::factory()->default()->create(['team_id' => $team->id]);
+
+        // Keines dieser Geräte ist im aktuellen Payload (nur 'keep' ist im Keyset):
+        $retired  = AssetDevice::factory()->create(['team_id' => $team->id, 'tenant_id' => $tenant->id, 'intune_id' => 'g-retired', 'lifecycle_status' => 'retired']);
+        $lost     = AssetDevice::factory()->create(['team_id' => $team->id, 'tenant_id' => $tenant->id, 'intune_id' => 'g-lost',    'lifecycle_status' => 'lost']);
+        $defect   = AssetDevice::factory()->create(['team_id' => $team->id, 'tenant_id' => $tenant->id, 'intune_id' => 'g-defect',  'lifecycle_status' => 'defect']);
+        $inUse    = AssetDevice::factory()->create(['team_id' => $team->id, 'tenant_id' => $tenant->id, 'intune_id' => 'g-inuse',   'lifecycle_status' => 'in_use']);
+        $noStatus = AssetDevice::factory()->create(['team_id' => $team->id, 'tenant_id' => $tenant->id, 'intune_id' => 'g-null',    'lifecycle_status' => null]);
+        AssetDevice::factory()->create(['team_id' => $team->id, 'tenant_id' => $tenant->id, 'intune_id' => 'keep']); // Keyset nicht leer
+
+        $removed = $this->reconciler()->run(
+            fn () => AssetDevice::where('tenant_id', $tenant->id)
+                ->where(fn ($q) => $q->whereNull('lifecycle_status')
+                                     ->orWhereNotIn('lifecycle_status', AssetDevice::TERMINAL_LIFECYCLE)),
+            'intune_id',
+            ['keep']
+        );
+
+        $this->assertSame(2, $removed, 'Nur in_use + NULL (nicht-terminal) werden entfernt.');
+        $this->assertNotNull(AssetDevice::find($retired->id), 'retired bleibt (gepinnt).');
+        $this->assertNotNull(AssetDevice::find($lost->id), 'lost bleibt (gepinnt).');
+        $this->assertNotNull(AssetDevice::find($defect->id), 'defect bleibt (gepinnt).');
+        $this->assertNull(AssetDevice::find($inUse->id), 'in_use wird entfernt.');
+        $this->assertNull(AssetDevice::find($noStatus->id), 'NULL-Lifecycle wird entfernt.');
+    }
 }

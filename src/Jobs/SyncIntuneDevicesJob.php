@@ -107,10 +107,21 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
             // N+1-Vermeidung: bestehende Geräte (inkl. soft-deleted), Modell-Schlüssel und Employee-UPNs
             // des Tenants EINMAL vorladen statt je Gerät zu queryen. ShouldBeUnique pro Connector schließt
             // nebenläufige Syncs desselben Tenants aus → der vorgeladene Stand bleibt während des Laufs gültig.
-            $existingByIntuneId = AssetDevice::withTrashed()
+            $existingDevices = AssetDevice::withTrashed()
                 ->where('tenant_id', $this->tenantId)
-                ->get()
-                ->keyBy('intune_id');
+                ->get();
+            $existingByIntuneId = $existingDevices->keyBy('intune_id');
+
+            // Serial-first-Identität (ADR 0006): zweiter Lookup über die normalisierte Seriennummer, damit ein
+            // plattgemachtes/neu eingebundenes Gerät (neue intune_id, gleiche Serial) AKTUALISIERT statt neu
+            // angelegt wird. Bei (Alt-)Duplikaten gewinnt deterministisch die niedrigste id.
+            $existingBySerial = [];
+            foreach ($existingDevices->sortBy('id') as $d) {
+                $key = AssetDevice::normalizeSerial($d->serial_number);
+                if ($key !== null && !isset($existingBySerial[$key])) {
+                    $existingBySerial[$key] = $d;
+                }
+            }
 
             $knownModelKeys = [];
             foreach (AssetDeviceModel::where('team_id', $this->teamId)->get(['manufacturer', 'model']) as $m) {
@@ -125,21 +136,39 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
             foreach ($devices as $device) {
                 $intuneIds[] = $device['id'];
 
-                // withTrashed: ein zuvor verschwundenes (soft-deleted) Gerät wird restored statt neu
-                // angelegt — so bleiben seine Kosten-Overrides (monthly_cost, cost_type_id …) erhalten.
-                // Lookup strikt pro Tenant (Multi-Tenant: intune_id ist nur innerhalb eines Tenants eindeutig).
-                $existing = $existingByIntuneId->get($device['id']);
-
                 $data = $this->mapDevice($device);
+
+                // Identität (ADR 0006): erst exakter Enrollment-Treffer (Fast-Path, intune_id ist je Tenant
+                // eindeutig). Kein Treffer + brauchbare Serial → dasselbe PHYSISCHE Gerät unter neuer
+                // intune_id (Wipe/Re-Enrollment/Nutzerwechsel). withTrashed: ein zuvor verschwundenes
+                // (soft-deleted) Gerät wird restored statt neu angelegt — Kosten-Overrides bleiben erhalten.
+                $existing        = $existingByIntuneId->get($device['id']);
+                $matchedBySerial = false;
+                if (!$existing) {
+                    $serial = AssetDevice::normalizeSerial($device['serialNumber'] ?? null);
+                    if ($serial !== null && isset($existingBySerial[$serial])) {
+                        $existing        = $existingBySerial[$serial];
+                        $matchedBySerial = true;
+                    }
+                }
 
                 if ($existing) {
                     if ($existing->trashed()) {
                         $existing->restore();
                     }
+                    // Serial-Treffer mit abweichender intune_id → id auf DERSELBEN Zeile rotieren (die alte
+                    // Enrollment-id existiert danach nirgends mehr; (tenant_id,intune_id) bleibt eindeutig).
+                    if ($matchedBySerial && $existing->intune_id !== $device['id']) {
+                        $this->recordEvent($existing, 'reenrolled', 'Neu eingebunden – Intune-ID gewechselt', $existing->intune_id, $device['id']);
+                        $data['intune_id'] = $device['id'];
+                    }
                     // VOR dem update(): $existing trägt noch die alten Werte → Verlaufs-Diff möglich.
                     $this->recordChangeEvents($existing, $data);
                     $existing->update($data);
                     $updated++;
+                    // Aktualisierten Datensatz unter der (ggf. neuen) intune_id im Lookup halten (Defensive
+                    // gegen mehrere eingehende Geräte, die auf dieselbe Zeile zeigen würden).
+                    $existingByIntuneId->put($existing->intune_id, $existing);
                 } else {
                     $created = AssetDevice::create(array_merge($data, [
                         'team_id'         => $this->teamId,
@@ -150,6 +179,13 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                     ]));
                     $this->recordEvent($created, 'created', 'Gerät erstmals aus Intune erfasst');
                     $added++;
+                    // Neuen Datensatz in beide Lookups aufnehmen — sonst träfe ein zweites Gerät mit
+                    // derselben Serial im selben Lauf erneut den else-Zweig und legte ein Duplikat an.
+                    $existingByIntuneId->put($created->intune_id, $created);
+                    $newSerial = AssetDevice::normalizeSerial($created->serial_number);
+                    if ($newSerial !== null && !isset($existingBySerial[$newSerial])) {
+                        $existingBySerial[$newSerial] = $created;
+                    }
                 }
 
                 // Geräte-Modell-Katalog pflegen — team-weit (Teil des Kostenmodells, NICHT tenant-skopiert).
@@ -192,8 +228,14 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                 // Array ist syntaktisch valide, würde aber whereNotIn('intune_id', []) zu „alle Zeilen"
                 // machen → Totalverlust beim ersten Tenant-Glitch. Dann nichts entfernen (removed=0).
                 // Scope strikt pro Tenant — kein Kreuz-Löschen zwischen Tenants desselben Teams.
+                // Lifecycle-Pin (ADR 0007): terminal gesetzte Geräte (retired/lost/defect) NICHT soft-löschen,
+                // auch wenn sie aus Intune verschwinden — sie bleiben getrackter Inventar-Datensatz. NULL und
+                // nicht-terminale Status folgen weiter der Intune-Präsenz; NULL muss dafür explizit
+                // eingeschlossen werden (ein nacktes whereNotIn schlösse NULL-Zeilen aus → reconcile liefe leer).
                 $removed = $this->reconcileDelete(
-                    fn () => AssetDevice::where('tenant_id', $this->tenantId),
+                    fn () => AssetDevice::where('tenant_id', $this->tenantId)
+                        ->where(fn ($q) => $q->whereNull('lifecycle_status')
+                                             ->orWhereNotIn('lifecycle_status', AssetDevice::TERMINAL_LIFECYCLE)),
                     'intune_id',
                     $intuneIds
                 );

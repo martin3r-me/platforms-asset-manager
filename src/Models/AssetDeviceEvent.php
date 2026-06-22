@@ -40,6 +40,7 @@ class AssetDeviceEvent extends Model
             'owner_changed'      => 'Besitzer geändert',
             'compliance_changed' => 'Compliance geändert',
             'os_changed'         => 'OS aktualisiert',
+            'reenrolled'         => 'Neu eingebunden',
             default              => $this->description ?: $this->event_type,
         };
     }
@@ -52,6 +53,7 @@ class AssetDeviceEvent extends Model
             'owner_changed'      => 'indigo',
             'compliance_changed' => 'amber',
             'os_changed'         => 'emerald',
+            'reenrolled'         => 'indigo',
             default              => 'gray',
         };
     }
