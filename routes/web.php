@@ -24,6 +24,8 @@ use Platform\AssetManager\Livewire\MasterData\Index as MasterDataIndex;
 use Platform\AssetManager\Livewire\DeviceModels\Index as DeviceModelsIndex;
 use Platform\AssetManager\Livewire\Printers\Index as PrintersIndex;
 use Platform\AssetManager\Livewire\Internet\Index as InternetIndex;
+use Platform\AssetManager\Livewire\Settings\Index as SettingsIndex;
+use Platform\AssetManager\Http\Middleware\EnsureControllingEnabled;
 
 Route::get('/', Dashboard::class)->name('asset-manager.dashboard');
 
@@ -49,23 +51,30 @@ Route::get('/licenses/{sku}', LicensesShow::class)->name('asset-manager.licenses
 Route::get('/printers', PrintersIndex::class)->name('asset-manager.printers.index');
 Route::get('/internet', InternetIndex::class)->name('asset-manager.internet.index');
 
-Route::get('/costs', CostsDashboard::class)->name('asset-manager.costs');
-Route::get('/costs/allocation', CostsAllocation::class)->name('asset-manager.costs.allocation');
-Route::get('/cost-lines', CostLinesIndex::class)->name('asset-manager.cost-lines.index');
-Route::get('/reports/device-models', DeviceModelsReport::class)->name('asset-manager.reports.device-models');
-Route::get('/costs/import', CostsImport::class)->name('asset-manager.costs.import');
-Route::get('/costs/import-log', CostsImportLog::class)->name('asset-manager.costs.import-log');
+// Controlling-Schicht (per Team abschaltbar, ADR 0008): Auswertungen, Stammdaten, Kosten-Import.
+// EnsureControllingEnabled leitet bei deaktiviertem Controlling auf das Dashboard um (statt 404),
+// damit alte Bookmarks/route()-Aufrufe nicht ins Leere laufen.
+Route::middleware(EnsureControllingEnabled::class)->group(function () {
+    Route::get('/costs', CostsDashboard::class)->name('asset-manager.costs');
+    Route::get('/costs/allocation', CostsAllocation::class)->name('asset-manager.costs.allocation');
+    Route::get('/cost-lines', CostLinesIndex::class)->name('asset-manager.cost-lines.index');
+    Route::get('/reports/device-models', DeviceModelsReport::class)->name('asset-manager.reports.device-models');
+    Route::get('/costs/import', CostsImport::class)->name('asset-manager.costs.import');
+    Route::get('/costs/import-log', CostsImportLog::class)->name('asset-manager.costs.import-log');
 
-// Stammdaten: alle vier Bereiche auf EINER Seite
-Route::get('/master-data', MasterDataIndex::class)->name('asset-manager.master-data.index');
+    // Stammdaten: alle vier Bereiche auf EINER Seite
+    Route::get('/master-data', MasterDataIndex::class)->name('asset-manager.master-data.index');
 
-// Alte Einzel-Routen → Weiterleitung auf die kombinierte Seite (öffnet den passenden Bereich via ?bereich=).
-// Namen bleiben erhalten, damit bestehende route()-Aufrufe/Bookmarks weiter funktionieren.
-Route::get('/companies',    fn () => redirect(route('asset-manager.master-data.index', ['bereich' => 'companies'])))->name('asset-manager.companies.index');
-Route::get('/cost-centers', fn () => redirect(route('asset-manager.master-data.index', ['bereich' => 'cost-centers'])))->name('asset-manager.cost-centers.index');
-Route::get('/cost-types',   fn () => redirect(route('asset-manager.master-data.index', ['bereich' => 'cost-types'])))->name('asset-manager.cost-types.index');
-Route::get('/vendors',      fn () => redirect(route('asset-manager.master-data.index', ['bereich' => 'vendors'])))->name('asset-manager.vendors.index');
+    // Alte Einzel-Routen → Weiterleitung auf die kombinierte Seite (öffnet den passenden Bereich via ?bereich=).
+    // Namen bleiben erhalten, damit bestehende route()-Aufrufe/Bookmarks weiter funktionieren.
+    Route::get('/companies',    fn () => redirect(route('asset-manager.master-data.index', ['bereich' => 'companies'])))->name('asset-manager.companies.index');
+    Route::get('/cost-centers', fn () => redirect(route('asset-manager.master-data.index', ['bereich' => 'cost-centers'])))->name('asset-manager.cost-centers.index');
+    Route::get('/cost-types',   fn () => redirect(route('asset-manager.master-data.index', ['bereich' => 'cost-types'])))->name('asset-manager.cost-types.index');
+    Route::get('/vendors',      fn () => redirect(route('asset-manager.master-data.index', ['bereich' => 'vendors'])))->name('asset-manager.vendors.index');
+});
 
+// Geräte-Modelle bleibt IT-Kern (Hardware-Katalog) — nur die Kosten-Spalten werden in der View
+// bei deaktiviertem Controlling ausgeblendet (ADR 0008). Daher NICHT in der Controlling-Gruppe.
 Route::get('/device-models', DeviceModelsIndex::class)->name('asset-manager.device-models.index');
 
 // Konnektoren-Verwaltung (Multi-Tenant): Tenant-Liste + Microsoft-Anbindung je Tenant.
@@ -73,3 +82,6 @@ Route::get('/connectors', ConnectorsIndex::class)->name('asset-manager.connector
 
 // Alte Connector-Route → Weiterleitung auf die neue Konnektoren-Seite (Bookmarks/route()-Aufrufe bleiben gültig).
 Route::get('/setup', fn () => redirect(route('asset-manager.connectors.index')))->name('asset-manager.setup');
+
+// Modul-Einstellungen (Controlling-Schalter u. a.) — immer erreichbar (IT-Kern, kein Controlling-Gate).
+Route::get('/settings', SettingsIndex::class)->name('asset-manager.settings');

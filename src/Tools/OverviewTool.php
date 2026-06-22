@@ -53,6 +53,26 @@ class OverviewTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('MISSING_TEAM', 'Kein aktives Team im Kontext. Nutze core__context__GET / core__team__switch.');
             }
 
+            $counts = [
+                'employees'        => AssetEmployee::where('team_id', $teamId)->count(),
+                'employees_active' => AssetEmployee::where('team_id', $teamId)->where('is_active', true)->count(),
+                'devices'          => AssetDevice::where('team_id', $teamId)->count(),
+                'license_skus'     => AssetLicenseSku::where('team_id', $teamId)->count(),
+                'items'            => AssetItem::where('team_id', $teamId)->count(),
+                'cost_lines'       => AssetCostLine::where('team_id', $teamId)->count(),
+            ];
+
+            // Controlling-Schicht aus (ADR 0008): Kosten-Engine NICHT aufrufen — nur das Mengengerüst
+            // liefern, Kosten/Top-Mitarbeiter/Anomalien ausblenden. controlling_enabled signalisiert der LLM,
+            // dass die Kosten-Sicht bewusst fehlt (nicht etwa leer ist).
+            if (!app(\Platform\AssetManager\Services\ControllingContext::class)->enabledFor($teamId)) {
+                return ToolResult::success([
+                    'controlling_enabled' => false,
+                    'counts'              => $counts,
+                    'note'                => 'Controlling/Kosten für dieses Team deaktiviert — Kosten, Top-Mitarbeiter und Anomalien sind ausgeblendet (Modul-Einstellungen).',
+                ]);
+            }
+
             /** @var CostAggregationService $agg */
             $agg = app(CostAggregationService::class);
 
@@ -68,15 +88,9 @@ class OverviewTool implements ToolContract, ToolMetadataContract
             ])->values()->all();
 
             return ToolResult::success([
+                'controlling_enabled' => true,
                 'monthly_costs' => $totals,
-                'counts'        => [
-                    'employees'        => AssetEmployee::where('team_id', $teamId)->count(),
-                    'employees_active' => AssetEmployee::where('team_id', $teamId)->where('is_active', true)->count(),
-                    'devices'          => AssetDevice::where('team_id', $teamId)->count(),
-                    'license_skus'     => AssetLicenseSku::where('team_id', $teamId)->count(),
-                    'items'            => AssetItem::where('team_id', $teamId)->count(),
-                    'cost_lines'       => AssetCostLine::where('team_id', $teamId)->count(),
-                ],
+                'counts'        => $counts,
                 'top_employees' => $top,
                 'anomalies'     => $anomalies,
                 'currency'      => 'EUR',

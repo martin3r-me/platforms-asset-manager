@@ -42,6 +42,11 @@ class ListCostTypesTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('MISSING_TEAM', 'Kein aktives Team im Kontext. Nutze core__context__GET / core__team__switch.');
             }
 
+            // Controlling-Schicht (ADR 0008): bei deaktiviertem Controlling sind Kosten/Stammdaten gesperrt.
+            if (!app(\Platform\AssetManager\Services\ControllingContext::class)->enabledFor($teamId)) {
+                return ToolResult::error('CONTROLLING_DISABLED', 'Die Controlling-/Kosten-Schicht ist für dieses Team deaktiviert (Modul-Einstellungen). Kosten, Kostenpositionen und Stammdaten sind daher nicht verfügbar.');
+            }
+
             $rows = AssetCostType::where('team_id', $teamId)->with('vendorDefault')
                 ->orderBy('sort_order')->orderBy('name')->get()
                 ->map(fn (AssetCostType $t) => [

@@ -91,6 +91,7 @@ class Dashboard extends Component
             ->sum(fn($i) => $i->monthlyCost());
 
         return view('asset-manager::livewire.dashboard', [
+            'controllingEnabled' => app(\Platform\AssetManager\Services\ControllingContext::class)->enabledFor($team->id),
             'config'          => $config,
             'stats'           => $stats,
             'complianceQuote' => $complianceQuote,

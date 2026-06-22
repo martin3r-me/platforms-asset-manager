@@ -81,6 +81,7 @@
                     <div class="text-xs text-gray-400 mt-1">Aktive</div>
                 </a>
 
+                @if($controllingEnabled ?? false)
                 <div class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5">
                     <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-500/50 to-transparent"></div>
                     <div class="flex items-center justify-between mb-3">
@@ -92,6 +93,7 @@
                     <div class="text-2xl font-semibold tracking-tight text-amber-600 dark:text-amber-400">{{ number_format($totalMonthly, 2, ',', '.') }} €</div>
                     <div class="text-xs text-gray-400 mt-1">HW + Lizenzen</div>
                 </div>
+                @endif
 
                 <div class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5">
                     <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent"></div>
@@ -205,6 +207,7 @@
 
             {{-- Lizenz-Kacheln --}}
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                @if($controllingEnabled ?? false)
                 <a href="{{ route('asset-manager.licenses.index') }}" wire:navigate
                    class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
                     <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent"></div>
@@ -219,6 +222,7 @@
                     </div>
                     <div class="text-xs text-gray-400 mt-1">Basierend auf gepflegten Preisen</div>
                 </a>
+                @endif
 
                 <a href="{{ route('asset-manager.licenses.index') }}" wire:navigate
                    class="group relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
