@@ -440,6 +440,10 @@ class Index extends Component
     /** Drag&Drop-Reihenfolge (wotz/livewire-sortablejs). Renummeriert sort_order sauber (10,20,30…). */
     public function reorder(array $order): void
     {
+        // E1/ADR 0004: Reihenfolge ist ein Schreibpfad → Owner/Admin. (UI blendet den Drag-Handle
+        // für reine Member ohnehin aus; der Gate schützt zusätzlich gegen direkte Livewire-Calls.)
+        Gate::authorize('asset-manager.manage');
+
         $teamId = $this->teamId();
         $pos    = 0;
         foreach ($this->flattenOrder($order) as $id) {
@@ -460,6 +464,9 @@ class Index extends Component
     /** Neutrale Standard-Kostenarten als Starthilfe laden (idempotent, keine Firmenspezifika). */
     public function seedDefaults(CostBootstrapService $bootstrap): void
     {
+        // E1/ADR 0004: Seeden legt Kostenarten an → Schreibpfad → Owner/Admin.
+        Gate::authorize('asset-manager.manage');
+
         $bootstrap->seedForTeam($this->teamId());
         $this->flash = 'Standard-Kostenarten geladen.';
     }

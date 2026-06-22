@@ -10,16 +10,19 @@
         ]">
             <x-slot name="actions">
                 @include('asset-manager::livewire.partials.tenant-selector')
-                <button wire:click="$toggle('showBulkCreate')"
-                   class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-black/[0.04] dark:bg-white/[0.06] rounded-lg hover:bg-black/[0.07] transition-all">
-                    @svg('heroicon-o-square-3-stack-3d', 'w-3.5 h-3.5')
-                    Mehrere anlegen
-                </button>
-                <a href="{{ route('asset-manager.assets.create') }}" wire:navigate
-                   class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg hover:from-violet-600 hover:to-indigo-700 transition-all shadow-sm">
-                    @svg('heroicon-o-plus', 'w-3.5 h-3.5')
-                    Asset anlegen
-                </a>
+                {{-- Schreib-Controls nur Owner/Admin (E1/ADR 0004) — Backend: AssetItemPolicy::create. --}}
+                @can('asset-manager.manage')
+                    <button wire:click="$toggle('showBulkCreate')"
+                       class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-black/[0.04] dark:bg-white/[0.06] rounded-lg hover:bg-black/[0.07] transition-all">
+                        @svg('heroicon-o-square-3-stack-3d', 'w-3.5 h-3.5')
+                        Mehrere anlegen
+                    </button>
+                    <a href="{{ route('asset-manager.assets.create') }}" wire:navigate
+                       class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg hover:from-violet-600 hover:to-indigo-700 transition-all shadow-sm">
+                        @svg('heroicon-o-plus', 'w-3.5 h-3.5')
+                        Asset anlegen
+                    </a>
+                @endcan
             </x-slot>
         </x-asset-manager-page-actionbar>
     </x-slot>
@@ -101,16 +104,18 @@
     <x-slot name="activity">
         <x-ui-page-sidebar title="Aktionen" icon="heroicon-o-bolt" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
             <div class="p-4 space-y-3 bg-[var(--ui-muted-5)]">
-                <a href="{{ route('asset-manager.assets.create') }}" wire:navigate
-                   class="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg hover:from-violet-600 hover:to-indigo-700 transition-all shadow-sm">
-                    @svg('heroicon-o-plus', 'w-4 h-4')
-                    Neues Asset anlegen
-                </a>
-                <button wire:click="$toggle('showBulkCreate')"
-                   class="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 bg-white border border-[var(--ui-border)]/40 rounded-lg hover:bg-[var(--ui-muted-5)] transition-all">
-                    @svg('heroicon-o-square-3-stack-3d', 'w-4 h-4')
-                    Mehrere identische anlegen
-                </button>
+                @can('asset-manager.manage')
+                    <a href="{{ route('asset-manager.assets.create') }}" wire:navigate
+                       class="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg hover:from-violet-600 hover:to-indigo-700 transition-all shadow-sm">
+                        @svg('heroicon-o-plus', 'w-4 h-4')
+                        Neues Asset anlegen
+                    </a>
+                    <button wire:click="$toggle('showBulkCreate')"
+                       class="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 bg-white border border-[var(--ui-border)]/40 rounded-lg hover:bg-[var(--ui-muted-5)] transition-all">
+                        @svg('heroicon-o-square-3-stack-3d', 'w-4 h-4')
+                        Mehrere identische anlegen
+                    </button>
+                @endcan
                 <a href="{{ route('asset-manager.employees.index') }}" wire:navigate
                    class="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 bg-white border border-[var(--ui-border)]/40 rounded-lg hover:bg-[var(--ui-muted-5)] transition-all">
                     @svg('heroicon-o-users', 'w-4 h-4')
@@ -137,7 +142,8 @@
                 </div>
             @endif
 
-            {{-- Bulk-Anlage-Formular --}}
+            {{-- Bulk-Anlage-Formular — nur Owner/Admin (Backend: createBulk → Gate create). --}}
+            @can('asset-manager.manage')
             @if($showBulkCreate)
                 <div class="rounded-xl bg-white/80 dark:bg-white/5 backdrop-blur-xl border border-violet-500/30 shadow-sm p-5">
                     <div class="flex items-center justify-between mb-4">
@@ -209,6 +215,7 @@
                     </form>
                 </div>
             @endif
+            @endcan
 
             {{-- Stats --}}
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -230,7 +237,8 @@
                 </div>
             </div>
 
-            {{-- Bulk-Aktionsleiste --}}
+            {{-- Bulk-Aktionsleiste — nur Owner/Admin (Backend: bulk* → Gate create/delete). --}}
+            @can('asset-manager.manage')
             @if(count($selected) > 0)
                 <div class="sticky top-0 z-10 flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl bg-violet-600 text-white shadow-lg">
                     <span class="text-sm font-medium">{{ count($selected) }} ausgewählt</span>
@@ -268,6 +276,7 @@
                     <button wire:click="clearSelection" class="ml-auto text-xs text-white/80 hover:text-white">Auswahl aufheben</button>
                 </div>
             @endif
+            @endcan
 
             {{-- Tabelle --}}
             <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
@@ -282,28 +291,34 @@
                             @endif
                         </p>
                         @if(!$search && !$filterCategory && !$filterStatus && !$filterSource && !$filterAssignee)
-                            <a href="{{ route('asset-manager.assets.create') }}" wire:navigate
-                               class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg hover:from-violet-600 hover:to-indigo-700 transition-all shadow-sm">
-                                @svg('heroicon-o-plus', 'w-4 h-4')
-                                Erstes Asset anlegen
-                            </a>
+                            @can('asset-manager.manage')
+                                <a href="{{ route('asset-manager.assets.create') }}" wire:navigate
+                                   class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg hover:from-violet-600 hover:to-indigo-700 transition-all shadow-sm">
+                                    @svg('heroicon-o-plus', 'w-4 h-4')
+                                    Erstes Asset anlegen
+                                </a>
+                            @endcan
                         @endif
                     </div>
                 @else
-                    {{-- "Alle X auswählen"-Banner --}}
+                    {{-- "Alle X auswählen"-Banner — nur Owner/Admin (Bulk ist owner/admin-only). --}}
+                    @can('asset-manager.manage')
                     @if($selectPage && count($selected) < $totalFiltered)
                         <div class="px-5 py-2 bg-violet-500/10 border-b border-violet-500/20 text-center text-xs text-violet-700 dark:text-violet-400">
                             Alle {{ count($selected) }} auf dieser Seite ausgewählt.
                             <button wire:click="selectAllFiltered" class="font-medium underline hover:text-violet-900">Alle {{ $totalFiltered }} gefilterten auswählen</button>
                         </div>
                     @endif
+                    @endcan
 
                     <table class="w-full text-sm">
                         <thead>
                             <tr class="border-b border-black/5 dark:border-white/5">
+                                @can('asset-manager.manage')
                                 <th class="w-10 px-5 py-3">
                                     <input type="checkbox" wire:model.live="selectPage" class="rounded border-black/20 dark:border-white/20 text-violet-600 focus:ring-violet-500/30" />
                                 </th>
+                                @endcan
                                 <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">
                                     <button wire:click="sortBy('name')" class="flex items-center gap-1 hover:text-gray-600">
                                         Name
@@ -320,9 +335,11 @@
                             @foreach($items as $item)
                                 @php $isChecked = in_array((string) $item->id, $selected, true); @endphp
                                 <tr wire:key="item-{{ $item->id }}" class="transition-colors {{ $isChecked ? 'bg-violet-500/5' : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]' }}">
+                                    @can('asset-manager.manage')
                                     <td class="px-5 py-3">
                                         <input type="checkbox" value="{{ $item->id }}" wire:model.live="selected" class="rounded border-black/20 dark:border-white/20 text-violet-600 focus:ring-violet-500/30" />
                                     </td>
+                                    @endcan
                                     <td class="px-5 py-3">
                                         <a href="{{ route('asset-manager.assets.show', $item) }}" wire:navigate
                                            class="font-medium text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400">

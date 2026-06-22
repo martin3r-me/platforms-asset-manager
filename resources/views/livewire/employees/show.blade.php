@@ -14,6 +14,9 @@
     {{-- LINKS: Eigenschaften (editierbar) --}}
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Profil" icon="heroicon-o-user" width="w-72" :defaultOpen="true">
+            {{-- Profil bearbeiten nur Owner/Admin (E1/ADR 0004) — Backend: save() Gate. Member sehen
+                 die Stammdaten read-only im Haupt-Content. --}}
+            @can('asset-manager.manage')
             <form wire:submit="save" class="p-4 space-y-4 bg-[var(--ui-muted-5)]">
 
                 <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
@@ -68,6 +71,7 @@
                     <div class="text-[10px] text-emerald-600 text-center">Gespeichert.</div>
                 @endif
             </form>
+            @endcan
 
             {{-- DSGVO-Einzel-Anonymisierung (E2 / ADR 0005) — nur Owner/Admin, mit Bestätigung. --}}
             @can('asset-manager.manage')

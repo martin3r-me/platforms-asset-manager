@@ -19,9 +19,11 @@
                 <td class="px-4 py-2.5 text-right text-xs text-gray-400">{{ $cc->employees_count }}</td>
                 <td class="px-4 py-2.5 text-right whitespace-nowrap">
                     @unless($cc->is_active)<span class="text-[10px] text-amber-600 mr-2">inaktiv</span>@endunless
-                    <button wire:click.stop="delete({{ $cc->id }})"
-                            wire:confirm="Kostenstelle {{ $cc->code }} wirklich löschen?{{ $cc->employees_count ? ' '.$cc->employees_count.' Mitarbeiter verlieren die Zuordnung.' : '' }} Kostenpositionen behalten ihren Betrag, verlieren aber die Kostenstelle."
-                            class="text-xs text-gray-400 hover:text-red-600">@svg('heroicon-o-trash', 'w-4 h-4 inline')</button>
+                    @can('asset-manager.manage')
+                        <button wire:click.stop="delete({{ $cc->id }})"
+                                wire:confirm="Kostenstelle {{ $cc->code }} wirklich löschen?{{ $cc->employees_count ? ' '.$cc->employees_count.' Mitarbeiter verlieren die Zuordnung.' : '' }} Kostenpositionen behalten ihren Betrag, verlieren aber die Kostenstelle."
+                                class="text-xs text-gray-400 hover:text-red-600">@svg('heroicon-o-trash', 'w-4 h-4 inline')</button>
+                    @endcan
                 </td>
             </tr>
         @empty

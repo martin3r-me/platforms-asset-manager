@@ -107,10 +107,13 @@
                 </div>
 
                 <div class="flex items-center gap-3 pt-2 border-t border-[var(--ui-border)]/30">
-                    <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg hover:from-violet-600 hover:to-indigo-700 transition-all shadow-sm">
-                        @svg('heroicon-o-check', 'w-4 h-4')
-                        Anlegen
-                    </button>
+                    {{-- Submit nur Owner/Admin (Backend: mount()+save() Gate create, ADR 0004). --}}
+                    @can('asset-manager.manage')
+                        <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg hover:from-violet-600 hover:to-indigo-700 transition-all shadow-sm">
+                            @svg('heroicon-o-check', 'w-4 h-4')
+                            Anlegen
+                        </button>
+                    @endcan
                     <a href="{{ route('asset-manager.assets.index') }}" wire:navigate class="text-sm text-gray-500 hover:text-gray-700">Abbrechen</a>
                 </div>
             </form>

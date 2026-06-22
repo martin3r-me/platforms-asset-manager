@@ -26,11 +26,14 @@
             ['label' => $current['label']],
         ]">
             <x-slot name="actions">
-                <button wire:click="startCreate"
-                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-all">
-                    @svg('heroicon-o-plus', 'w-3.5 h-3.5')
-                    Neu
-                </button>
+                {{-- Anlegen nur Owner/Admin (E1/ADR 0004) — Backend: save() Gate asset-manager.manage. --}}
+                @can('asset-manager.manage')
+                    <button wire:click="startCreate"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-all">
+                        @svg('heroicon-o-plus', 'w-3.5 h-3.5')
+                        Neu
+                    </button>
+                @endcan
             </x-slot>
         </x-asset-manager-page-actionbar>
     </x-slot>
@@ -51,6 +54,8 @@
             :title="($creating ? 'Neu: ' : '') . $current['singular']"
             icon="heroicon-o-pencil-square" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
             <div class="p-4 space-y-3 bg-[var(--ui-muted-5)]">
+                {{-- Bearbeiten/Anlegen nur Owner/Admin (ADR 0004) — Backend: save()/delete() Gate. --}}
+                @can('asset-manager.manage')
                 @if($creating || $selectedId)
                     <div class="flex items-center justify-between pb-2 border-b border-[var(--ui-border)]/30">
                         <span class="text-[10px] uppercase tracking-wider text-[var(--ui-muted)]">
@@ -82,6 +87,7 @@
                         <p class="text-[11px] text-[var(--ui-muted)]">Eine Zeile anklicken zum Bearbeiten — oder oben „Neu“ für einen neuen Eintrag.</p>
                     </div>
                 @endif
+                @endcan
             </div>
         </x-ui-page-sidebar>
     </x-slot>
@@ -98,11 +104,13 @@
                 <h2 class="text-lg font-semibold text-[var(--ui-secondary)] m-0">{{ $current['label'] }}</h2>
                 <span class="text-xs text-[var(--ui-secondary)] bg-[var(--ui-muted-10)] rounded-full px-2 py-0.5">{{ $counts[$active] ?? 0 }}</span>
                 <span class="flex-1"></span>
-                <button wire:click="startCreate"
-                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">
-                    @svg('heroicon-o-plus', 'w-3.5 h-3.5')
-                    {{ $current['singular'] }}
-                </button>
+                @can('asset-manager.manage')
+                    <button wire:click="startCreate"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">
+                        @svg('heroicon-o-plus', 'w-3.5 h-3.5')
+                        {{ $current['singular'] }}
+                    </button>
+                @endcan
             </div>
 
             @if($flash)

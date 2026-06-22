@@ -30,7 +30,11 @@
                 @if($manualOrder) wire:sortable.item="{{ $t->id }}" @endif>
                 <td class="px-2 py-2.5 text-center whitespace-nowrap">
                     @if($manualOrder)
-                        <button wire:sortable.handle type="button" x-on:click.stop title="Ziehen zum Sortieren" class="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing">@svg('heroicon-o-bars-3', 'w-4 h-4 inline')</button>
+                        @can('asset-manager.manage')
+                            <button wire:sortable.handle type="button" x-on:click.stop title="Ziehen zum Sortieren" class="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing">@svg('heroicon-o-bars-3', 'w-4 h-4 inline')</button>
+                        @else
+                            <span class="text-gray-200">–</span>
+                        @endcan
                     @else
                         <span class="text-gray-200">–</span>
                     @endif
@@ -44,9 +48,11 @@
                 </td>
                 <td class="px-2 py-2.5 text-right text-xs text-gray-400">{{ $t->cost_lines_count }}</td>
                 <td class="px-2 py-2.5 text-right whitespace-nowrap">
-                    <button wire:click.stop="delete({{ $t->id }})"
-                            @if($t->cost_lines_count == 0) wire:confirm="Kostenart {{ $t->name }} wirklich löschen?" @endif
-                            class="text-xs text-gray-400 hover:text-red-600">@svg('heroicon-o-trash', 'w-4 h-4 inline')</button>
+                    @can('asset-manager.manage')
+                        <button wire:click.stop="delete({{ $t->id }})"
+                                @if($t->cost_lines_count == 0) wire:confirm="Kostenart {{ $t->name }} wirklich löschen?" @endif
+                                class="text-xs text-gray-400 hover:text-red-600">@svg('heroicon-o-trash', 'w-4 h-4 inline')</button>
+                    @endcan
                 </td>
             </tr>
         @endforeach
@@ -55,7 +61,9 @@
                 <td colspan="8" class="px-4 py-10 text-center">
                     @if(($total ?? 0) === 0)
                         <p class="text-sm text-gray-400 mb-3">Noch keine Kostenarten angelegt. Lege oben eine eigene an — oder lade generische Standard-Kostenarten als Starthilfe.</p>
-                        <button wire:click="seedDefaults" class="px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">Standard-Kostenarten laden</button>
+                        @can('asset-manager.manage')
+                            <button wire:click="seedDefaults" class="px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">Standard-Kostenarten laden</button>
+                        @endcan
                     @else
                         <p class="text-sm text-gray-400">Keine Kostenarten für diesen Filter — Filter zurücksetzen.</p>
                     @endif

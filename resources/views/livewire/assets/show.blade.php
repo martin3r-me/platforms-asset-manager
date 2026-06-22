@@ -14,6 +14,9 @@
     {{-- LINKS: Eigenschaften (editierbar) --}}
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Eigenschaften" icon="heroicon-o-adjustments-horizontal" width="w-72" :defaultOpen="true">
+            {{-- Bearbeiten nur Owner/Admin (E1/ADR 0004) — Backend: save()/delete() Gate. Member sehen
+                 die Werte read-only im Haupt-Content. --}}
+            @can('asset-manager.manage')
             <form wire:submit="save" class="p-4 space-y-4 bg-[var(--ui-muted-5)]">
 
                 @if($item->source === 'intune')
@@ -137,6 +140,7 @@
                     @endcan
                 </div>
             </form>
+            @endcan
         </x-ui-page-sidebar>
     </x-slot>
 
