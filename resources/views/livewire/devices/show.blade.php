@@ -155,6 +155,21 @@
                     <div class="p-3 text-center text-[11px] text-[var(--ui-muted)]">Noch keine Änderungen erfasst.</div>
                 @endforelse
 
+                <div class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-1 pt-2">Zuordnungs-Verlauf</div>
+                @forelse($assignments as $a)
+                    <div class="p-2.5 rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm">
+                        <div class="flex items-center gap-1.5 mb-0.5">
+                            <span class="w-1.5 h-1.5 rounded-full {{ $a->returned_at ? 'bg-gray-400' : 'bg-emerald-500' }} flex-shrink-0"></span>
+                            <span class="text-[11px] font-medium text-[var(--ui-secondary)]">{{ $a->employee?->name ?? '—' }}</span>
+                        </div>
+                        <div class="text-[10px] text-[var(--ui-muted)] pl-3">
+                            {{ $a->assigned_at?->format('d.m.Y') ?? '—' }} – {{ $a->returned_at?->format('d.m.Y') ?? 'laufend' }}@if($a->source === 'intune') · Intune @endif
+                        </div>
+                    </div>
+                @empty
+                    <div class="p-3 text-center text-[11px] text-[var(--ui-muted)]">Noch keine Zuordnung erfasst.</div>
+                @endforelse
+
                 <div class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-1 pt-2">Letzte Synchronisierungen</div>
                 @forelse($activities as $activity)
                     <div class="p-3 rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm">

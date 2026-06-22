@@ -221,9 +221,12 @@ class Index extends Component
 
             if ($this->bcAssigneeId) {
                 AssetAssignment::create([
-                    'asset_item_id' => $item->id,
-                    'employee_id'   => $this->bcAssigneeId,
-                    'assigned_at'   => now(),
+                    'asset_item_id'   => $item->id,
+                    'assignable_type' => AssetAssignment::SUBJECT_ITEM,
+                    'assignable_id'   => $item->id,
+                    'employee_id'     => $this->bcAssigneeId,
+                    'assigned_at'     => now(),
+                    'source'          => AssetAssignment::SOURCE_MANUAL,
                 ]);
             }
         }

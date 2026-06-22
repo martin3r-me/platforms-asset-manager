@@ -125,10 +125,13 @@ class AssetItem extends Model
                 'status'      => 'assigned',
             ]);
             AssetAssignment::create([
-                'asset_item_id' => $this->id,
-                'employee_id'   => $employee->id,
-                'assigned_at'   => now(),
-                'notes'         => $notes,
+                'asset_item_id'   => $this->id,
+                'assignable_type' => AssetAssignment::SUBJECT_ITEM,
+                'assignable_id'   => $this->id,
+                'employee_id'     => $employee->id,
+                'assigned_at'     => now(),
+                'notes'           => $notes,
+                'source'          => AssetAssignment::SOURCE_MANUAL,
             ]);
         } else {
             $this->update([

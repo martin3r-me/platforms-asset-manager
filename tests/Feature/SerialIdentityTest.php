@@ -17,9 +17,11 @@ namespace Platform\AssetManager\Tests\Feature;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Platform\AssetManager\Jobs\SyncIntuneDevicesJob;
 use Platform\AssetManager\Models\AssetConnectorConfig;
+use Platform\AssetManager\Models\AssetAssignment;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceEvent;
 use Platform\AssetManager\Models\AssetDeviceSource;
+use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetTenant;
 use Platform\AssetManager\Services\IntuneGraphService;
 use Platform\Core\Models\Team;
@@ -174,5 +176,50 @@ class SerialIdentityTest extends TestCase
         $this->assertCount(1, $sources, 'Genau eine intune-Quell-Zeile je Gerät.');
         $this->assertSame('enr-2', $sources->first()->external_id, 'external_id ist mit der intune_id mitrotiert.');
         $this->assertSame('SN-SRC-1', $sources->first()->serial_number);
+    }
+
+    /**
+     * ADR 0006 + Frage 6 / 2b: Der Sync leitet die Geräte-Zuordnung aus dem UPN ab. Ein Nutzerwechsel
+     * (auch über ein Re-Enrollment mit neuer intune_id, gleiche Serial) schließt die offene Zuordnung
+     * und öffnet eine neue — auf derselben (Serial-stabilen) Geräte-Zeile.
+     */
+    public function test_sync_derives_device_assignment_periods_from_upn(): void
+    {
+        $team      = Team::factory()->create();
+        $tenant    = AssetTenant::factory()->default()->create(['team_id' => $team->id]);
+        $connector = $this->configuredConnector($team, $tenant);
+
+        // Erstsync: Gerät mit Nutzer A.
+        $this->fakeGraphDevices([[
+            'id' => 'enr-1', 'serialNumber' => 'SN-ASG-1', 'deviceName' => 'NB-ASG',
+            'userPrincipalName' => 'a@example.test', 'complianceState' => 'compliant',
+        ]]);
+        SyncIntuneDevicesJob::dispatchSync($connector->id);
+
+        $device = AssetDevice::where('tenant_id', $tenant->id)->where('serial_number', 'SN-ASG-1')->firstOrFail();
+        $empA   = AssetEmployee::where('tenant_id', $tenant->id)->where('user_principal_name', 'a@example.test')->firstOrFail();
+
+        $open = AssetAssignment::where('assignable_type', 'device')->where('assignable_id', $device->id)->whereNull('returned_at')->get();
+        $this->assertCount(1, $open, 'Eine offene Geräte-Zuordnung nach Erstsync.');
+        $this->assertSame($empA->id, $open->first()->employee_id);
+        $this->assertSame('intune', $open->first()->source);
+
+        // Folgesync: gleiche Serial, NEUE intune_id (Re-Enrollment) + neuer Nutzer B.
+        $this->fakeGraphDevices([[
+            'id' => 'enr-2', 'serialNumber' => 'SN-ASG-1', 'deviceName' => 'NB-ASG',
+            'userPrincipalName' => 'b@example.test', 'complianceState' => 'compliant',
+        ]]);
+        SyncIntuneDevicesJob::dispatchSync($connector->id);
+
+        $empB = AssetEmployee::where('tenant_id', $tenant->id)->where('user_principal_name', 'b@example.test')->firstOrFail();
+
+        // A geschlossen, B offen — auf derselben Geräte-Zeile.
+        $this->assertNotNull(
+            AssetAssignment::where('assignable_id', $device->id)->where('employee_id', $empA->id)->value('returned_at'),
+            'A-Zuordnung wurde beim Nutzerwechsel geschlossen.'
+        );
+        $openNow = AssetAssignment::where('assignable_type', 'device')->where('assignable_id', $device->id)->whereNull('returned_at')->get();
+        $this->assertCount(1, $openNow, 'Genau eine offene Zuordnung (B).');
+        $this->assertSame($empB->id, $openNow->first()->employee_id);
     }
 }

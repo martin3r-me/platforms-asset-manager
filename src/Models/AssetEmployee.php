@@ -65,6 +65,12 @@ class AssetEmployee extends Model
         return $this->hasMany(AssetCostLine::class, 'assignee_id');
     }
 
+    /** Zuordnungs-Verlauf dieser Person über Items UND Geräte (Frage 6 / 2b). */
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(AssetAssignment::class, 'employee_id')->orderByDesc('assigned_at');
+    }
+
     /** True wenn Funktionskonto (kein echter Mitarbeiter). */
     public function isFunctionAccount(): bool
     {

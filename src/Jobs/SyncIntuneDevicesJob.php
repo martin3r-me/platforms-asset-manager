@@ -2,6 +2,7 @@
 
 namespace Platform\AssetManager\Jobs;
 
+use Platform\AssetManager\Models\AssetAssignment;
 use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceEvent;
@@ -232,6 +233,10 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                     );
                     $knownUpns->put($device['userPrincipalName'], true);
                 }
+
+                // Geräte-Zuordnung aus dem aktuellen UPN ableiten (Frage 6 / 2b) — auf der stabilen
+                // Serial-Zeile (ADR 0006): Nutzerwechsel schließt die offene Zuordnung und öffnet eine neue.
+                $this->syncDeviceAssignment($persisted);
             }
 
             $durationMs = (int) ($startedAt->diffInMilliseconds(now()));
@@ -340,6 +345,55 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
         }
 
         return $dt->year < 1970 ? null : $dt;
+    }
+
+    /**
+     * Leitet die Geräte-Zuordnung (Frage 6 / 2b) aus dem aktuellen UPN ab: weicht der Ziel-Mitarbeiter von
+     * der offenen Zuordnung ab (oder ist der UPN jetzt leer), wird die offene geschlossen und ggf. eine neue
+     * geöffnet. Läuft auf der stabilen Serial-Zeile (ADR 0006) → die intune_id-Rotation ändert die Zuordnung
+     * nicht. Quelle 'intune'. Zuordnungs-Fehler dürfen den Sync nie scheitern lassen.
+     */
+    protected function syncDeviceAssignment(AssetDevice $device): void
+    {
+        try {
+            $upn = $device->user_principal_name;
+            $employeeId = !empty($upn)
+                ? AssetEmployee::where('tenant_id', $this->tenantId)->where('user_principal_name', $upn)->value('id')
+                : null;
+
+            $open = AssetAssignment::where('assignable_type', AssetAssignment::SUBJECT_DEVICE)
+                ->where('assignable_id', $device->id)
+                ->whereNull('returned_at')
+                ->get();
+
+            // Bereits korrekt? Genau eine offene Zuordnung zum Ziel — oder keine offene + kein Ziel.
+            if ($employeeId !== null && $open->count() === 1 && (int) $open->first()->employee_id === (int) $employeeId) {
+                return;
+            }
+            if ($employeeId === null && $open->isEmpty()) {
+                return;
+            }
+
+            // Sonst: alle offenen schließen, ggf. neue öffnen.
+            if ($open->isNotEmpty()) {
+                AssetAssignment::whereIn('id', $open->pluck('id'))
+                    ->update(['returned_at' => now(), 'updated_at' => now()]);
+            }
+            if ($employeeId !== null) {
+                AssetAssignment::create([
+                    'assignable_type' => AssetAssignment::SUBJECT_DEVICE,
+                    'assignable_id'   => $device->id,
+                    'employee_id'     => $employeeId,
+                    'assigned_at'     => now(),
+                    'source'          => AssetAssignment::SOURCE_INTUNE,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('AssetManager: Geräte-Zuordnung nicht aktualisiert', [
+                'asset_device_id' => $device->id,
+                'error'           => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

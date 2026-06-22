@@ -170,6 +170,14 @@ class AssetDevice extends Model
         return $this->hasMany(AssetDeviceSource::class, 'asset_device_id');
     }
 
+    /** Zuordnungs-Verlauf (wer hatte das Gerät wann) — aus Intune abgeleitet (Frage 6 / 2b). */
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(AssetAssignment::class, 'assignable_id')
+            ->where('assignable_type', AssetAssignment::SUBJECT_DEVICE)
+            ->orderByDesc('assigned_at');
+    }
+
     /**
      * Passendes Geräte-Modell (Default-Kosten) per (Hersteller, Modell) auflösen — normalisiert
      * (case-/whitespace-tolerant) über AssetDeviceModel::normalizeKey(), damit Detailansicht und

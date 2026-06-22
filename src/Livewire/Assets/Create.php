@@ -88,9 +88,12 @@ class Create extends Component
 
         if ($this->assigneeId) {
             \Platform\AssetManager\Models\AssetAssignment::create([
-                'asset_item_id' => $item->id,
-                'employee_id'   => $this->assigneeId,
-                'assigned_at'   => now(),
+                'asset_item_id'   => $item->id,
+                'assignable_type' => \Platform\AssetManager\Models\AssetAssignment::SUBJECT_ITEM,
+                'assignable_id'   => $item->id,
+                'employee_id'     => $this->assigneeId,
+                'assigned_at'     => now(),
+                'source'          => \Platform\AssetManager\Models\AssetAssignment::SOURCE_MANUAL,
             ]);
         }
 

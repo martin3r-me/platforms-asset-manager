@@ -234,10 +234,14 @@ class Show extends Component
             ->limit(20)
             ->get();
 
+        // Zuordnungs-Verlauf (wer hatte das Gerät wann) — aus Intune abgeleitet (2b).
+        $assignments = $this->device->assignments()->with('employee')->limit(20)->get();
+
         return view('asset-manager::livewire.devices.show', [
             'device'             => $this->device,
             'activities'         => $activities,
             'events'             => $events,
+            'assignments'        => $assignments,
             'canManage'          => $this->canManage(),
             'resolvedCost'       => $this->device->resolvedMonthlyCost(),
             'resolvedCostTypeId' => $this->device->resolvedCostTypeId(),
