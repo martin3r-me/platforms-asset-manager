@@ -14,6 +14,7 @@ class AssetConnectorConfig extends Model
     protected $fillable = [
         'team_id',
         'tenant_id',
+        'provider',
         'client_id',
         'azure_tenant_id',
         'object_id',

@@ -6,6 +6,7 @@ use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceEvent;
 use Platform\AssetManager\Models\AssetDeviceModel;
+use Platform\AssetManager\Models\AssetDeviceSource;
 use Platform\AssetManager\Models\AssetDeviceSyncLog;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Concerns\RunsTeamSync;
@@ -152,6 +153,7 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                     }
                 }
 
+                $created = null;
                 if ($existing) {
                     if ($existing->trashed()) {
                         $existing->restore();
@@ -187,6 +189,21 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                         $existingBySerial[$newSerial] = $created;
                     }
                 }
+
+                // Provider-Quelle pflegen (ADR 0009): genau eine 'intune'-Quell-Zeile je Gerät; external_id =
+                // aktuelle intune_id (rotiert bei Re-Enrollment automatisch mit). Legt den Seam, auf dem ABM
+                // (Eigentums-Quelle) später per Serial andockt + den Drift „besessen, aber nicht verwaltet" rechnet.
+                $persisted = $existing ?? $created;
+                AssetDeviceSource::updateOrCreate(
+                    ['asset_device_id' => $persisted->id, 'provider' => AssetDeviceSource::PROVIDER_INTUNE],
+                    [
+                        'team_id'       => $this->teamId,
+                        'tenant_id'     => $this->tenantId,
+                        'external_id'   => $device['id'],
+                        'serial_number' => $persisted->serial_number,
+                        'last_seen_at'  => now(),
+                    ]
+                );
 
                 // Geräte-Modell-Katalog pflegen — team-weit (Teil des Kostenmodells, NICHT tenant-skopiert).
                 // Nur anlegen, wenn der (exakte) Schlüssel noch nicht bekannt ist → kein firstOrCreate-SELECT

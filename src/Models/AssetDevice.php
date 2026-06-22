@@ -5,6 +5,7 @@ namespace Platform\AssetManager\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\AssetManager\Concerns\TenantScopable;
 
@@ -161,6 +162,12 @@ class AssetDevice extends Model
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(AssetEmployee::class, 'user_principal_name', 'user_principal_name');
+    }
+
+    /** Provider-Quellen, die dieses physische Gerät kennen (Intune, ABM …) — ADR 0009. */
+    public function sources(): HasMany
+    {
+        return $this->hasMany(AssetDeviceSource::class, 'asset_device_id');
     }
 
     /**

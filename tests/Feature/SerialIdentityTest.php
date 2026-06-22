@@ -19,6 +19,7 @@ use Platform\AssetManager\Jobs\SyncIntuneDevicesJob;
 use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceEvent;
+use Platform\AssetManager\Models\AssetDeviceSource;
 use Platform\AssetManager\Models\AssetTenant;
 use Platform\AssetManager\Services\IntuneGraphService;
 use Platform\Core\Models\Team;
@@ -138,5 +139,40 @@ class SerialIdentityTest extends TestCase
         $this->assertNotSame($existing->id, $active->first()->id, 'Andere Zeile als das alte Gerät.');
         $this->assertSame(2, AssetDevice::withTrashed()->where('tenant_id', $tenant->id)->count());
         $this->assertNotNull(AssetDevice::withTrashed()->find($existing->id)?->deleted_at, 'Altes Gerät soft-deleted.');
+    }
+
+    /**
+     * ADR 0009 — Provider-Seam: Der Sync pflegt je Gerät genau eine 'intune'-Quell-Zeile; deren
+     * external_id rotiert bei Re-Enrollment mit der intune_id mit (gleiche Zeile, kein Duplikat).
+     */
+    public function test_sync_maintains_single_intune_device_source_and_rotates_external_id(): void
+    {
+        $team      = Team::factory()->create();
+        $tenant    = AssetTenant::factory()->default()->create(['team_id' => $team->id]);
+        $connector = $this->configuredConnector($team, $tenant);
+
+        $existing = AssetDevice::factory()->create([
+            'team_id'          => $team->id,
+            'tenant_id'        => $tenant->id,
+            'intune_id'        => 'enr-1',
+            'serial_number'    => 'SN-SRC-1',
+            'lifecycle_status' => 'in_use',
+        ]);
+
+        $this->fakeGraphDevices([[
+            'id'              => 'enr-2',          // Re-Enrollment: neue Intune-id, gleiche Serial
+            'serialNumber'    => 'SN-SRC-1',
+            'deviceName'      => 'NB-SRC',
+            'complianceState' => 'compliant',
+        ]]);
+
+        SyncIntuneDevicesJob::dispatchSync($connector->id);
+
+        $sources = AssetDeviceSource::where('asset_device_id', $existing->id)
+            ->where('provider', 'intune')->get();
+
+        $this->assertCount(1, $sources, 'Genau eine intune-Quell-Zeile je Gerät.');
+        $this->assertSame('enr-2', $sources->first()->external_id, 'external_id ist mit der intune_id mitrotiert.');
+        $this->assertSame('SN-SRC-1', $sources->first()->serial_number);
     }
 }
