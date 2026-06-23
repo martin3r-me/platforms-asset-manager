@@ -12,7 +12,8 @@
     "require": {
         "php": "^8.2",
         "ext-zip": "*",
-        "ext-simplexml": "*"
+        "ext-simplexml": "*",
+        "barryvdh/laravel-dompdf": "^3.0"
     },
     "autoload": {
         "psr-4": {

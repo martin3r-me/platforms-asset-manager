@@ -192,6 +192,38 @@
                 </div>
             @endif
 
+            {{-- Geräteausgaben (Übergabeprotokolle) — read-only; Anlegen von der Geräteseite/globalen Liste --}}
+            @if($handovers->count() > 0)
+                <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
+                    <div class="px-5 py-3 border-b border-black/5 dark:border-white/5 flex items-center justify-between">
+                        <h2 class="text-xs font-medium uppercase tracking-wider text-gray-400">Geräteausgaben</h2>
+                        <span class="text-xs text-gray-400">{{ $handovers->count() }}</span>
+                    </div>
+                    <div class="divide-y divide-black/[0.03]">
+                        @foreach($handovers as $ho)
+                            <div class="flex items-center gap-3 px-5 py-3">
+                                @svg('heroicon-o-clipboard-document-check', 'w-4 h-4 text-gray-400 flex-shrink-0')
+                                <div class="flex-1 min-w-0">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                                        {{ $ho->lines->map(fn($l) => $l->deviceName())->take(3)->implode(', ') ?: '—' }}
+                                    </div>
+                                    <div class="text-xs text-gray-400">
+                                        {{ $ho->issued_at?->format('d.m.Y') ?? '—' }} · {{ $ho->lines->count() }} Gerät(e) · {{ $ho->isSigned() ? 'unterschrieben' : 'nicht unterschrieben' }}
+                                    </div>
+                                </div>
+                                @php $stCls = [
+                                    'open'               => 'bg-emerald-500/10 text-emerald-700',
+                                    'partially_returned' => 'bg-amber-500/10 text-amber-700',
+                                    'returned'           => 'bg-gray-500/10 text-gray-600',
+                                ][$ho->status] ?? 'bg-gray-500/10 text-gray-600'; @endphp
+                                <span class="px-2 py-0.5 rounded-full text-[10px] {{ $stCls }}">{{ $ho->statusLabel() }}</span>
+                                <a href="{{ route('asset-manager.handovers.pdf', $ho->id) }}" target="_blank" class="text-gray-400 hover:text-violet-600" title="Protokoll-PDF">@svg('heroicon-o-document-arrow-down', 'w-4 h-4')</a>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
             {{-- Sonstige Assets --}}
             @if($items->count() > 0)
                 <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">

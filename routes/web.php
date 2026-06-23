@@ -26,6 +26,8 @@ use Platform\AssetManager\Livewire\Printers\Index as PrintersIndex;
 use Platform\AssetManager\Livewire\Internet\Index as InternetIndex;
 use Platform\AssetManager\Livewire\Settings\Index as SettingsIndex;
 use Platform\AssetManager\Http\Middleware\EnsureControllingEnabled;
+use Platform\AssetManager\Livewire\Handovers\Index as HandoversIndex;
+use Platform\AssetManager\Http\Controllers\HandoverPdfController;
 
 Route::get('/', Dashboard::class)->name('asset-manager.dashboard');
 
@@ -44,6 +46,10 @@ Route::get('/assets/{item}', AssetsShow::class)->name('asset-manager.assets.show
 
 Route::get('/employees', EmployeesIndex::class)->name('asset-manager.employees.index');
 Route::get('/employees/{employee}', EmployeesShow::class)->name('asset-manager.employees.show');
+
+// Geräteausgaben (Übergabeprotokolle): globale Liste + PDF-Protokoll.
+Route::get('/handovers', HandoversIndex::class)->name('asset-manager.handovers.index');
+Route::get('/handovers/{handover}/pdf', HandoverPdfController::class)->name('asset-manager.handovers.pdf');
 
 Route::get('/licenses', LicensesIndex::class)->name('asset-manager.licenses.index');
 Route::get('/licenses/{sku}', LicensesShow::class)->name('asset-manager.licenses.show');

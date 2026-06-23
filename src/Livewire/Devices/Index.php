@@ -13,6 +13,7 @@ use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceSyncLog;
 use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHandoverLine;
 use Platform\AssetManager\Models\AssetUserLicense;
 use Platform\AssetManager\Jobs\SyncIntuneDevicesJob;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -418,6 +419,15 @@ class Index extends Component
 
         $canSync = Gate::allows('sync', AssetDevice::class);
 
+        // Geräte mit offener Ausgabe (für den „ohne Ausgabe"-Hinweis). whereHas('handover') scoped aufs
+        // Team + schließt soft-deleted Protokolle aus. Als Lookup-Map (id => …) für O(1)-isset im Blade.
+        $openHandoverDeviceIds = AssetHandoverLine::whereHas('handover', fn ($q) => $q->where('team_id', $team->id))
+            ->whereNull('returned_at')
+            ->pluck('asset_device_id')
+            ->unique()
+            ->flip()
+            ->all();
+
         // Master-Detail-Daten laden
         $selectedDevice   = null;
         $selectedEmployee = null;
@@ -455,6 +465,7 @@ class Index extends Component
             'complianceBreakdown' => $complianceBreakdown,
             'canSync'             => $canSync,
             'canManage'           => $this->canManage(),
+            'openHandoverDeviceIds' => $openHandoverDeviceIds,
             'costCenters'         => AssetCostCenter::where('team_id', $team->id)->orderBy('code')->get(),
             'columns'             => $this->columnOrder,
             'selectedDevice'      => $selectedDevice,

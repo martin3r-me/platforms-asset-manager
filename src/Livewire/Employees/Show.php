@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHandover;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetUserLicense;
@@ -115,6 +116,14 @@ class Show extends Component
             ->orderBy('sku_part_number')
             ->get();
 
+        // Geräteausgaben dieses Mitarbeiters (Übergabeprotokolle, read-only; Anlegen von der Geräteseite).
+        $handovers = AssetHandover::with('lines')
+            ->where('team_id', $teamId)
+            ->where('employee_id', $this->employee->id)
+            ->orderByDesc('issued_at')
+            ->orderByDesc('id')
+            ->get();
+
         // SKU-Lookup für Kosten
         $skuIds = $licenses->pluck('sku_id')->unique()->toArray();
         $skuMap = AssetLicenseSku::where('team_id', $teamId)
@@ -135,6 +144,7 @@ class Show extends Component
             'employee'     => $this->employee,
             'items'        => $items,
             'devices'      => $devices,
+            'handovers'    => $handovers,
             'deviceRows'   => $deviceRows,
             'licenses'     => $licenses,
             'skuMap'       => $skuMap,

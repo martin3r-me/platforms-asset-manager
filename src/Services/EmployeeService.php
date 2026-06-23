@@ -5,6 +5,7 @@ namespace Platform\AssetManager\Services;
 use Illuminate\Support\Facades\DB;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHandover;
 use Platform\AssetManager\Models\AssetTenant;
 use Platform\AssetManager\Models\AssetUserLicense;
 
@@ -99,6 +100,29 @@ class EmployeeService
                         'display_name'        => null,
                         'raw_data'            => null,
                     ]);
+            }
+
+            // Geräteausgabe-Protokolle dieses Mitarbeiters: PII der Person pseudonymisieren — signer_name
+            // sowie die User-Felder im device_snapshot. Gerätedaten (Name/Seriennr./Modell) bleiben, da
+            // keine Personen-PII. Protokoll bleibt als anonymisierte Historie erhalten (kein Löschen).
+            $handovers = AssetHandover::where('team_id', $teamId)
+                ->where('employee_id', $employee->id)
+                ->with('lines')
+                ->get();
+
+            foreach ($handovers as $handover) {
+                if ($handover->signer_name) {
+                    $handover->update(['signer_name' => $pseudoName]);
+                }
+
+                foreach ($handover->lines as $line) {
+                    $snap = is_array($line->device_snapshot) ? $line->device_snapshot : null;
+                    if ($snap && (($snap['user_principal_name'] ?? null) || ($snap['user_display_name'] ?? null))) {
+                        $snap['user_principal_name'] = $pseudoUpn;
+                        $snap['user_display_name']   = null;
+                        $line->update(['device_snapshot' => $snap]);
+                    }
+                }
             }
 
             $employee->update([

@@ -367,6 +367,52 @@
                     @endif
                 </div>
 
+                {{-- Geräteausgaben (Übergabeprotokolle) --}}
+                <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
+                    <div class="px-4 py-3 border-b border-black/5 dark:border-white/5 flex items-center justify-between">
+                        <h2 class="text-xs font-medium uppercase tracking-wider text-gray-400">Übergabeprotokolle</h2>
+                        @can('asset-manager.manage')
+                            <a href="{{ route('asset-manager.handovers.index', ['device' => $device->id, 'new' => 1]) }}"
+                               class="text-xs text-violet-600 hover:underline">Ausgabe erfassen</a>
+                        @endcan
+                    </div>
+                    <div class="p-4 space-y-3">
+                        @if($hasOpenHandover)
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                                @svg('heroicon-o-check-circle', 'w-3 h-3') Aktuell ausgegeben
+                            </span>
+                        @elseif($device->user_principal_name)
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                                @svg('heroicon-o-exclamation-triangle', 'w-3 h-3') Ohne offene Ausgabe
+                            </span>
+                        @endif
+
+                        @if($handoverLines->isEmpty())
+                            <p class="text-[11px] text-gray-400">Noch keine Ausgabe erfasst.</p>
+                        @else
+                            <ul class="text-[11px] divide-y divide-black/[0.04]">
+                                @foreach($handoverLines as $hl)
+                                    <li class="flex items-center justify-between gap-2 py-1.5">
+                                        <div class="min-w-0 truncate">
+                                            <span class="text-gray-700 dark:text-gray-300">{{ $hl->handover?->employee?->display_name ?: ($hl->handover?->employee?->user_principal_name ?? '—') }}</span>
+                                            <span class="text-gray-400">· {{ $hl->handover?->issued_at?->format('d.m.Y') ?? '—' }}</span>
+                                        </div>
+                                        <div class="flex items-center gap-2 flex-shrink-0">
+                                            @if($hl->returned_at)
+                                                <span class="px-1.5 py-0.5 rounded bg-gray-500/10 text-gray-600">zurück {{ $hl->returned_at->format('d.m.Y') }}</span>
+                                            @else
+                                                <span class="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700">ausgegeben</span>
+                                            @endif
+                                            <a href="{{ route('asset-manager.handovers.pdf', $hl->handover_id) }}" target="_blank"
+                                               class="text-gray-400 hover:text-violet-600" title="Protokoll-PDF">@svg('heroicon-o-document-arrow-down', 'w-3.5 h-3.5 inline')</a>
+                                        </div>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @endif
+                    </div>
+                </div>
+
                 {{-- Kosten --}}
                 <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
                     <div class="px-4 py-3 border-b border-black/5 dark:border-white/5 flex items-center justify-between">

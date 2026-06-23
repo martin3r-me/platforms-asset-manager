@@ -482,7 +482,8 @@
                                                     @if($device->model)
                                                         <div class="text-xs text-gray-400">{{ $device->manufacturer }} {{ $device->model }}</div>
                                                     @endif
-                                                    @if($device->lifecycle_status || $device->isExpiringSoon())
+                                                    @php $missingHandover = $device->user_principal_name && ! isset($openHandoverDeviceIds[$device->id]); @endphp
+                                                    @if($device->lifecycle_status || $device->isExpiringSoon() || $missingHandover)
                                                         <div class="flex flex-wrap items-center gap-1 mt-1">
                                                             @if($device->lifecycle_status)
                                                                 @php $lc = $device->lifecycleBadgeColor(); @endphp
@@ -490,6 +491,9 @@
                                                             @endif
                                                             @if($device->isExpiringSoon())
                                                                 <span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-amber-500/10 text-amber-600">@svg('heroicon-o-exclamation-triangle', 'w-2.5 h-2.5') läuft ab</span>
+                                                            @endif
+                                                            @if($missingHandover)
+                                                                <span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-amber-500/10 text-amber-600" title="Gerät mit Nutzer, aber ohne offene Ausgabe">@svg('heroicon-o-clipboard-document-check', 'w-2.5 h-2.5') ohne Ausgabe</span>
                                                             @endif
                                                         </div>
                                                     @endif

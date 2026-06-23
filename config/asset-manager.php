@@ -114,6 +114,11 @@ return [
                     'icon'  => 'heroicon-o-signal',
                 ],
                 [
+                    'label' => 'Geräteausgaben',
+                    'route' => 'asset-manager.handovers.index',
+                    'icon'  => 'heroicon-o-clipboard-document-check',
+                ],
+                [
                     'label' => 'Lizenzen',
                     'route' => 'asset-manager.licenses.index',
                     'icon'  => 'heroicon-o-key',

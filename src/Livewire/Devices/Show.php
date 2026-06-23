@@ -11,6 +11,7 @@ use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceEvent;
 use Platform\AssetManager\Models\AssetDeviceSyncLog;
+use Platform\AssetManager\Models\AssetHandoverLine;
 use Platform\AssetManager\Models\AssetVendor;
 
 class Show extends Component
@@ -237,11 +238,22 @@ class Show extends Component
         // Zuordnungs-Verlauf (wer hatte das Gerät wann) — aus Intune abgeleitet (2b).
         $assignments = $this->device->assignments()->with('employee')->limit(20)->get();
 
+        // Geräteausgabe-Historie (Übergabeprotokoll-Zeilen dieses Geräts). whereHas('handover')
+        // schließt soft-deleted Protokolle aus + scoped auf das Team.
+        $handoverLines = AssetHandoverLine::with('handover.employee')
+            ->whereHas('handover', fn ($q) => $q->where('team_id', $teamId))
+            ->where('asset_device_id', $this->device->id)
+            ->orderByDesc('id')
+            ->get();
+        $hasOpenHandover = $handoverLines->contains(fn ($l) => $l->returned_at === null);
+
         return view('asset-manager::livewire.devices.show', [
             'device'             => $this->device,
             'activities'         => $activities,
             'events'             => $events,
             'assignments'        => $assignments,
+            'handoverLines'      => $handoverLines,
+            'hasOpenHandover'    => $hasOpenHandover,
             'canManage'          => $this->canManage(),
             'resolvedCost'       => $this->device->resolvedMonthlyCost(),
             'resolvedCostTypeId' => $this->device->resolvedCostTypeId(),

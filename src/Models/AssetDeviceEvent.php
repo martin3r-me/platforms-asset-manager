@@ -77,6 +77,8 @@ class AssetDeviceEvent extends Model
             'os_changed'         => 'OS aktualisiert',
             'reenrolled'         => 'Neu eingebunden',
             'lifecycle_changed'  => 'Lifecycle geändert',
+            'issued'             => 'Ausgegeben',
+            'returned'           => 'Zurückgenommen',
             default              => $this->description ?: $this->event_type,
         };
     }
@@ -91,6 +93,8 @@ class AssetDeviceEvent extends Model
             'os_changed'         => 'emerald',
             'reenrolled'         => 'indigo',
             'lifecycle_changed'  => 'amber',
+            'issued'             => 'indigo',
+            'returned'           => 'gray',
             default              => 'gray',
         };
     }
