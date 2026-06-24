@@ -15,7 +15,7 @@
         <div class="max-w-2xl mx-auto space-y-6">
             <div>
                 <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">Neues Asset anlegen</h1>
-                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                <p class="mt-1 text-sm text-[color:var(--ui-secondary)]">
                     Erfasse manuell Hardware wie Maus, Tastatur, Headset, Monitor o.ä.
                 </p>
             </div>
@@ -30,14 +30,14 @@
                             <option value="{{ $cat->id }}">{{ $cat->name }}</option>
                         @endforeach
                     </select>
-                    @error('categoryId') <p class="mt-1 text-xs text-red-500">{{ $message }}</p> @enderror
+                    @error('categoryId') <p class="mt-1 text-xs text-red-700">{{ $message }}</p> @enderror
                 </div>
 
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Name <span class="text-red-400">*</span></label>
                     <input type="text" wire:model="name" placeholder="z.B. Logitech MX Master 3S"
                         class="w-full px-3 py-2 text-sm rounded-lg bg-black/[0.02] dark:bg-white/[0.03] border border-black/10 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-violet-500/30" />
-                    @error('name') <p class="mt-1 text-xs text-red-500">{{ $message }}</p> @enderror
+                    @error('name') <p class="mt-1 text-xs text-red-700">{{ $message }}</p> @enderror
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -80,7 +80,7 @@
                 </div>
 
                 <div class="rounded-lg bg-black/[0.02] dark:bg-white/[0.03] border border-[var(--ui-border)]/30 p-3 space-y-3">
-                    <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--ui-muted)]">Kosten (optional)</h3>
+                    <h3 class="text-xs font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)]">Kosten (optional)</h3>
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
                             <label class="block text-xs text-gray-600 mb-1">Kaufdatum</label>
@@ -109,12 +109,12 @@
                 <div class="flex items-center gap-3 pt-2 border-t border-[var(--ui-border)]/30">
                     {{-- Submit nur Owner/Admin (Backend: mount()+save() Gate create, ADR 0004). --}}
                     @can('asset-manager.manage')
-                        <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg hover:from-violet-600 hover:to-indigo-700 transition-all shadow-sm">
+                        <x-ui-button variant="primary" size="md" rounded="lg" type="submit">
                             @svg('heroicon-o-check', 'w-4 h-4')
                             Anlegen
-                        </button>
+                        </x-ui-button>
                     @endcan
-                    <a href="{{ route('asset-manager.assets.index') }}" wire:navigate class="text-sm text-gray-500 hover:text-gray-700">Abbrechen</a>
+                    <x-ui-button variant="secondary-ghost" size="sm" rounded="lg" href="{{ route('asset-manager.assets.index') }}" wire:navigate>Abbrechen</x-ui-button>
                 </div>
             </form>
         </div>

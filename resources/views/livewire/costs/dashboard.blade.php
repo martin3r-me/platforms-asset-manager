@@ -89,27 +89,27 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div class="relative overflow-hidden rounded-xl bg-gradient-to-br from-violet-500/10 to-indigo-500/10 border border-violet-500/20 shadow-sm p-5">
                         <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent"></div>
-                        <div class="text-xs uppercase tracking-wider text-gray-500 mb-1">Gesamt / Monat</div>
-                        <div class="text-3xl font-semibold text-violet-700 dark:text-violet-300 tabular-nums">{{ number_format($totals['total'], 2, ',', '.') }} €</div>
-                        <div class="text-xs text-gray-400 mt-2">{{ number_format($totals['total'] * 12, 2, ',', '.') }} € / Jahr</div>
+                        <div class="text-xs uppercase tracking-wider text-[color:var(--ui-secondary)] mb-1">Gesamt / Monat</div>
+                        <div class="text-3xl font-semibold text-[color:var(--ui-primary)] tabular-nums">{{ number_format($totals['total'], 2, ',', '.') }} €</div>
+                        <div class="text-xs text-[color:var(--ui-secondary)] mt-2">{{ number_format($totals['total'] * 12, 2, ',', '.') }} € / Jahr</div>
                     </div>
                     <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm p-5">
-                        <div class="text-xs uppercase tracking-wider text-gray-400 mb-1">Hardware (AfA)</div>
-                        <div class="text-2xl font-semibold text-sky-600 tabular-nums">{{ number_format($totals['hardware'], 2, ',', '.') }} €</div>
+                        <div class="text-xs uppercase tracking-wider text-[color:var(--ui-secondary)] mb-1">Hardware (AfA)</div>
+                        <div class="text-2xl font-semibold text-sky-700 tabular-nums">{{ number_format($totals['hardware'], 2, ',', '.') }} €</div>
                         @php $pctHw = $totals['total'] > 0 ? round($totals['hardware'] / $totals['total'] * 100) : 0; @endphp
                         <div class="mt-2 w-full h-1.5 rounded-full bg-[var(--ui-muted-10)] overflow-hidden">
                             <div class="h-full bg-sky-500" style="width: {{ $pctHw }}%"></div>
                         </div>
-                        <div class="text-[10px] text-gray-400 mt-1">{{ $pctHw }}% der Gesamtkosten</div>
+                        <div class="text-[10px] text-[color:var(--ui-secondary)] mt-1">{{ $pctHw }}% der Gesamtkosten</div>
                     </div>
                     <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm p-5">
-                        <div class="text-xs uppercase tracking-wider text-gray-400 mb-1">Lizenzen</div>
-                        <div class="text-2xl font-semibold text-emerald-600 tabular-nums">{{ number_format($totals['licenses'], 2, ',', '.') }} €</div>
+                        <div class="text-xs uppercase tracking-wider text-[color:var(--ui-secondary)] mb-1">Lizenzen</div>
+                        <div class="text-2xl font-semibold text-emerald-700 tabular-nums">{{ number_format($totals['licenses'], 2, ',', '.') }} €</div>
                         @php $pctLic = $totals['total'] > 0 ? round($totals['licenses'] / $totals['total'] * 100) : 0; @endphp
                         <div class="mt-2 w-full h-1.5 rounded-full bg-[var(--ui-muted-10)] overflow-hidden">
                             <div class="h-full bg-emerald-500" style="width: {{ $pctLic }}%"></div>
                         </div>
-                        <div class="text-[10px] text-gray-400 mt-1">{{ $pctLic }}% der Gesamtkosten</div>
+                        <div class="text-[10px] text-[color:var(--ui-secondary)] mt-1">{{ $pctLic }}% der Gesamtkosten</div>
                     </div>
                 </div>
             </section>
@@ -120,38 +120,38 @@
 
                 <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
                     @if($topEmployees->isEmpty())
-                        <div class="p-8 text-center text-sm text-gray-400">
+                        <div class="p-8 text-center text-sm text-[color:var(--ui-secondary)]">
                             Keine Mitarbeiter mit Kostendaten gefunden.
-                            <div class="text-xs text-gray-400 mt-1">Hinweis: Pflege bei Assets <strong>Kaufpreis + AfA-Monate</strong> und bei Lizenz-SKUs den <strong>Stückpreis</strong>, damit hier etwas erscheint.</div>
+                            <div class="text-xs text-[color:var(--ui-secondary)] mt-1">Hinweis: Pflege bei Assets <strong>Kaufpreis + AfA-Monate</strong> und bei Lizenz-SKUs den <strong>Stückpreis</strong>, damit hier etwas erscheint.</div>
                         </div>
                     @else
                         <table class="w-full text-sm">
                             <thead>
-                                <tr class="border-b border-black/5 dark:border-white/5">
-                                    <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Mitarbeiter</th>
-                                    <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Abteilung</th>
-                                    <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Hardware</th>
-                                    <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Lizenzen</th>
-                                    <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Gesamt</th>
-                                    <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400 w-32">Verteilung</th>
+                                <tr class="border-b border-[color:var(--ui-muted)]">
+                                    <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)]">Mitarbeiter</th>
+                                    <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)]">Abteilung</th>
+                                    <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)]">Hardware</th>
+                                    <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)]">Lizenzen</th>
+                                    <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)]">Gesamt</th>
+                                    <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)] w-32">Verteilung</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-black/[0.03] dark:divide-white/[0.04]">
+                            <tbody class="divide-y divide-[color:var(--ui-muted)]">
                                 @php $maxTotal = $topEmployees->max('total'); @endphp
                                 @foreach($topEmployees as $row)
-                                    <tr class="hover:bg-black/[0.02]">
+                                    <tr class="hover:bg-[color:var(--ui-muted-10)]">
                                         <td class="px-5 py-3">
                                             <a href="{{ route('asset-manager.employees.show', $row['employee']) }}" wire:navigate class="flex items-center gap-2 hover:text-violet-600">
-                                                <div class="w-7 h-7 rounded-full bg-violet-500/10 text-violet-600 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">
+                                                <div class="w-7 h-7 rounded-full bg-[color:var(--ui-primary-10)] text-[color:var(--ui-primary)] flex items-center justify-center text-[10px] font-semibold flex-shrink-0">
                                                     {{ $row['employee']->initials() }}
                                                 </div>
                                                 <span class="font-medium text-gray-900 dark:text-gray-100">{{ $row['employee']->name }}</span>
                                             </a>
                                         </td>
-                                        <td class="px-5 py-3 text-xs text-gray-500">{{ $row['employee']->department ?? '—' }}</td>
-                                        <td class="px-5 py-3 text-right text-sm tabular-nums text-sky-600">{{ number_format($row['hardware'], 2, ',', '.') }} €</td>
-                                        <td class="px-5 py-3 text-right text-sm tabular-nums text-emerald-600">{{ number_format($row['licenses'], 2, ',', '.') }} €</td>
-                                        <td class="px-5 py-3 text-right text-sm font-semibold tabular-nums text-violet-700 dark:text-violet-400">{{ number_format($row['total'], 2, ',', '.') }} €</td>
+                                        <td class="px-5 py-3 text-xs text-[color:var(--ui-secondary)]">{{ $row['employee']->department ?? '—' }}</td>
+                                        <td class="px-5 py-3 text-right text-sm tabular-nums text-sky-700">{{ number_format($row['hardware'], 2, ',', '.') }} €</td>
+                                        <td class="px-5 py-3 text-right text-sm tabular-nums text-emerald-700">{{ number_format($row['licenses'], 2, ',', '.') }} €</td>
+                                        <td class="px-5 py-3 text-right text-sm font-semibold tabular-nums text-[color:var(--ui-primary)]">{{ number_format($row['total'], 2, ',', '.') }} €</td>
                                         <td class="px-5 py-3">
                                             <div class="w-full h-1.5 rounded-full bg-[var(--ui-muted-10)] overflow-hidden">
                                                 <div class="h-full bg-gradient-to-r from-violet-500 to-indigo-500" style="width: {{ $maxTotal > 0 ? round($row['total'] / $maxTotal * 100) : 0 }}%"></div>
@@ -182,7 +182,7 @@
                 <h2 class="text-sm font-semibold text-[var(--ui-secondary)]">Hardware-Kosten pro Kategorie</h2>
                 <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
                     @if($byCategory->isEmpty() || $byCategory->sum('monthly') == 0)
-                        <div class="p-8 text-center text-sm text-gray-400">Keine Hardware-Kosten erfasst.</div>
+                        <div class="p-8 text-center text-sm text-[color:var(--ui-secondary)]">Keine Hardware-Kosten erfasst.</div>
                     @else
                         <div class="p-5 space-y-3">
                             @php $maxCat = $byCategory->max('monthly') ?: 1; @endphp
@@ -207,31 +207,31 @@
                 <h2 class="text-sm font-semibold text-[var(--ui-secondary)]">Lizenz-Kosten pro SKU</h2>
                 <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
                     @if($bySku->isEmpty())
-                        <div class="p-8 text-center text-sm text-gray-400">
+                        <div class="p-8 text-center text-sm text-[color:var(--ui-secondary)]">
                             Noch keine Preise gepflegt. Lege Stückpreise unter <a href="{{ route('asset-manager.licenses.index') }}" wire:navigate class="text-violet-500 hover:underline">Lizenzen</a> fest.
                         </div>
                     @else
                         <table class="w-full text-sm">
                             <thead>
-                                <tr class="border-b border-black/5 dark:border-white/5">
-                                    <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Lizenz</th>
-                                    <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Stückpreis</th>
-                                    <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Genutzt</th>
-                                    <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Auslastung</th>
-                                    <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Pro Monat</th>
+                                <tr class="border-b border-[color:var(--ui-muted)]">
+                                    <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)]">Lizenz</th>
+                                    <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)]">Stückpreis</th>
+                                    <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)]">Genutzt</th>
+                                    <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)]">Auslastung</th>
+                                    <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)]">Pro Monat</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-black/[0.03]">
+                            <tbody class="divide-y divide-[color:var(--ui-muted)]">
                                 @foreach($bySku as $row)
                                     @php $util = $row['utilization']; $c = $util >= 95 ? 'red' : ($util >= 80 ? 'amber' : 'emerald'); @endphp
-                                    <tr class="hover:bg-black/[0.02]">
+                                    <tr class="hover:bg-[color:var(--ui-muted-10)]">
                                         <td class="px-5 py-3 font-medium text-gray-900 dark:text-gray-100">{{ $row['label'] }}</td>
                                         <td class="px-5 py-3 text-right text-sm tabular-nums">{{ number_format((float)($row['unit_price'] ?? 0), 2, ',', '.') }} €</td>
                                         <td class="px-5 py-3 text-right text-sm tabular-nums">{{ $row['consumed'] }} / {{ $row['purchased'] }}</td>
                                         <td class="px-5 py-3 text-right">
-                                            <span class="inline-block min-w-[3rem] text-sm font-medium text-{{ $c }}-600 tabular-nums">{{ $util }}%</span>
+                                            <x-asset-manager-badge :color="$c" size="xs" class="min-w-[3rem] justify-center tabular-nums">{{ $util }}%</x-asset-manager-badge>
                                         </td>
-                                        <td class="px-5 py-3 text-right text-sm font-semibold tabular-nums text-emerald-600">{{ number_format($row['monthly'], 2, ',', '.') }} €</td>
+                                        <td class="px-5 py-3 text-right text-sm font-semibold tabular-nums text-emerald-700">{{ number_format($row['monthly'], 2, ',', '.') }} €</td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -248,30 +248,30 @@
                     <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-sky-500/20 shadow-sm p-5">
                         <div class="flex items-center gap-2 mb-2">
                             @svg('heroicon-o-archive-box', 'w-5 h-5 text-sky-500')
-                            <span class="text-xs uppercase tracking-wider text-gray-400">Hardware im Lager</span>
+                            <span class="text-xs uppercase tracking-wider text-[color:var(--ui-secondary)]">Hardware im Lager</span>
                         </div>
-                        <div class="text-2xl font-semibold text-sky-600 tabular-nums">{{ number_format($anomalies['pool']['value'], 2, ',', '.') }} €</div>
-                        <div class="text-xs text-gray-400 mt-1">{{ $anomalies['pool']['count'] }} Items mit Anschaffungswert</div>
+                        <div class="text-2xl font-semibold text-sky-700 tabular-nums">{{ number_format($anomalies['pool']['value'], 2, ',', '.') }} €</div>
+                        <div class="text-xs text-[color:var(--ui-secondary)] mt-1">{{ $anomalies['pool']['count'] }} Items mit Anschaffungswert</div>
                         <a href="{{ route('asset-manager.assets.index', ['filterStatus' => 'in_stock']) }}" wire:navigate class="text-xs text-violet-500 hover:underline mt-2 inline-block">→ Lager-Items ansehen</a>
                     </div>
 
                     <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-emerald-500/20 shadow-sm p-5">
                         <div class="flex items-center gap-2 mb-2">
                             @svg('heroicon-o-currency-euro', 'w-5 h-5 text-emerald-500')
-                            <span class="text-xs uppercase tracking-wider text-gray-400">Ungenutzte Lizenzen</span>
+                            <span class="text-xs uppercase tracking-wider text-[color:var(--ui-secondary)]">Ungenutzte Lizenzen</span>
                         </div>
-                        <div class="text-2xl font-semibold text-emerald-600 tabular-nums">{{ number_format($anomalies['unused_licenses']['savings'], 2, ',', '.') }} €</div>
-                        <div class="text-xs text-gray-400 mt-1">{{ $anomalies['unused_licenses']['units'] }} freie Lizenzen / Monat</div>
+                        <div class="text-2xl font-semibold text-emerald-700 tabular-nums">{{ number_format($anomalies['unused_licenses']['savings'], 2, ',', '.') }} €</div>
+                        <div class="text-xs text-[color:var(--ui-secondary)] mt-1">{{ $anomalies['unused_licenses']['units'] }} freie Lizenzen / Monat</div>
                         <a href="{{ route('asset-manager.licenses.index') }}" wire:navigate class="text-xs text-violet-500 hover:underline mt-2 inline-block">→ Lizenzen prüfen</a>
                     </div>
 
                     <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-red-500/20 shadow-sm p-5">
                         <div class="flex items-center gap-2 mb-2">
                             @svg('heroicon-o-user-minus', 'w-5 h-5 text-red-500')
-                            <span class="text-xs uppercase tracking-wider text-gray-400">Hardware bei Inaktiven</span>
+                            <span class="text-xs uppercase tracking-wider text-[color:var(--ui-secondary)]">Hardware bei Inaktiven</span>
                         </div>
-                        <div class="text-2xl font-semibold text-red-600 tabular-nums">{{ $anomalies['inactive_employees']['count'] }}</div>
-                        <div class="text-xs text-gray-400 mt-1">Items, {{ number_format($anomalies['inactive_employees']['monthly'], 2, ',', '.') }} € / Monat</div>
+                        <div class="text-2xl font-semibold text-red-700 tabular-nums">{{ $anomalies['inactive_employees']['count'] }}</div>
+                        <div class="text-xs text-[color:var(--ui-secondary)] mt-1">Items, {{ number_format($anomalies['inactive_employees']['monthly'], 2, ',', '.') }} € / Monat</div>
                         <a href="{{ route('asset-manager.employees.index') }}" wire:navigate class="text-xs text-violet-500 hover:underline mt-2 inline-block">→ Mitarbeiter prüfen</a>
                     </div>
                 </div>

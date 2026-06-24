@@ -36,7 +36,7 @@
                 @php $active = ($key === 'all' && $status === '') || $status === $key; @endphp
                 <button type="button" wire:click="setStatus('{{ $key === 'all' ? '' : $key }}')"
                     class="text-left rounded-xl border bg-white px-4 py-3 transition-all hover:shadow-sm {{ $active ? 'border-violet-400 ring-2 ring-violet-500/30' : 'border-[var(--ui-border)]/40' }}">
-                    <div class="text-2xl font-semibold tabular-nums text-{{ $color }}-600">{{ $counts[$key] ?? 0 }}</div>
+                    <div class="text-2xl font-semibold tabular-nums text-{{ $color }}-700">{{ $counts[$key] ?? 0 }}</div>
                     <div class="mt-0.5 text-[11px] font-medium text-[var(--ui-secondary)]">{{ $label }}</div>
                 </button>
             @endforeach
@@ -47,33 +47,30 @@
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
-                        <tr class="text-left text-[11px] uppercase tracking-wider text-[var(--ui-muted)] border-b border-[var(--ui-border)]/40">
-                            <th class="px-4 py-2.5 font-semibold">Gerät</th>
-                            <th class="px-4 py-2.5 font-semibold">Nutzer</th>
-                            <th class="px-4 py-2.5 font-semibold">Status</th>
-                            <th class="px-4 py-2.5 font-semibold">Letzter Check-in</th>
+                        <tr class="text-left text-xs uppercase tracking-wider border-b border-[color:var(--ui-muted)]">
+                            <th class="px-4 py-2.5 bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)] font-semibold">Gerät</th>
+                            <th class="px-4 py-2.5 bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)] font-semibold">Nutzer</th>
+                            <th class="px-4 py-2.5 bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)] font-semibold">Status</th>
+                            <th class="px-4 py-2.5 bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)] font-semibold">Letzter Check-in</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-[var(--ui-border)]/30">
                         @forelse($devices as $device)
-                            @php $lc = $device->lifecycleBadgeColor(); @endphp
-                            <tr class="hover:bg-[var(--ui-muted-5)] transition-colors">
+                            <tr class="hover:bg-[color:var(--ui-muted-10)] transition-colors">
                                 <td class="px-4 py-2.5">
                                     <a href="{{ route('asset-manager.devices.show', $device) }}" wire:navigate
-                                       class="font-medium text-violet-600 hover:text-violet-700">
+                                       class="font-medium text-[color:var(--ui-primary)] hover:text-violet-700">
                                         {{ $device->device_name ?: '—' }}
                                     </a>
                                     @if($device->manufacturer || $device->model)
-                                        <div class="text-[11px] text-[var(--ui-muted)]">{{ trim(($device->manufacturer ?? '') . ' ' . ($device->model ?? '')) }}</div>
+                                        <div class="text-[11px] text-[color:var(--ui-secondary)]">{{ trim(($device->manufacturer ?? '') . ' ' . ($device->model ?? '')) }}</div>
                                     @endif
                                 </td>
                                 <td class="px-4 py-2.5 text-[var(--ui-secondary)]">
                                     {{ $device->user_display_name ?: ($device->user_principal_name ?: '—') }}
                                 </td>
                                 <td class="px-4 py-2.5">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-{{ $lc }}-500/10 text-{{ $lc }}-600">
-                                        {{ $device->lifecycleLabel() }}
-                                    </span>
+                                    <x-asset-manager-badge :color="$device->lifecycleBadgeColor()" dot size="sm">{{ $device->lifecycleLabel() }}</x-asset-manager-badge>
                                 </td>
                                 <td class="px-4 py-2.5 text-[var(--ui-secondary)] tabular-nums">
                                     {{ $device->last_check_in_at?->format('d.m.Y H:i') ?? '—' }}
@@ -81,7 +78,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="4" class="px-4 py-10 text-center text-sm text-[var(--ui-muted)]">
+                                <td colspan="4" class="px-4 py-10 text-center text-sm text-[color:var(--ui-secondary)]">
                                     Keine Geräte in diesem Status.
                                 </td>
                             </tr>
@@ -91,7 +88,7 @@
             </div>
 
             @if($devices->hasPages())
-                <div class="px-4 py-3 border-t border-[var(--ui-border)]/40">
+                <div class="px-4 py-3 border-t border-[color:var(--ui-muted)]">
                     {{ $devices->links() }}
                 </div>
             @endif

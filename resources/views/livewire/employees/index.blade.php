@@ -98,11 +98,10 @@
                 @endif
 
                 @if($preset !== 'active' || $search || $filterDept || $filterSku || $filterSource || $filterCostCenter || $filterHasLicense || $filterHasDevice || $filterHasAsset)
-                    <button wire:click="resetFilters"
-                            class="w-full px-3 py-2 text-[11px] font-medium text-red-500 bg-red-500/5 border border-red-500/20 rounded-lg hover:bg-red-500/10">
-                        @svg('heroicon-o-arrow-uturn-left', 'w-3.5 h-3.5 inline -mt-0.5 mr-1')
+                    <x-ui-button variant="secondary-ghost" size="sm" rounded="lg" class="w-full" wire:click="resetFilters">
+                        @svg('heroicon-o-arrow-uturn-left', 'w-3.5 h-3.5 mr-1')
                         Alle Filter zurücksetzen
-                    </button>
+                    </x-ui-button>
                 @endif
             </div>
         </x-ui-page-sidebar>
@@ -124,7 +123,7 @@
                     {{-- Identität --}}
                     <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm p-3">
                         <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-full bg-violet-500/10 text-violet-600 flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                            <div class="w-10 h-10 rounded-full bg-[color:var(--ui-primary-10)] text-[color:var(--ui-primary)] flex items-center justify-center text-xs font-semibold flex-shrink-0">
                                 {{ $selectedEmployee->initials() }}
                             </div>
                             <div class="min-w-0 flex-1">
@@ -154,11 +153,11 @@
                                 <dt class="text-[var(--ui-muted)] flex-shrink-0">Quelle</dt>
                                 <dd class="m-0 text-right">
                                     @if($selectedEmployee->source === 'graph')
-                                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-full bg-violet-500/10 text-violet-600">Graph</span>
+                                        <x-asset-manager-badge color="violet" size="xs">Graph</x-asset-manager-badge>
                                     @elseif($selectedEmployee->source === 'manual')
-                                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-full bg-amber-500/10 text-amber-600">Manuell</span>
+                                        <x-asset-manager-badge color="amber" size="xs">Manuell</x-asset-manager-badge>
                                     @else
-                                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-full bg-gray-500/10 text-gray-500">Abgeleitet</span>
+                                        <x-asset-manager-badge color="gray" size="xs">Abgeleitet</x-asset-manager-badge>
                                     @endif
                                 </dd>
                             </div>
@@ -166,9 +165,9 @@
                                 <dt class="text-[var(--ui-muted)] flex-shrink-0">Status</dt>
                                 <dd class="m-0 text-right">
                                     @if($selectedEmployee->is_active)
-                                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-full bg-emerald-500/10 text-emerald-600">Aktiv</span>
+                                        <x-asset-manager-badge color="emerald" size="xs">Aktiv</x-asset-manager-badge>
                                     @else
-                                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-full bg-red-500/10 text-red-600">Inaktiv</span>
+                                        <x-asset-manager-badge color="red" size="xs">Inaktiv</x-asset-manager-badge>
                                     @endif
                                 </dd>
                             </div>
@@ -190,21 +189,20 @@
                             <div class="text-[10px] uppercase tracking-wider text-[var(--ui-muted)]">Lizenzen</div>
                         </div>
                         <div class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm p-2.5 text-center">
-                            <div class="text-lg font-semibold tabular-nums text-violet-600">{{ number_format($selectedCost['total'], 2, ',', '.') }} €</div>
+                            <div class="text-lg font-semibold tabular-nums text-[color:var(--ui-primary)]">{{ number_format($selectedCost['total'], 2, ',', '.') }} €</div>
                             <div class="text-[10px] uppercase tracking-wider text-[var(--ui-muted)]">pro Monat</div>
                         </div>
                     </div>
 
-                    <a href="{{ route('asset-manager.employees.show', $selectedEmployee) }}" wire:navigate
-                       class="block px-3 py-2 text-xs text-center font-medium text-white bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg hover:from-violet-600 hover:to-indigo-700 transition-all">
-                        @svg('heroicon-o-arrow-top-right-on-square', 'w-3.5 h-3.5 inline -mt-0.5')
+                    <x-ui-button variant="primary" size="md" rounded="lg" href="{{ route('asset-manager.employees.show', $selectedEmployee) }}" wire:navigate class="w-full">
+                        @svg('heroicon-o-arrow-top-right-on-square', 'w-3.5 h-3.5')
                         Vollständiges Profil
-                    </a>
+                    </x-ui-button>
                 @else
                     <div class="flex flex-col items-center justify-center py-8 text-center">
-                        @svg('heroicon-o-cursor-arrow-rays', 'w-8 h-8 text-gray-300 mb-3')
+                        @svg('heroicon-o-cursor-arrow-rays', 'w-8 h-8 text-[color:var(--ui-muted)] mb-3')
                         <p class="text-[11px] text-[var(--ui-muted)] mb-1">Wähle einen Mitarbeiter aus der Tabelle.</p>
-                        <p class="text-[10px] text-[var(--ui-muted)]/70">Zeigt Zusammenfassung & Monatskosten.</p>
+                        <p class="text-[10px] text-[color:var(--ui-secondary)]">Zeigt Zusammenfassung & Monatskosten.</p>
                     </div>
                 @endif
             </div>
@@ -241,7 +239,7 @@
                                     : 'bg-white dark:bg-white/5 text-gray-600 dark:text-gray-400 border-black/10 dark:border-white/10 hover:border-' . $chip['color'] . '-500/50 hover:text-' . $chip['color'] . '-600' }}">
                         @svg($chip['icon'], 'w-3.5 h-3.5')
                         {{ $chip['label'] }}
-                        <span class="tabular-nums {{ $active ? 'text-white/80' : 'text-gray-400' }}">{{ $chip['count'] }}</span>
+                        <span class="tabular-nums {{ $active ? 'text-white/80' : 'text-[color:var(--ui-secondary)]' }}">{{ $chip['count'] }}</span>
                     </button>
                 @endforeach
             </div>
@@ -249,7 +247,7 @@
             {{-- Aktive Sidebar-Filter als Badges --}}
             @if($search || $filterDept || $filterSku || $filterSource || $filterCostCenter || $filterHasLicense || $filterHasDevice || $filterHasAsset)
                 <div class="flex flex-wrap items-center gap-2 text-xs">
-                    <span class="text-gray-400">Zusatzfilter:</span>
+                    <span class="text-[color:var(--ui-secondary)]">Zusatzfilter:</span>
                     @if($search) <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/10 text-violet-600">"{{ Str::limit($search, 30) }}" <button wire:click="$set('search', '')">×</button></span> @endif
                     @if($filterSku)
                         @php $skuLabel = optional($skus->firstWhere('sku_id', $filterSku))->display_name ?? $filterSku; @endphp
@@ -271,29 +269,29 @@
             <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
                 @if($employees->isEmpty())
                     <div class="flex flex-col items-center justify-center py-16 text-center">
-                        @svg('heroicon-o-users', 'w-10 h-10 text-gray-300 dark:text-gray-600 mb-3')
-                        <p class="text-sm text-gray-400">Keine Mitarbeiter für diese Filter.</p>
+                        @svg('heroicon-o-users', 'w-10 h-10 text-[color:var(--ui-muted)] mb-3')
+                        <p class="text-sm text-[color:var(--ui-secondary)]">Keine Mitarbeiter für diese Filter.</p>
                         <button wire:click="resetFilters" class="mt-2 text-xs text-violet-500 hover:underline">Filter zurücksetzen</button>
                     </div>
                 @else
                     <table class="w-full text-sm">
                         <thead>
-                            <tr class="border-b border-black/5 dark:border-white/5">
-                                <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">
+                            <tr class="border-b border-[color:var(--ui-muted)]">
+                                <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)]">
                                     <button wire:click="sortBy('display_name')" class="flex items-center gap-1 hover:text-gray-600">
                                         Name
                                         @if($sortField === 'display_name') @svg($sortDirection === 'asc' ? 'heroicon-o-chevron-up' : 'heroicon-o-chevron-down', 'w-3 h-3') @endif
                                     </button>
                                 </th>
-                                <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Abteilung</th>
-                                <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Kostenstelle</th>
-                                <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Geräte</th>
-                                <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Assets</th>
-                                <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Lizenzen</th>
-                                <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">Quelle</th>
+                                <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)]">Abteilung</th>
+                                <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)]">Kostenstelle</th>
+                                <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)]">Geräte</th>
+                                <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)]">Assets</th>
+                                <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)]">Lizenzen</th>
+                                <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)]">Quelle</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-black/[0.03] dark:divide-white/[0.04]">
+                        <tbody class="divide-y divide-[color:var(--ui-muted)]">
                             @foreach($employees as $emp)
                                 {{-- Klick auf die Zeile öffnet das Panel; Klicks aus dem Namens-Link (wire:navigate)
                                      werden ignoriert, damit der Name weiterhin direkt zum Profil navigiert. Kein
@@ -301,30 +299,30 @@
                                 <tr wire:key="emp-{{ $emp->id }}"
                                     x-data
                                     @click="if (! $event.target.closest('a')) $wire.selectEmployee({{ $emp->id }})"
-                                    class="cursor-pointer transition-colors {{ $selectedId === $emp->id ? 'bg-violet-500/10' : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]' }}">
+                                    class="cursor-pointer transition-colors {{ $selectedId === $emp->id ? 'bg-[color:var(--ui-primary-10)] shadow-[inset_3px_0_0_rgb(var(--ui-primary-rgb))]' : 'hover:bg-[color:var(--ui-muted-10)]' }}">
                                     <td class="px-5 py-3">
                                         <a href="{{ route('asset-manager.employees.show', $emp) }}" wire:navigate class="flex items-center gap-2">
-                                            <div class="w-7 h-7 rounded-full bg-violet-500/10 text-violet-600 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">
+                                            <div class="w-7 h-7 rounded-full bg-[color:var(--ui-primary-10)] text-[color:var(--ui-primary)] flex items-center justify-center text-[10px] font-semibold flex-shrink-0">
                                                 {{ $emp->initials() }}
                                             </div>
                                             <div class="min-w-0">
                                                 <div class="font-medium text-gray-900 dark:text-gray-100 hover:text-violet-600">{{ $emp->name }}</div>
-                                                <div class="text-xs text-gray-400 truncate max-w-[240px]">{{ $emp->user_principal_name }}</div>
+                                                <div class="text-xs text-[color:var(--ui-secondary)] truncate max-w-[240px]">{{ $emp->user_principal_name }}</div>
                                             </div>
                                         </a>
                                     </td>
-                                    <td class="px-5 py-3 text-xs text-gray-500">{{ $emp->department ?? '—' }}</td>
-                                    <td class="px-5 py-3 text-xs text-gray-500">{{ $emp->cost_center ?: '—' }}</td>
+                                    <td class="px-5 py-3 text-xs text-[color:var(--ui-secondary)]">{{ $emp->department ?? '—' }}</td>
+                                    <td class="px-5 py-3 text-xs text-[color:var(--ui-secondary)]">{{ $emp->cost_center ?: '—' }}</td>
                                     <td class="px-5 py-3 text-right text-sm tabular-nums">{{ $deviceCounts[$emp->user_principal_name] ?? 0 }}</td>
                                     <td class="px-5 py-3 text-right text-sm tabular-nums">{{ $itemCounts[$emp->id] ?? 0 }}</td>
                                     <td class="px-5 py-3 text-right text-sm tabular-nums">{{ $licenseCounts[$emp->user_principal_name] ?? 0 }}</td>
                                     <td class="px-5 py-3">
                                         @if($emp->source === 'graph')
-                                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-full bg-violet-500/10 text-violet-600">Graph</span>
+                                            <x-asset-manager-badge color="violet" size="xs">Graph</x-asset-manager-badge>
                                         @elseif($emp->source === 'manual')
-                                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-full bg-amber-500/10 text-amber-600">Manuell</span>
+                                            <x-asset-manager-badge color="amber" size="xs">Manuell</x-asset-manager-badge>
                                         @else
-                                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-full bg-gray-500/10 text-gray-500">Abgeleitet</span>
+                                            <x-asset-manager-badge color="gray" size="xs">Abgeleitet</x-asset-manager-badge>
                                         @endif
                                     </td>
                                 </tr>
@@ -332,7 +330,7 @@
                         </tbody>
                     </table>
                     @if($employees->hasPages())
-                        <div class="px-5 py-3 border-t border-black/5 dark:border-white/5">
+                        <div class="px-5 py-3 border-t border-[color:var(--ui-muted)]">
                             {{ $employees->links() }}
                         </div>
                     @endif

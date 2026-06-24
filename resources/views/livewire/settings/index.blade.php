@@ -25,26 +25,29 @@
                 <div class="flex items-start justify-between gap-6">
                     <div class="min-w-0">
                         <h2 class="text-sm font-medium text-gray-900 dark:text-gray-100">Controlling / Kostenaufteilung</h2>
-                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        <p class="mt-1 text-xs text-[color:var(--ui-secondary)]">
                             Blendet die Kosten-Schicht ein bzw. aus: Auswertungen (Kostenaufteilung, Kostenpositionen, Kosten je Mitarbeiter, Geräte nach Modell), Stammdaten und den Kosten-Import. Bei deaktiviertem Controlling bleibt das Geräte-/Asset-Inventar voll funktionsfähig; vorhandene Kostendaten bleiben erhalten.
                         </p>
-                        <p class="mt-3 inline-flex items-center gap-1.5 text-xs font-medium {{ $controllingEnabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400' }}">
+                        <p class="mt-3 inline-flex items-center gap-1.5 text-xs font-medium {{ $controllingEnabled ? 'text-emerald-700 dark:text-emerald-400' : 'text-[color:var(--ui-secondary)]' }}">
                             <span class="w-1.5 h-1.5 rounded-full {{ $controllingEnabled ? 'bg-emerald-500' : 'bg-gray-400' }}"></span>
                             {{ $controllingEnabled ? 'Aktiviert' : 'Deaktiviert' }}
                         </p>
                     </div>
                     <div class="flex-shrink-0">
                         @if($canManage)
-                            <button type="button" wire:click="toggleControlling"
-                                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all shadow-sm
-                                {{ $controllingEnabled
-                                    ? 'text-violet-600 dark:text-violet-400 bg-violet-500/10 hover:bg-violet-500/20'
-                                    : 'text-white bg-gradient-to-br from-violet-500 to-indigo-600 hover:from-violet-600 hover:to-indigo-700' }}">
-                                @svg($controllingEnabled ? 'heroicon-o-eye-slash' : 'heroicon-o-eye', 'w-4 h-4')
-                                {{ $controllingEnabled ? 'Deaktivieren' : 'Aktivieren' }}
-                            </button>
+                            @if($controllingEnabled)
+                                <x-ui-button variant="secondary-ghost" size="md" rounded="lg" type="button" wire:click="toggleControlling">
+                                    @svg('heroicon-o-eye-slash', 'w-4 h-4')
+                                    Deaktivieren
+                                </x-ui-button>
+                            @else
+                                <x-ui-button variant="primary" size="md" rounded="lg" type="button" wire:click="toggleControlling">
+                                    @svg('heroicon-o-eye', 'w-4 h-4')
+                                    Aktivieren
+                                </x-ui-button>
+                            @endif
                         @else
-                            <span class="text-xs text-gray-400">Nur Owner/Admin</span>
+                            <span class="text-xs text-[color:var(--ui-secondary)]">Nur Owner/Admin</span>
                         @endif
                     </div>
                 </div>

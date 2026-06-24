@@ -11,11 +11,11 @@
             <x-slot name="actions">
                 <div class="inline-flex rounded-lg bg-black/[0.04] dark:bg-white/[0.06] p-0.5">
                     <button wire:click="setPeriod('monthly')"
-                            class="px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ $period === 'monthly' ? 'bg-white shadow text-violet-600' : 'text-gray-500 hover:text-gray-700' }}">
+                            class="px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ $period === 'monthly' ? 'bg-white shadow text-violet-600' : 'text-[color:var(--ui-secondary)] hover:text-gray-700' }}">
                         Monatlich
                     </button>
                     <button wire:click="setPeriod('quarterly')"
-                            class="px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ $period === 'quarterly' ? 'bg-white shadow text-violet-600' : 'text-gray-500 hover:text-gray-700' }}">
+                            class="px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ $period === 'quarterly' ? 'bg-white shadow text-violet-600' : 'text-[color:var(--ui-secondary)] hover:text-gray-700' }}">
                         Quartal
                     </button>
                 </div>
@@ -36,7 +36,7 @@
                     <h2 class="text-sm font-semibold text-[var(--ui-secondary)]">
                         Kostenaufteilung — Kostenstelle × Kostenart ({{ $period === 'quarterly' ? 'Quartal' : 'Monatlich' }})
                     </h2>
-                    <span class="text-sm font-semibold text-violet-700 tabular-nums">
+                    <span class="text-sm font-semibold text-[color:var(--ui-primary)] tabular-nums">
                         Gesamt: {{ number_format($pivot['grandTotal'], 2, ',', '.') }} €
                     </span>
                 </div>
@@ -52,7 +52,7 @@
                     <h2 class="text-sm font-semibold text-[var(--ui-secondary)]">Nach Kostenart</h2>
                     <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
                         @if($byCostType->isEmpty())
-                            <div class="p-6 text-center text-sm text-gray-400">Keine Daten.</div>
+                            <div class="p-6 text-center text-sm text-[color:var(--ui-secondary)]">Keine Daten.</div>
                         @else
                             <div class="p-5 space-y-3">
                                 @php $maxT = max($byCostType->max('monthly'), 0.01); @endphp
@@ -77,15 +77,15 @@
                     <h2 class="text-sm font-semibold text-[var(--ui-secondary)]">Nach Kreditor</h2>
                     <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
                         @if($byVendor->isEmpty())
-                            <div class="p-6 text-center text-sm text-gray-400">Keine Kostenpositionen mit Kreditor.</div>
+                            <div class="p-6 text-center text-sm text-[color:var(--ui-secondary)]">Keine Kostenpositionen mit Kreditor.</div>
                         @else
                             <table class="w-full text-sm">
-                                <tbody class="divide-y divide-black/[0.03]">
+                                <tbody class="divide-y divide-[color:var(--ui-muted)]">
                                     @foreach($byVendor as $row)
-                                        <tr class="hover:bg-black/[0.02]">
+                                        <tr class="hover:bg-[color:var(--ui-muted-10)]">
                                             <td class="px-5 py-2.5 font-medium text-gray-800">{{ $row['label'] }}</td>
-                                            <td class="px-5 py-2.5 text-right text-xs text-gray-400">{{ $row['count'] }} Pos.</td>
-                                            <td class="px-5 py-2.5 text-right tabular-nums font-semibold text-violet-700">{{ number_format($row['monthly'], 2, ',', '.') }} €</td>
+                                            <td class="px-5 py-2.5 text-right text-xs text-[color:var(--ui-secondary)]">{{ $row['count'] }} Pos.</td>
+                                            <td class="px-5 py-2.5 text-right tabular-nums font-semibold text-[color:var(--ui-primary)]">{{ number_format($row['monthly'], 2, ',', '.') }} €</td>
                                         </tr>
                                     @endforeach
                                 </tbody>
