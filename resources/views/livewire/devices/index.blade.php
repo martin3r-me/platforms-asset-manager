@@ -11,23 +11,21 @@
             <x-slot name="actions">
                 @include('asset-manager::livewire.partials.tenant-selector')
                 @if($config && $config->isConfigured() && $config->last_sync_at)
-                    <span class="text-xs text-gray-400">
+                    <span class="text-xs text-[color:var(--ui-secondary)]">
                         @svg('heroicon-o-clock', 'w-3 h-3 inline -mt-0.5')
                         Letzter Sync {{ $config->last_sync_at->diffForHumans() }}
                     </span>
                 @endif
                 @if($config && $config->isConfigured() && $stats['total'] > 0)
-                    <button wire:click="exportCsv" wire:loading.attr="disabled" wire:target="exportCsv"
-                       class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-black/[0.04] dark:bg-white/[0.06] rounded-lg hover:bg-black/[0.07] transition-all disabled:opacity-60">
+                    <x-ui-button variant="secondary-ghost" size="sm" rounded="lg" wire:click="exportCsv" wire:loading.attr="disabled" wire:target="exportCsv">
                         @svg('heroicon-o-arrow-down-tray', 'w-3.5 h-3.5')
                         Export CSV
-                    </button>
+                    </x-ui-button>
                 @endif
-                <a href="{{ route('asset-manager.setup') }}" wire:navigate
-                   class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-black/[0.04] dark:bg-white/[0.06] rounded-lg hover:bg-black/[0.07] transition-all">
+                <x-ui-button variant="secondary-ghost" size="sm" rounded="lg" href="{{ route('asset-manager.setup') }}" wire:navigate>
                     @svg('heroicon-o-wrench-screwdriver', 'w-3.5 h-3.5')
                     Connector
-                </a>
+                </x-ui-button>
             </x-slot>
         </x-asset-manager-page-actionbar>
     </x-slot>
@@ -37,7 +35,7 @@
         <x-ui-page-sidebar title="Filter" icon="heroicon-o-funnel" width="w-72" :defaultOpen="true">
             <div class="p-4 space-y-4 bg-[var(--ui-muted-5)]">
                 <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Schnellfilter</h3>
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">Schnellfilter</h3>
                     <div class="px-2 pb-2 space-y-0.5">
                         @foreach([
                             ['all',          'Alle Geräte'],
@@ -49,16 +47,16 @@
                             ['unencrypted',  'Nicht verschlüsselt'],
                         ] as [$key, $label])
                             <button wire:click="setPreset('{{ $key }}')"
-                                class="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-[11px] rounded-md transition-colors {{ $preset === $key ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300 font-medium' : 'text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]' }}">
+                                class="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-[11px] rounded-md transition-colors {{ $preset === $key ? 'bg-[color:var(--ui-primary-10)] text-[color:var(--ui-primary)] font-medium' : 'text-[color:var(--ui-secondary)] hover:bg-[color:var(--ui-muted-5)]' }}">
                                 <span>{{ $label }}</span>
-                                <span class="tabular-nums px-1.5 py-0.5 rounded-full text-[10px] {{ $preset === $key ? 'bg-violet-500/20 text-violet-700 dark:text-violet-300' : 'bg-[var(--ui-muted-10)] text-[var(--ui-muted)]' }}">{{ $presetCounts[$key] ?? 0 }}</span>
+                                <span class="tabular-nums px-1.5 py-0.5 rounded-full text-[10px] {{ $preset === $key ? 'bg-[color:var(--ui-primary-20)] text-[color:var(--ui-primary)]' : 'bg-[color:var(--ui-muted-10)] text-[color:var(--ui-secondary)]' }}">{{ $presetCounts[$key] ?? 0 }}</span>
                             </button>
                         @endforeach
                     </div>
                 </section>
 
                 <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Suche</h3>
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">Suche</h3>
                     <div class="px-3 pb-3">
                         <input type="text" wire:model.live.debounce.300ms="search" placeholder="Name, Nutzer, Seriennr..."
                             class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40 focus:outline-none focus:ring-2 focus:ring-violet-500/30" />
@@ -66,7 +64,7 @@
                 </section>
 
                 <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Compliance</h3>
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">Compliance</h3>
                     <div class="px-3 pb-3">
                         <select wire:model.live="filterCompliance" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40">
                             <option value="">Alle</option>
@@ -81,7 +79,7 @@
 
                 @if($osList->count() > 0)
                     <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                        <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Betriebssystem</h3>
+                        <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">Betriebssystem</h3>
                         <div class="px-3 pb-3">
                             <select wire:model.live="filterOs" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40">
                                 <option value="">Alle</option>
@@ -92,7 +90,7 @@
                 @endif
 
                 <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Lifecycle</h3>
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">Lifecycle</h3>
                     <div class="px-3 pb-3">
                         <select wire:model.live="filterLifecycle" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40">
                             <option value="">Alle</option>
@@ -107,10 +105,10 @@
                 </section>
 
                 <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Anzeige</h3>
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">Anzeige</h3>
                     <div class="px-3 pb-2 text-[11px]">
                         <div class="flex items-center justify-between py-1.5">
-                            <span class="text-[var(--ui-muted)]">Pro Seite</span>
+                            <span class="text-[color:var(--ui-secondary)]">Pro Seite</span>
                             <select wire:model.live="perPage" class="px-2 py-1 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40">
                                 <option value="15">15</option>
                                 <option value="25">25</option>
@@ -119,18 +117,18 @@
                             </select>
                         </div>
                     </div>
-                    <button wire:click="resetColumnOrder" class="w-full text-left px-3 py-2 border-t border-[var(--ui-border)]/30 text-[11px] text-[var(--ui-muted)] hover:bg-[var(--ui-muted-5)]">
+                    <button wire:click="resetColumnOrder" class="w-full text-left px-3 py-2 border-t border-[var(--ui-border)]/30 text-[11px] text-[color:var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
                         @svg('heroicon-o-arrow-uturn-left', 'w-3 h-3 inline -mt-0.5 mr-1')
                         Spalten zurücksetzen
                     </button>
                 </section>
 
                 @if($search || $filterCompliance || $filterOs || $filterLifecycle || $preset !== 'all')
-                    <button wire:click="$set('search', ''); $set('filterCompliance', ''); $set('filterOs', ''); $set('filterLifecycle', ''); setPreset('all')"
-                            class="w-full px-3 py-2 text-[11px] font-medium text-red-500 bg-red-500/5 border border-red-500/20 rounded-lg hover:bg-red-500/10">
-                        @svg('heroicon-o-x-circle', 'w-3.5 h-3.5 inline -mt-0.5 mr-1')
+                    <x-ui-button variant="secondary-ghost" size="sm" rounded="lg" class="w-full"
+                            wire:click="$set('search', ''); $set('filterCompliance', ''); $set('filterOs', ''); $set('filterLifecycle', ''); setPreset('all')">
+                        @svg('heroicon-o-x-circle', 'w-3.5 h-3.5')
                         Filter zurücksetzen
-                    </button>
+                    </x-ui-button>
                 @endif
             </div>
         </x-ui-page-sidebar>
@@ -144,8 +142,8 @@
                 @if($selectedDevice)
                     {{-- Detail: einzelnes Gerät --}}
                     <div class="flex items-center justify-between pb-2 border-b border-[var(--ui-border)]/30">
-                        <span class="text-[10px] uppercase tracking-wider text-[var(--ui-muted)]">Auswahl</span>
-                        <button wire:click="clearSelection" class="text-[10px] text-[var(--ui-muted)] hover:text-red-500">
+                        <span class="text-[10px] uppercase tracking-wider text-[color:var(--ui-secondary)]">Auswahl</span>
+                        <button wire:click="clearSelection" class="text-[10px] text-[color:var(--ui-secondary)] hover:text-red-500">
                             @svg('heroicon-o-x-mark', 'w-3 h-3 inline -mt-0.5')
                             Schließen
                         </button>
@@ -156,19 +154,17 @@
                             @svg('heroicon-o-computer-desktop', 'w-5 h-5 text-violet-500 flex-shrink-0')
                             <div class="min-w-0">
                                 <div class="text-sm font-semibold text-[var(--ui-secondary)] truncate">{{ $selectedDevice->device_name ?? '—' }}</div>
-                                <div class="text-[11px] text-[var(--ui-muted)] truncate">{{ trim($selectedDevice->manufacturer . ' ' . $selectedDevice->model) }}</div>
+                                <div class="text-[11px] text-[color:var(--ui-secondary)] truncate">{{ trim($selectedDevice->manufacturer . ' ' . $selectedDevice->model) }}</div>
                             </div>
                         </div>
 
-                        @php $c = $selectedDevice->complianceBadgeColor() @endphp
-                        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-{{ $c }}-500/10 text-{{ $c }}-600">
-                            <span class="w-1.5 h-1.5 rounded-full bg-{{ $c }}-500"></span>
+                        <x-asset-manager-badge :color="$selectedDevice->complianceBadgeColor()" dot size="xs">
                             {{ $selectedDevice->complianceLabel() }}
-                        </span>
+                        </x-asset-manager-badge>
                     </section>
 
                     <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                        <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Eigenschaften</h3>
+                        <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">Eigenschaften</h3>
                         <dl class="divide-y divide-[var(--ui-border)]/30 text-[11px]">
                             @foreach([
                                 ['OS',           $selectedDevice->operating_system],
@@ -181,7 +177,7 @@
                                 ['Letztes Check-In', $selectedDevice->last_check_in_at?->diffForHumans()],
                             ] as [$label, $value])
                                 <div class="flex items-baseline justify-between gap-2 py-1.5 px-3">
-                                    <dt class="text-[var(--ui-muted)] flex-shrink-0">{{ $label }}</dt>
+                                    <dt class="text-[color:var(--ui-secondary)] flex-shrink-0">{{ $label }}</dt>
                                     <dd class="text-[var(--ui-secondary)] m-0 truncate max-w-[60%] text-right">{{ $value ?: '—' }}</dd>
                                 </div>
                             @endforeach
@@ -189,11 +185,10 @@
                     </section>
 
                     <div class="space-y-2">
-                        <a href="{{ route('asset-manager.devices.show', $selectedDevice) }}" wire:navigate
-                           class="block px-3 py-2 text-xs text-center font-medium text-white bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg hover:from-violet-600 hover:to-indigo-700 transition-all">
-                            @svg('heroicon-o-arrow-top-right-on-square', 'w-3.5 h-3.5 inline -mt-0.5')
+                        <x-ui-button variant="primary" size="md" rounded="lg" href="{{ route('asset-manager.devices.show', $selectedDevice) }}" wire:navigate class="w-full">
+                            @svg('heroicon-o-arrow-top-right-on-square', 'w-3.5 h-3.5')
                             Vollständige Detail-Seite
-                        </a>
+                        </x-ui-button>
                         @if($selectedDevice->user_principal_name)
                             <button wire:click="selectEmployeeByUpn('{{ $selectedDevice->user_principal_name }}')"
                                 class="block w-full px-3 py-2 text-xs text-center text-[var(--ui-secondary)] bg-white border border-[var(--ui-border)]/40 rounded-lg hover:bg-[var(--ui-muted-5)]">
@@ -206,8 +201,8 @@
                 @elseif($selectedEmployee)
                     {{-- Detail: Mitarbeiter mit allen Geräten/Lizenzen --}}
                     <div class="flex items-center justify-between pb-2 border-b border-[var(--ui-border)]/30">
-                        <span class="text-[10px] uppercase tracking-wider text-[var(--ui-muted)]">Mitarbeiter</span>
-                        <button wire:click="clearSelection" class="text-[10px] text-[var(--ui-muted)] hover:text-red-500">
+                        <span class="text-[10px] uppercase tracking-wider text-[color:var(--ui-secondary)]">Mitarbeiter</span>
+                        <button wire:click="clearSelection" class="text-[10px] text-[color:var(--ui-secondary)] hover:text-red-500">
                             @svg('heroicon-o-x-mark', 'w-3 h-3 inline -mt-0.5')
                             Schließen
                         </button>
@@ -220,28 +215,28 @@
                             </div>
                             <div class="min-w-0 flex-1">
                                 <div class="text-sm font-semibold text-[var(--ui-secondary)] truncate">{{ $selectedEmployee->name }}</div>
-                                <div class="text-[10px] text-[var(--ui-muted)] truncate">{{ $selectedEmployee->user_principal_name }}</div>
+                                <div class="text-[10px] text-[color:var(--ui-secondary)] truncate">{{ $selectedEmployee->user_principal_name }}</div>
                             </div>
                         </div>
                         @if($selectedEmployee->department || $selectedEmployee->job_title)
-                            <div class="mt-2 text-[10px] text-[var(--ui-muted)]">
+                            <div class="mt-2 text-[10px] text-[color:var(--ui-secondary)]">
                                 {{ $selectedEmployee->job_title }}@if($selectedEmployee->department && $selectedEmployee->job_title) · @endif{{ $selectedEmployee->department }}
                             </div>
                         @endif
                     </section>
 
                     <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                        <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Geräte ({{ $employeeDevices->count() }})</h3>
+                        <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">Geräte ({{ $employeeDevices->count() }})</h3>
                         @if($employeeDevices->isEmpty())
-                            <div class="px-3 pb-3 text-[11px] text-[var(--ui-muted)]">Keine Geräte zugewiesen.</div>
+                            <div class="px-3 pb-3 text-[11px] text-[color:var(--ui-secondary)]">Keine Geräte zugewiesen.</div>
                         @else
                             <div class="divide-y divide-[var(--ui-border)]/30">
                                 @foreach($employeeDevices as $d)
                                     <button wire:click="selectDevice({{ $d->id }})" class="w-full flex items-center gap-2 px-3 py-2 hover:bg-[var(--ui-muted-5)] text-left">
-                                        @svg('heroicon-o-computer-desktop', 'w-3.5 h-3.5 text-gray-400 flex-shrink-0')
+                                        @svg('heroicon-o-computer-desktop', 'w-3.5 h-3.5 text-[color:var(--ui-secondary)] flex-shrink-0')
                                         <div class="min-w-0 flex-1">
                                             <div class="text-[11px] font-medium text-[var(--ui-secondary)] truncate">{{ $d->device_name ?? '—' }}</div>
-                                            <div class="text-[10px] text-[var(--ui-muted)] truncate">{{ $d->operating_system }} {{ $d->os_version }}</div>
+                                            <div class="text-[10px] text-[color:var(--ui-secondary)] truncate">{{ $d->operating_system }} {{ $d->os_version }}</div>
                                         </div>
                                     </button>
                                 @endforeach
@@ -250,14 +245,14 @@
                     </section>
 
                     <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                        <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Lizenzen ({{ $employeeLicenses->count() }})</h3>
+                        <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">Lizenzen ({{ $employeeLicenses->count() }})</h3>
                         @if($employeeLicenses->isEmpty())
-                            <div class="px-3 pb-3 text-[11px] text-[var(--ui-muted)]">Keine Lizenzen zugewiesen.</div>
+                            <div class="px-3 pb-3 text-[11px] text-[color:var(--ui-secondary)]">Keine Lizenzen zugewiesen.</div>
                         @else
                             <ul class="divide-y divide-[var(--ui-border)]/30">
                                 @foreach($employeeLicenses as $lic)
                                     <li class="px-3 py-2 text-[11px] text-[var(--ui-secondary)] truncate">
-                                        @svg('heroicon-o-key', 'w-3 h-3 text-gray-400 inline -mt-0.5 mr-1')
+                                        @svg('heroicon-o-key', 'w-3 h-3 text-[color:var(--ui-secondary)] inline -mt-0.5 mr-1')
                                         {{ $lic->sku_part_number ?? $lic->sku_id }}
                                     </li>
                                 @endforeach
@@ -265,35 +260,33 @@
                         @endif
                     </section>
 
-                    <a href="{{ route('asset-manager.employees.show', $selectedEmployee) }}" wire:navigate
-                       class="block px-3 py-2 text-xs text-center font-medium text-white bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg hover:from-violet-600 hover:to-indigo-700 transition-all">
-                        @svg('heroicon-o-arrow-top-right-on-square', 'w-3.5 h-3.5 inline -mt-0.5')
+                    <x-ui-button variant="primary" size="md" rounded="lg" href="{{ route('asset-manager.employees.show', $selectedEmployee) }}" wire:navigate class="w-full">
+                        @svg('heroicon-o-arrow-top-right-on-square', 'w-3.5 h-3.5')
                         Vollständiges Profil
-                    </a>
+                    </x-ui-button>
 
                 @else
                     {{-- Keine Auswahl: Hinweis --}}
                     <div class="flex flex-col items-center justify-center py-8 text-center">
-                        @svg('heroicon-o-cursor-arrow-rays', 'w-8 h-8 text-gray-300 mb-3')
-                        <p class="text-[11px] text-[var(--ui-muted)] mb-1">Wähle ein Gerät oder einen Nutzer aus der Tabelle.</p>
-                        <p class="text-[10px] text-[var(--ui-muted)]/70">Sync-Informationen findest du im Connector.</p>
+                        @svg('heroicon-o-cursor-arrow-rays', 'w-8 h-8 text-[color:var(--ui-muted)] mb-3')
+                        <p class="text-[11px] text-[color:var(--ui-secondary)] mb-1">Wähle ein Gerät oder einen Nutzer aus der Tabelle.</p>
+                        <p class="text-[10px] text-[color:var(--ui-secondary)]">Sync-Informationen findest du im Connector.</p>
                     </div>
 
                     @if($canSync && $config && $config->isConfigured() && $config->sync_status !== 'running')
-                        <button wire:click="syncNow" wire:loading.attr="disabled" wire:target="syncNow"
-                            class="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-white bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg hover:from-violet-600 hover:to-indigo-700 transition-all shadow-sm disabled:opacity-60">
-                            <span wire:loading.remove wire:target="syncNow">@svg('heroicon-o-arrow-path', 'w-3 h-3') Jetzt synchronisieren</span>
-                            <span wire:loading wire:target="syncNow">@svg('heroicon-o-arrow-path', 'w-3 h-3 animate-spin') Startet...</span>
-                        </button>
+                        <x-ui-button variant="primary" size="md" rounded="lg" class="w-full" wire:click="syncNow" wire:loading.attr="disabled" wire:target="syncNow">
+                            <span wire:loading.remove wire:target="syncNow" class="inline-flex items-center gap-1.5">@svg('heroicon-o-arrow-path', 'w-3 h-3') Jetzt synchronisieren</span>
+                            <span wire:loading wire:target="syncNow" class="inline-flex items-center gap-1.5">@svg('heroicon-o-arrow-path', 'w-3 h-3 animate-spin') Startet...</span>
+                        </x-ui-button>
                     @endif
 
                     @if($syncResult)
-                        <div class="p-2 rounded-lg bg-violet-500/10 border border-violet-500/20 text-[11px] text-violet-700 dark:text-violet-400">
+                        <div class="p-2 rounded-lg bg-[color:var(--ui-primary-10)] border border-[color:var(--ui-border)] text-[11px] text-[color:var(--ui-primary)]">
                             {{ $syncResult }}
                         </div>
                     @endif
 
-                    <a href="{{ route('asset-manager.setup') }}" wire:navigate class="block text-center text-[10px] text-[var(--ui-muted)] hover:text-violet-500 mt-2">
+                    <a href="{{ route('asset-manager.setup') }}" wire:navigate class="block text-center text-[10px] text-[color:var(--ui-secondary)] hover:text-violet-500 mt-2">
                         Connector & vollständige Sync-Historie →
                     </a>
                 @endif
@@ -312,13 +305,12 @@
                         @svg('heroicon-o-wrench-screwdriver', 'w-6 h-6 text-amber-500')
                     </div>
                     <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Connector nicht konfiguriert</h3>
-                    <p class="text-xs text-gray-400 mb-4 max-w-xs">Trage die Azure App-Registration Credentials ein, um Intune-Gerätedaten zu synchronisieren.</p>
+                    <p class="text-xs text-[color:var(--ui-secondary)] mb-4 max-w-xs">Trage die Azure App-Registration Credentials ein, um Intune-Gerätedaten zu synchronisieren.</p>
                     @if($canSync)
-                        <a href="{{ route('asset-manager.setup') }}" wire:navigate
-                           class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg hover:from-violet-600 hover:to-indigo-700 transition-all shadow-sm">
+                        <x-ui-button variant="primary" size="md" rounded="lg" href="{{ route('asset-manager.setup') }}" wire:navigate>
                             @svg('heroicon-o-arrow-right', 'w-4 h-4')
                             Connector einrichten
-                        </a>
+                        </x-ui-button>
                     @endif
                 </div>
             @else
@@ -327,19 +319,19 @@
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm p-4">
                     <div class="text-2xl font-semibold text-gray-900 dark:text-gray-100">{{ $stats['total'] }}</div>
-                    <div class="text-xs text-gray-400">Geräte gesamt</div>
+                    <div class="text-xs text-[color:var(--ui-secondary)]">Geräte gesamt</div>
                 </div>
                 <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm p-4">
                     <div class="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">{{ $stats['compliant'] }}</div>
-                    <div class="text-xs text-gray-400">Konform</div>
+                    <div class="text-xs text-[color:var(--ui-secondary)]">Konform</div>
                 </div>
                 <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm p-4">
                     <div class="text-2xl font-semibold text-red-600 dark:text-red-400">{{ $stats['noncompliant'] }}</div>
-                    <div class="text-xs text-gray-400">Nicht konform</div>
+                    <div class="text-xs text-[color:var(--ui-secondary)]">Nicht konform</div>
                 </div>
                 <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm p-4">
-                    <div class="text-2xl font-semibold text-gray-500 dark:text-gray-400">{{ $stats['unknown'] }}</div>
-                    <div class="text-xs text-gray-400">Unbekannt</div>
+                    <div class="text-2xl font-semibold text-gray-500 dark:text-[color:var(--ui-secondary)]">{{ $stats['unknown'] }}</div>
+                    <div class="text-xs text-[color:var(--ui-secondary)]">Unbekannt</div>
                 </div>
             </div>
 
@@ -350,7 +342,7 @@
                     $lifecycleLabels = \Platform\AssetManager\Models\AssetDevice::LIFECYCLE_LABELS;
                 @endphp
                 <div class="flex flex-wrap items-center gap-2 text-xs">
-                    <span class="text-gray-400">Aktive Filter:</span>
+                    <span class="text-[color:var(--ui-secondary)]">Aktive Filter:</span>
                     @if($preset !== 'all')<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/10 text-violet-600">{{ $presetLabels[$preset] ?? $preset }} <button wire:click="setPreset('all')">×</button></span>@endif
                     @if($search)<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/10 text-violet-600">Suche: "{{ Str::limit($search, 30) }}" <button wire:click="$set('search', '')">×</button></span>@endif
                     @if($filterCompliance)<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/10 text-violet-600">{{ $filterCompliance }} <button wire:click="$set('filterCompliance', '')">×</button></span>@endif
@@ -417,24 +409,24 @@
             <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
                 @if($devices->isEmpty())
                     <div class="flex flex-col items-center justify-center py-16 text-center">
-                        @svg('heroicon-o-computer-desktop', 'w-10 h-10 text-gray-300 dark:text-gray-600 mb-3')
-                        <p class="text-sm text-gray-400">
+                        @svg('heroicon-o-computer-desktop', 'w-10 h-10 text-[color:var(--ui-muted)] dark:text-gray-600 mb-3')
+                        <p class="text-sm text-[color:var(--ui-secondary)]">
                             @if($search || $filterCompliance || $filterOs || $filterLifecycle || $preset !== 'all') Keine Geräte für diese Filter.
                             @else Noch keine Geräte synchronisiert. @endif
                         </p>
                     </div>
                 @else
                     @if($canManage && $selectPage && count($selected) < $devices->total())
-                        <div class="px-5 py-2 bg-violet-500/10 border-b border-violet-500/20 text-center text-xs text-violet-700 dark:text-violet-400">
+                        <div class="px-5 py-2 bg-[color:var(--ui-primary-10)] border-b border-[color:var(--ui-border)] text-center text-xs text-[color:var(--ui-primary)]">
                             {{ count($selected) }} auf dieser Seite ausgewählt.
-                            <button wire:click="selectAllFiltered" class="font-medium underline hover:text-violet-900">Alle {{ $devices->total() }} gefilterten auswählen</button>
+                            <button wire:click="selectAllFiltered" class="font-medium underline hover:opacity-80">Alle {{ $devices->total() }} gefilterten auswählen</button>
                         </div>
                     @endif
                     <table class="w-full text-sm">
                         <thead>
-                            <tr wire:sortable="reorderColumns" wire:sortable.options="{ axis: 'x' }" class="border-b border-black/5 dark:border-white/5">
+                            <tr wire:sortable="reorderColumns" wire:sortable.options="{ axis: 'x' }" class="border-b border-[color:var(--ui-muted)]">
                                 @if($canManage)
-                                    <th class="w-10 px-5 py-3 bg-white/40 dark:bg-white/[0.02]">
+                                    <th class="w-10 px-5 py-3 bg-[color:var(--ui-muted-10)]">
                                         <input type="checkbox" wire:model.live="selectPage" class="rounded border-black/20 dark:border-white/20 text-violet-600 focus:ring-violet-500/30" />
                                     </th>
                                 @endif
@@ -442,9 +434,9 @@
                                     @php $def = $columnDefs[$colKey] ?? null; @endphp
                                     @if($def)
                                         <th wire:sortable.item="{{ $colKey }}" wire:key="col-{{ $colKey }}"
-                                            class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-400 bg-white/40 dark:bg-white/[0.02]">
+                                            class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[color:var(--ui-body-color)] bg-[color:var(--ui-muted-10)]">
                                             <div class="flex items-center gap-2">
-                                                <button wire:sortable.handle type="button" title="Spalte verschieben" class="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing">
+                                                <button wire:sortable.handle type="button" title="Spalte verschieben" class="text-[color:var(--ui-muted)] hover:text-gray-500 cursor-grab active:cursor-grabbing">
                                                     @svg('heroicon-o-bars-3', 'w-3.5 h-3.5')
                                                 </button>
                                                 @if($def['sortField'])
@@ -461,14 +453,14 @@
                                 @endforeach
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-black/[0.03] dark:divide-white/[0.04]">
+                        <tbody class="divide-y divide-[color:var(--ui-muted)]">
                             @foreach($devices as $device)
                                 @php
                                     $isSelected = $detailType === 'device' && $detailId === $device->id;
                                     $isChecked  = $canManage && in_array((string) $device->id, $selected, true);
                                 @endphp
                                 <tr wire:key="row-{{ $device->id }}"
-                                    class="cursor-pointer transition-colors {{ $isSelected ? 'bg-violet-500/10' : ($isChecked ? 'bg-violet-500/5' : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]') }}">
+                                    class="cursor-pointer transition-colors {{ $isSelected ? 'bg-[color:var(--ui-primary-10)] shadow-[inset_3px_0_0_rgb(var(--ui-primary-rgb))]' : ($isChecked ? 'bg-[color:var(--ui-primary-5)]' : 'hover:bg-[color:var(--ui-muted-10)]') }}">
                                     @if($canManage)
                                         <td class="px-5 py-3">
                                             <input type="checkbox" value="{{ $device->id }}" wire:model.live="selected" class="rounded border-black/20 dark:border-white/20 text-violet-600 focus:ring-violet-500/30" />
@@ -480,20 +472,19 @@
                                                 <td wire:click="selectDevice({{ $device->id }})" class="px-5 py-3">
                                                     <div class="font-medium text-gray-900 dark:text-gray-100">{{ $device->device_name ?? '—' }}</div>
                                                     @if($device->model)
-                                                        <div class="text-xs text-gray-400">{{ $device->manufacturer }} {{ $device->model }}</div>
+                                                        <div class="text-xs text-[color:var(--ui-secondary)]">{{ $device->manufacturer }} {{ $device->model }}</div>
                                                     @endif
                                                     @php $missingHandover = $device->user_principal_name && ! isset($openHandoverDeviceIds[$device->id]); @endphp
                                                     @if($device->lifecycle_status || $device->isExpiringSoon() || $missingHandover)
                                                         <div class="flex flex-wrap items-center gap-1 mt-1">
                                                             @if($device->lifecycle_status)
-                                                                @php $lc = $device->lifecycleBadgeColor(); @endphp
-                                                                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-{{ $lc }}-500/10 text-{{ $lc }}-600">{{ $device->lifecycleLabel() }}</span>
+                                                                <x-asset-manager-badge :color="$device->lifecycleBadgeColor()" size="xs">{{ $device->lifecycleLabel() }}</x-asset-manager-badge>
                                                             @endif
                                                             @if($device->isExpiringSoon())
-                                                                <span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-amber-500/10 text-amber-600">@svg('heroicon-o-exclamation-triangle', 'w-2.5 h-2.5') läuft ab</span>
+                                                                <x-asset-manager-badge color="amber" size="xs" icon="heroicon-o-exclamation-triangle">läuft ab</x-asset-manager-badge>
                                                             @endif
                                                             @if($missingHandover)
-                                                                <span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-amber-500/10 text-amber-600" title="Gerät mit Nutzer, aber ohne offene Ausgabe">@svg('heroicon-o-clipboard-document-check', 'w-2.5 h-2.5') ohne Ausgabe</span>
+                                                                <x-asset-manager-badge color="amber" size="xs" icon="heroicon-o-clipboard-document-check" title="Gerät mit Nutzer, aber ohne offene Ausgabe">ohne Ausgabe</x-asset-manager-badge>
                                                             @endif
                                                         </div>
                                                     @endif
@@ -503,31 +494,29 @@
                                                 <td class="px-5 py-3">
                                                     @if($device->user_principal_name)
                                                         <button wire:click.stop="selectEmployeeByUpn('{{ $device->user_principal_name }}')" class="text-left hover:text-violet-600">
-                                                            <div class="text-gray-700 dark:text-gray-300">{{ $device->user_display_name ?? '—' }}</div>
-                                                            <div class="text-xs text-gray-400 truncate max-w-[180px]">{{ $device->user_principal_name }}</div>
+                                                            <div class="text-gray-700 dark:text-[color:var(--ui-muted)]">{{ $device->user_display_name ?? '—' }}</div>
+                                                            <div class="text-xs text-[color:var(--ui-secondary)] truncate max-w-[180px]">{{ $device->user_principal_name }}</div>
                                                         </button>
                                                     @else
-                                                        <span class="text-gray-400">—</span>
+                                                        <span class="text-[color:var(--ui-secondary)]">—</span>
                                                     @endif
                                                 </td>
                                             @break
                                             @case('os')
                                                 <td wire:click="selectDevice({{ $device->id }})" class="px-5 py-3">
-                                                    <div class="text-gray-700 dark:text-gray-300">{{ $device->operating_system ?? '—' }}</div>
-                                                    @if($device->os_version)<div class="text-xs text-gray-400">{{ $device->os_version }}</div>@endif
+                                                    <div class="text-gray-700 dark:text-[color:var(--ui-muted)]">{{ $device->operating_system ?? '—' }}</div>
+                                                    @if($device->os_version)<div class="text-xs text-[color:var(--ui-secondary)]">{{ $device->os_version }}</div>@endif
                                                 </td>
                                             @break
                                             @case('status')
                                                 <td wire:click="selectDevice({{ $device->id }})" class="px-5 py-3">
-                                                    @php $color = $device->complianceBadgeColor() @endphp
-                                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-{{ $color }}-500/10 text-{{ $color }}-600">
-                                                        <span class="w-1.5 h-1.5 rounded-full bg-{{ $color }}-500"></span>
+                                                    <x-asset-manager-badge :color="$device->complianceBadgeColor()" dot size="sm">
                                                         {{ $device->complianceLabel() }}
-                                                    </span>
+                                                    </x-asset-manager-badge>
                                                 </td>
                                             @break
                                             @case('lastCheckIn')
-                                                <td wire:click="selectDevice({{ $device->id }})" class="px-5 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                                <td wire:click="selectDevice({{ $device->id }})" class="px-5 py-3 text-sm text-gray-500 dark:text-[color:var(--ui-secondary)]">
                                                     {{ $device->last_check_in_at ? $device->last_check_in_at->diffForHumans() : '—' }}
                                                 </td>
                                             @break
@@ -538,7 +527,7 @@
                         </tbody>
                     </table>
                     @if($devices->hasPages())
-                        <div class="px-5 py-3 border-t border-black/5 dark:border-white/5">{{ $devices->links() }}</div>
+                        <div class="px-5 py-3 border-t border-[color:var(--ui-muted)]">{{ $devices->links() }}</div>
                     @endif
                 @endif
             </div>
@@ -550,7 +539,7 @@
         {{-- BOTTOM PANEL: Verteilungen --}}
         @if($config && $config->isConfigured() && $stats['total'] > 0)
             <div class="shrink-0 border-t border-[color:var(--ui-border)] bg-[var(--ui-muted-5)]" x-data="{ open: false }">
-                <button type="button" @click="open = !open" class="w-full p-2 text-center flex items-center justify-center gap-2 hover:bg-[var(--ui-muted-10)] text-[11px] uppercase tracking-wider text-[var(--ui-muted)]">
+                <button type="button" @click="open = !open" class="w-full p-2 text-center flex items-center justify-center gap-2 hover:bg-[var(--ui-muted-10)] text-[11px] uppercase tracking-wider text-[color:var(--ui-secondary)]">
                     <span class="font-semibold">Verteilung</span>
                     <span class="text-[10px]">OS · Compliance</span>
                     @svg('heroicon-o-chevron-double-down', 'w-3 h-3', ['x-show' => '!open'])
@@ -559,14 +548,14 @@
                 <div x-show="open" x-cloak class="border-t border-[color:var(--ui-border)] p-4 max-h-64 overflow-y-auto bg-white dark:bg-black/20">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <div class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] mb-3">Betriebssysteme</div>
+                            <div class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] mb-3">Betriebssysteme</div>
                             <div class="space-y-2">
                                 @foreach($osBreakdown as $row)
                                     @php $pct = $stats['total'] > 0 ? round($row->count / $stats['total'] * 100) : 0; @endphp
                                     <div>
                                         <div class="flex items-baseline justify-between text-[11px] mb-0.5">
                                             <span class="text-[var(--ui-secondary)] truncate">{{ $row->os }}</span>
-                                            <span class="text-[var(--ui-muted)] tabular-nums ml-2 flex-shrink-0">{{ $row->count }} ({{ $pct }}%)</span>
+                                            <span class="text-[color:var(--ui-secondary)] tabular-nums ml-2 flex-shrink-0">{{ $row->count }} ({{ $pct }}%)</span>
                                         </div>
                                         <div class="w-full h-1.5 rounded-full bg-[var(--ui-muted-10)] overflow-hidden">
                                             <div class="h-full bg-violet-500" style="width: {{ $pct }}%"></div>
@@ -576,7 +565,7 @@
                             </div>
                         </div>
                         <div>
-                            <div class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] mb-3">Compliance-Status</div>
+                            <div class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] mb-3">Compliance-Status</div>
                             <div class="space-y-2">
                                 @foreach($complianceBreakdown as $row)
                                     @php
@@ -596,7 +585,7 @@
                                                 <span class="w-1.5 h-1.5 rounded-full bg-{{ $color }}-500"></span>
                                                 {{ $label }}
                                             </span>
-                                            <span class="text-[var(--ui-muted)] tabular-nums">{{ $row->count }} ({{ $pct }}%)</span>
+                                            <span class="text-[color:var(--ui-secondary)] tabular-nums">{{ $row->count }} ({{ $pct }}%)</span>
                                         </div>
                                         <div class="w-full h-1.5 rounded-full bg-[var(--ui-muted-10)] overflow-hidden">
                                             <div class="h-full bg-{{ $color }}-500" style="width: {{ $pct }}%"></div>

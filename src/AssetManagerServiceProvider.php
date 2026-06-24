@@ -82,6 +82,9 @@ class AssetManagerServiceProvider extends ServiceProvider
         // reicht unseren benannten actions-Slot in den Default-Slot des UI-x-ui-page-actionbar durch.
         Blade::component('asset-manager::components.page-actionbar', 'asset-manager-page-actionbar');
 
+        // Modul-lokales Status-/Kategorie-Badge (WCAG-AA, Farbfamilien-Pass-through, siehe ADR 0011).
+        Blade::component('asset-manager::components.badge', 'asset-manager-badge');
+
         $this->registerLivewireComponents();
 
         $this->registerTools();
