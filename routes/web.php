@@ -41,7 +41,10 @@ Route::get('/compliance', ComplianceIndex::class)->name('asset-manager.complianc
 Route::get('/inventory', InventoryIndex::class)->name('asset-manager.inventory.index');
 
 Route::get('/assets', AssetsIndex::class)->name('asset-manager.assets.index');
-Route::get('/assets/create', AssetsCreate::class)->name('asset-manager.assets.create');
+// Anlegen läuft jetzt als Modal auf der vereinten Inventar-Liste (Phase 1). Die alte Create-Seite
+// leitet weiter und öffnet das Modal (?create=1) — Name bleibt erhalten, route()-Aufrufe/Bookmarks
+// brechen nicht (Muster wie die MasterData-Redirects unten).
+Route::get('/assets/create', fn () => redirect()->route('asset-manager.inventory.index', ['create' => 1]))->name('asset-manager.assets.create');
 Route::get('/assets/{item}', AssetsShow::class)->name('asset-manager.assets.show');
 
 Route::get('/employees', EmployeesIndex::class)->name('asset-manager.employees.index');

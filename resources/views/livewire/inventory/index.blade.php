@@ -20,6 +20,13 @@
                     @svg('heroicon-o-computer-desktop', 'w-3.5 h-3.5')
                     Nur Intune-Geräte
                 </x-ui-button>
+                {{-- Anlegen nur Owner/Admin (Backend: createItem → Gate create). Nur manuelle Assets (E7). --}}
+                @can('asset-manager.manage')
+                    <x-ui-button variant="primary" size="sm" rounded="lg" wire:click="openCreate">
+                        @svg('heroicon-o-plus', 'w-3.5 h-3.5')
+                        Asset anlegen
+                    </x-ui-button>
+                @endcan
             </x-slot>
         </x-asset-manager-page-actionbar>
     </x-slot>
@@ -27,9 +34,13 @@
     {{-- Voll-Breite-Übersicht: keine in-page-Sidebars (wie compliance/reports), Filter inline. --}}
     <x-ui-page-container padding="p-6" spacing="space-y-5">
 
-        <p class="text-[11px] text-[color:var(--ui-secondary)]">
-            Nur-Anzeige: manuelle Assets + Intune-Geräte zusammengeführt — bearbeitet wird in der jeweiligen Quelle (oben rechts).
-        </p>
+        @if($flash)
+            <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                @svg('heroicon-o-check-circle', 'w-4 h-4 text-emerald-500 flex-shrink-0')
+                <p class="text-sm text-emerald-700 dark:text-emerald-400">{{ $flash }}</p>
+                <button wire:click="$set('flash', null)" class="ml-auto text-emerald-600 hover:text-emerald-800">×</button>
+            </div>
+        @endif
 
         {{-- Stats --}}
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -193,4 +204,9 @@
             Monatskosten = AfA/Leasing je Objekt (rohe Gerätekosten) — nicht die kostenstellen-zugeteilte Summe aus der Kostenaufteilung.
         </p>
     </x-ui-page-container>
+
+    {{-- Modals innerhalb <x-ui-page> (Referenz-Doku: „Modals immer innerhalb von x-ui-page"). --}}
+    @can('asset-manager.manage')
+        @include('asset-manager::livewire.inventory.partials.modal-create')
+    @endcan
 </x-ui-page>
