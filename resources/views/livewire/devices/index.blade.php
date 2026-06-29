@@ -148,7 +148,7 @@
                         </x-asset-manager-badge>
                     </section>
 
-                    <x-asset-manager-panel title="Eigenschaften" body-class="p-0">
+                    <x-asset-manager-panel title="Eigenschaften" body-class="px-4 py-1">
                         <x-asset-manager-detail-list>
                             @foreach([
                                 ['OS',           $selectedDevice->operating_system],
