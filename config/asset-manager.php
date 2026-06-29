@@ -98,10 +98,12 @@ return [
         [
             'group' => 'Assets',
             'items' => [
+                // E1: „Inventar" ist das kanonische Dach über manuelle Assets + Intune-Geräte
+                // (eine vereinte Liste). Einstieg zeigt daher auf die vereinte Inventar-Sicht.
                 [
-                    'label' => 'Alle Assets',
-                    'route' => 'asset-manager.assets.index',
-                    'icon'  => 'heroicon-o-cube-transparent',
+                    'label' => 'Inventar',
+                    'route' => 'asset-manager.inventory.index',
+                    'icon'  => 'heroicon-o-rectangle-group',
                 ],
                 [
                     'label' => 'Intune-Geräte',
