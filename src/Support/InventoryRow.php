@@ -46,7 +46,7 @@ class InventoryRow
             statusColor:   self::safeColor($item->statusBadgeColor()),
             statusSortKey: (string) ($item->status ?? ''),
             monthlyCost:   $item->monthlyCost(),
-            detailRoute:   route('asset-manager.assets.show', $item),
+            detailRoute:   route('asset-manager.inventory.show', ['type' => 'manual', 'id' => $item->id]),
         );
     }
 
@@ -66,7 +66,7 @@ class InventoryRow
             statusColor:   $hasLifecycle ? self::safeColor($device->lifecycleBadgeColor()) : 'gray',
             statusSortKey: (string) ($device->lifecycle_status ?? ''),
             monthlyCost:   $monthlyCost,
-            detailRoute:   route('asset-manager.devices.show', $device),
+            detailRoute:   route('asset-manager.inventory.show', ['type' => 'intune', 'id' => $device->id]),
         );
     }
 
@@ -75,7 +75,7 @@ class InventoryRow
      * werden sonst weggepurged). `sky` (AssetItem-Status „Lager") ist NICHT im Build → auf `indigo`
      * abbilden (deckt sich farblich mit dem Geräte-Status „Reserve/Lager" = spare).
      */
-    private static function safeColor(string $color): string
+    public static function safeColor(string $color): string
     {
         $built = ['emerald', 'indigo', 'amber', 'orange', 'gray', 'red', 'violet'];
 

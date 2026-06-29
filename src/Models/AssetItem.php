@@ -82,7 +82,7 @@ class AssetItem extends Model
     public function statusLabel(): string
     {
         return match($this->status) {
-            'assigned' => 'Zugewiesen',
+            'assigned' => 'Zugeordnet',
             'in_stock' => 'Lager',
             'retired'  => 'Ausgemustert',
             'lost'     => 'Verloren',

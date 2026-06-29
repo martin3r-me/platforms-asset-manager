@@ -12,6 +12,7 @@ use Platform\AssetManager\Livewire\Assets\Index as AssetsIndex;
 use Platform\AssetManager\Livewire\Assets\Create as AssetsCreate;
 use Platform\AssetManager\Livewire\Assets\Show as AssetsShow;
 use Platform\AssetManager\Livewire\Inventory\Index as InventoryIndex;
+use Platform\AssetManager\Livewire\Inventory\Show as InventoryShow;
 use Platform\AssetManager\Livewire\Employees\Index as EmployeesIndex;
 use Platform\AssetManager\Livewire\Employees\Show as EmployeesShow;
 use Platform\AssetManager\Livewire\Costs\Dashboard as CostsDashboard;
@@ -39,6 +40,12 @@ Route::get('/devices/{device}', DevicesShow::class)->name('asset-manager.devices
 Route::get('/compliance', ComplianceIndex::class)->name('asset-manager.compliance.index');
 
 Route::get('/inventory', InventoryIndex::class)->name('asset-manager.inventory.index');
+// Vereinte Detailseite (E1/E3): EINE Komponente, Typ-Dispatch via {type}=manual|intune + {id}.
+// Getrennte Tabellen/IDs (item vs. device) kollidieren so nicht; geladen wird strikt nach Typ.
+Route::get('/inventory/{type}/{id}', InventoryShow::class)
+    ->whereIn('type', ['manual', 'intune'])
+    ->whereNumber('id')
+    ->name('asset-manager.inventory.show');
 
 Route::get('/assets', AssetsIndex::class)->name('asset-manager.assets.index');
 // Anlegen läuft jetzt als Modal auf der vereinten Inventar-Liste (Phase 1). Die alte Create-Seite
