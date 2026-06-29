@@ -17,127 +17,118 @@
             {{-- Bearbeiten nur Owner/Admin (E1/ADR 0004) — Backend: save()/delete() Gate. Member sehen
                  die Werte read-only im Haupt-Content. --}}
             @can('asset-manager.manage')
-            <form wire:submit="save" class="p-4 space-y-4 bg-[var(--ui-muted-5)]">
+            <form wire:submit="save" class="p-4 space-y-4 bg-[var(--am-bg)]">
 
                 @if($item->source === 'intune')
-                    <div class="rounded-lg bg-violet-500/10 border border-violet-500/20 p-2 text-[11px] text-violet-700 dark:text-violet-400">
+                    <div class="rounded-lg bg-violet-50 border border-violet-200 p-2 text-[11px] text-violet-700">
                         @svg('heroicon-o-cloud', 'w-3.5 h-3.5 inline -mt-0.5 mr-1')
                         Intune-synced — Gerätedaten read-only, Zuweisung und Kosten editierbar.
                     </div>
                 @endif
 
                 {{-- Kategorie & Status --}}
-                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">Klassifikation</h3>
-                    <div class="px-3 pb-3 space-y-2">
+                <x-asset-manager-filter-section title="Klassifikation">
+                    <div class="space-y-2">
                         <div>
-                            <label class="block text-[10px] text-[color:var(--ui-secondary)] mb-1">Kategorie</label>
-                            <select wire:model="categoryId" @if($item->source === 'intune') disabled @endif class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40 disabled:opacity-60">
+                            <label class="block text-[10px] text-[var(--am-text-muted)] mb-1">Kategorie</label>
+                            <x-asset-manager-select size="sm" wire:model="categoryId" :disabled="$item->source === 'intune'">
                                 @foreach($categories as $cat)
                                     <option value="{{ $cat->id }}">{{ $cat->name }}</option>
                                 @endforeach
-                            </select>
+                            </x-asset-manager-select>
                         </div>
                         <div>
-                            <label class="block text-[10px] text-[color:var(--ui-secondary)] mb-1">Status</label>
-                            <select wire:model="status" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40">
+                            <label class="block text-[10px] text-[var(--am-text-muted)] mb-1">Status</label>
+                            <x-asset-manager-select size="sm" wire:model="status">
                                 <option value="in_stock">Lager</option>
                                 <option value="assigned">Zugewiesen</option>
                                 <option value="retired">Ausgemustert</option>
                                 <option value="lost">Verloren</option>
-                            </select>
+                            </x-asset-manager-select>
                         </div>
                     </div>
-                </section>
+                </x-asset-manager-filter-section>
 
                 {{-- Hardware --}}
-                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">Gerät</h3>
-                    <div class="px-3 pb-3 space-y-2">
+                <x-asset-manager-filter-section title="Gerät">
+                    <div class="space-y-2">
                         <div>
-                            <label class="block text-[10px] text-[color:var(--ui-secondary)] mb-1">Name</label>
-                            <input type="text" wire:model="name" @if($item->source === 'intune') disabled @endif class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40 disabled:opacity-60" />
+                            <label class="block text-[10px] text-[var(--am-text-muted)] mb-1">Name</label>
+                            <x-asset-manager-input size="sm" type="text" wire:model="name" :disabled="$item->source === 'intune'" />
                         </div>
                         <div>
-                            <label class="block text-[10px] text-[color:var(--ui-secondary)] mb-1">Hersteller</label>
-                            <input type="text" wire:model="manufacturer" @if($item->source === 'intune') disabled @endif class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40 disabled:opacity-60" />
+                            <label class="block text-[10px] text-[var(--am-text-muted)] mb-1">Hersteller</label>
+                            <x-asset-manager-input size="sm" type="text" wire:model="manufacturer" :disabled="$item->source === 'intune'" />
                         </div>
                         <div>
-                            <label class="block text-[10px] text-[color:var(--ui-secondary)] mb-1">Modell</label>
-                            <input type="text" wire:model="model" @if($item->source === 'intune') disabled @endif class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40 disabled:opacity-60" />
+                            <label class="block text-[10px] text-[var(--am-text-muted)] mb-1">Modell</label>
+                            <x-asset-manager-input size="sm" type="text" wire:model="model" :disabled="$item->source === 'intune'" />
                         </div>
                         <div>
-                            <label class="block text-[10px] text-[color:var(--ui-secondary)] mb-1">Seriennummer</label>
-                            <input type="text" wire:model="serialNumber" @if($item->source === 'intune') disabled @endif class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40 disabled:opacity-60" />
+                            <label class="block text-[10px] text-[var(--am-text-muted)] mb-1">Seriennummer</label>
+                            <x-asset-manager-input size="sm" type="text" wire:model="serialNumber" :disabled="$item->source === 'intune'" />
                         </div>
                     </div>
-                </section>
+                </x-asset-manager-filter-section>
 
                 {{-- Zuweisung --}}
-                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">Zuweisung</h3>
-                    <div class="px-3 pb-3">
-                        <select wire:model="assigneeId" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40">
-                            <option value="">– Niemand (Lager) –</option>
-                            @foreach($employees as $emp)
-                                <option value="{{ $emp->id }}">{{ $emp->name }}</option>
-                            @endforeach
-                        </select>
-                        @if($item->assignee)
-                            <a href="{{ route('asset-manager.employees.show', $item->assignee) }}" wire:navigate class="block mt-2 text-[10px] text-violet-500 hover:underline">
-                                → Mitarbeiter-Profil ansehen
-                            </a>
-                        @endif
-                    </div>
-                </section>
+                <x-asset-manager-filter-section title="Zuweisung">
+                    <x-asset-manager-select size="sm" wire:model="assigneeId">
+                        <option value="">– Niemand (Lager) –</option>
+                        @foreach($employees as $emp)
+                            <option value="{{ $emp->id }}">{{ $emp->name }}</option>
+                        @endforeach
+                    </x-asset-manager-select>
+                    @if($item->assignee)
+                        <a href="{{ route('asset-manager.employees.show', $item->assignee) }}" wire:navigate class="block mt-2 text-[10px] text-[var(--am-accent)] hover:underline">
+                            → Mitarbeiter-Profil ansehen
+                        </a>
+                    @endif
+                </x-asset-manager-filter-section>
 
                 {{-- Kosten --}}
-                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">Kosten</h3>
-                    <div class="px-3 pb-3 space-y-2">
+                <x-asset-manager-filter-section title="Kosten">
+                    <div class="space-y-2">
                         <div>
-                            <label class="block text-[10px] text-[color:var(--ui-secondary)] mb-1">Kaufdatum</label>
-                            <input type="date" wire:model="purchaseDate" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40" />
+                            <label class="block text-[10px] text-[var(--am-text-muted)] mb-1">Kaufdatum</label>
+                            <x-asset-manager-input size="sm" type="date" wire:model="purchaseDate" />
                         </div>
                         <div>
-                            <label class="block text-[10px] text-[color:var(--ui-secondary)] mb-1">Kaufpreis (€)</label>
-                            <input type="number" step="0.01" min="0" wire:model="purchasePrice" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40" />
+                            <label class="block text-[10px] text-[var(--am-text-muted)] mb-1">Kaufpreis (€)</label>
+                            <x-asset-manager-input size="sm" type="number" step="0.01" min="0" wire:model="purchasePrice" />
                         </div>
                         <div>
-                            <label class="block text-[10px] text-[color:var(--ui-secondary)] mb-1">AfA (Monate)</label>
-                            <input type="number" min="1" max="240" wire:model="depreciationMonths" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40" />
+                            <label class="block text-[10px] text-[var(--am-text-muted)] mb-1">AfA (Monate)</label>
+                            <x-asset-manager-input size="sm" type="number" min="1" max="240" wire:model="depreciationMonths" />
                         </div>
                         @if($item->monthlyCost() > 0)
-                            <div class="text-[11px] text-[color:var(--ui-secondary)] pt-1 border-t border-[var(--ui-border)]/30 flex justify-between">
+                            <div class="text-[11px] text-[var(--am-text-secondary)] pt-1 border-t border-[color:var(--am-border)] flex justify-between">
                                 <span>Monatlich</span>
-                                <span class="font-semibold text-[var(--ui-secondary)]">{{ number_format($item->monthlyCost(), 2, ',', '.') }} €</span>
+                                <span class="font-semibold text-[var(--am-text)]">{{ number_format($item->monthlyCost(), 2, ',', '.') }} €</span>
                             </div>
                         @endif
                     </div>
-                </section>
+                </x-asset-manager-filter-section>
 
                 {{-- Notes --}}
-                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">Notizen</h3>
-                    <div class="px-3 pb-3">
-                        <textarea wire:model="notes" rows="3" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40 resize-none"></textarea>
-                    </div>
-                </section>
+                <x-asset-manager-filter-section title="Notizen">
+                    <x-asset-manager-textarea wire:model="notes" rows="3" />
+                </x-asset-manager-filter-section>
 
                 <div class="space-y-2 pt-2">
-                    <x-ui-button type="submit" variant="primary" size="md" rounded="lg" class="w-full">
+                    <x-asset-manager-button type="submit" variant="primary" size="md" class="w-full">
                         @svg('heroicon-o-check', 'w-3.5 h-3.5')
                         Speichern
-                    </x-ui-button>
+                    </x-asset-manager-button>
                     @if($saved)
                         <div class="text-[10px] text-emerald-700 text-center">Gespeichert.</div>
                     @endif
                     @can('delete', $item)
-                        <x-ui-button type="button" variant="danger-ghost" size="md" rounded="lg" class="w-full"
+                        <x-asset-manager-button type="button" variant="danger" size="md" class="w-full"
                                      wire:click="delete" wire:confirm="Asset wirklich löschen?">
                             @svg('heroicon-o-trash', 'w-3.5 h-3.5')
                             Löschen
-                        </x-ui-button>
+                        </x-asset-manager-button>
                     @endcan
                 </div>
             </form>
@@ -148,26 +139,26 @@
     {{-- RECHTS: Zuweisungs-Historie --}}
     <x-slot name="activity">
         <x-ui-page-sidebar title="Historie" icon="heroicon-o-clock" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
-            <div class="p-4 space-y-3 bg-[var(--ui-muted-5)]">
-                <div class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-1">Zuweisungs-Historie</div>
+            <div class="p-4 space-y-3 bg-[var(--am-bg)]">
+                <div class="text-[10px] font-semibold uppercase tracking-wider text-[var(--am-text-muted)] px-1">Zuweisungs-Historie</div>
                 @forelse($activities as $a)
-                    <div class="p-3 rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm">
+                    <div class="p-3 rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm">
                         <div class="flex items-start justify-between gap-2 mb-1.5">
                             <a href="{{ $a->employee ? route('asset-manager.employees.show', $a->employee) : '#' }}" @if($a->employee) wire:navigate @endif
-                                class="text-[12px] font-medium text-[color:var(--ui-secondary)] hover:text-[color:var(--ui-primary)]">
+                                class="text-[12px] font-medium text-[var(--am-text-secondary)] hover:text-[var(--am-accent)]">
                                 {{ $a->employee?->name ?? '— gelöscht —' }}
                             </a>
                             @if($a->isOpen())
                                 <x-asset-manager-badge color="emerald" size="xs">aktuell</x-asset-manager-badge>
                             @endif
                         </div>
-                        <div class="text-[10px] text-[color:var(--ui-secondary)]">
+                        <div class="text-[10px] text-[var(--am-text-muted)]">
                             {{ $a->assigned_at->format('d.m.Y') }}
                             @if($a->returned_at) — {{ $a->returned_at->format('d.m.Y') }} @endif
                         </div>
                     </div>
                 @empty
-                    <div class="p-3 text-center text-[11px] text-[color:var(--ui-secondary)]">Noch keine Historie.</div>
+                    <div class="p-3 text-center text-[11px] text-[var(--am-text-muted)]">Noch keine Historie.</div>
                 @endforelse
             </div>
         </x-ui-page-sidebar>
@@ -177,15 +168,15 @@
     <div class="flex-1 flex flex-col min-h-0 min-w-0">
         <div class="flex-1 overflow-y-auto p-6">
             <div class="max-w-3xl mx-auto space-y-5">
-                <div class="relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5">
+                <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-5">
                     <div class="flex items-start gap-4">
-                        <div class="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500/10 to-indigo-500/10 flex items-center justify-center">
-                            @if($item->category?->icon) @svg($item->category->icon, 'w-6 h-6 text-[color:var(--ui-primary)]') @else @svg('heroicon-o-cube', 'w-6 h-6 text-[color:var(--ui-primary)]') @endif
+                        <div class="flex-shrink-0 w-12 h-12 rounded-xl bg-[var(--am-accent-surface)] flex items-center justify-center">
+                            @if($item->category?->icon) @svg($item->category->icon, 'w-6 h-6 text-[var(--am-accent)]') @else @svg('heroicon-o-cube', 'w-6 h-6 text-[var(--am-accent)]') @endif
                         </div>
                         <div class="flex-1 min-w-0">
-                            <h1 class="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">{{ $item->name }}</h1>
+                            <h1 class="text-lg font-semibold text-[var(--am-text)] truncate">{{ $item->name }}</h1>
                             @if($item->manufacturer || $item->model)
-                                <p class="text-sm text-[color:var(--ui-secondary)]">{{ trim($item->manufacturer . ' ' . $item->model) }}</p>
+                                <p class="text-sm text-[var(--am-text-secondary)]">{{ trim($item->manufacturer . ' ' . $item->model) }}</p>
                             @endif
                         </div>
                         <span class="flex-shrink-0">
@@ -195,30 +186,30 @@
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div class="rounded-lg bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm p-4">
-                        <div class="text-[10px] uppercase tracking-wider text-[color:var(--ui-secondary)] mb-1">Kategorie</div>
-                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ $item->category?->name ?? '—' }}</div>
+                    <div class="rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-4">
+                        <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Kategorie</div>
+                        <div class="text-sm font-medium text-[var(--am-text-secondary)]">{{ $item->category?->name ?? '—' }}</div>
                     </div>
-                    <div class="rounded-lg bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm p-4">
-                        <div class="text-[10px] uppercase tracking-wider text-[color:var(--ui-secondary)] mb-1">Zugewiesen an</div>
-                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">{{ $item->assignee?->name ?? '—' }}</div>
+                    <div class="rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-4">
+                        <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Zugewiesen an</div>
+                        <div class="text-sm font-medium text-[var(--am-text-secondary)] truncate">{{ $item->assignee?->name ?? '—' }}</div>
                     </div>
-                    <div class="rounded-lg bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm p-4">
-                        <div class="text-[10px] uppercase tracking-wider text-[color:var(--ui-secondary)] mb-1">Monatliche Kosten</div>
-                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <div class="rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-4">
+                        <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Monatliche Kosten</div>
+                        <div class="text-sm font-medium text-[var(--am-text-secondary)]">
                             @if($item->monthlyCost() > 0)
                                 {{ number_format($item->monthlyCost(), 2, ',', '.') }} €
                             @else
-                                <span class="text-[color:var(--ui-secondary)]">—</span>
+                                <span class="text-[var(--am-text-muted)]">—</span>
                             @endif
                         </div>
                     </div>
                 </div>
 
                 @if($item->notes)
-                    <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm p-5">
-                        <div class="text-xs font-medium uppercase tracking-wider text-[color:var(--ui-secondary)] mb-2">Notizen</div>
-                        <div class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{{ $item->notes }}</div>
+                    <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-5">
+                        <div class="text-xs font-medium uppercase tracking-wider text-[var(--am-text-muted)] mb-2">Notizen</div>
+                        <div class="text-sm text-[var(--am-text-secondary)] whitespace-pre-wrap">{{ $item->notes }}</div>
                     </div>
                 @endif
             </div>
@@ -226,14 +217,14 @@
 
         {{-- BOTTOM PANEL --}}
         @if($item->raw_data)
-            <div class="shrink-0 border-t border-[color:var(--ui-border)] bg-[var(--ui-muted-5)]" x-data="{ open: false }">
-                <button type="button" @click="open = !open" class="w-full p-2 text-center flex items-center justify-center gap-2 hover:bg-[var(--ui-muted-10)] text-[11px] uppercase tracking-wider text-[color:var(--ui-secondary)]">
+            <div class="shrink-0 border-t border-[color:var(--am-border)] bg-[var(--am-bg)]" x-data="{ open: false }">
+                <button type="button" @click="open = !open" class="w-full p-2 text-center flex items-center justify-center gap-2 hover:bg-[var(--am-bg)] text-[11px] uppercase tracking-wider text-[var(--am-text-muted)]">
                     <span class="font-semibold">Rohdaten</span>
                     @svg('heroicon-o-chevron-double-down', 'w-3 h-3', ['x-show' => '!open'])
                     @svg('heroicon-o-chevron-double-up', 'w-3 h-3', ['x-show' => 'open', 'style' => 'display:none'])
                 </button>
-                <div x-show="open" x-cloak class="border-t border-[color:var(--ui-border)] p-4 max-h-64 overflow-y-auto bg-white dark:bg-black/20">
-                    <pre class="text-[10px] text-[color:var(--ui-secondary)] font-mono whitespace-pre-wrap break-all">{{ json_encode($item->raw_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
+                <div x-show="open" x-cloak class="border-t border-[color:var(--am-border)] p-4 max-h-64 overflow-y-auto bg-[var(--am-surface)]">
+                    <pre class="text-[10px] text-[var(--am-text-secondary)] font-mono whitespace-pre-wrap break-all">{{ json_encode($item->raw_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
                 </div>
             </div>
         @endif

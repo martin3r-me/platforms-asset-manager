@@ -28,10 +28,10 @@
             <x-slot name="actions">
                 {{-- Anlegen nur Owner/Admin (E1/ADR 0004) — Backend: save() Gate asset-manager.manage. --}}
                 @can('asset-manager.manage')
-                    <x-ui-button variant="primary" size="sm" rounded="lg" wire:click="startCreate">
+                    <x-asset-manager-button variant="primary" size="sm" wire:click="startCreate">
                         @svg('heroicon-o-plus', 'w-3.5 h-3.5')
                         Neu
-                    </x-ui-button>
+                    </x-asset-manager-button>
                 @endcan
             </x-slot>
         </x-asset-manager-page-actionbar>
@@ -40,7 +40,7 @@
     {{-- LINKS: Bereichs-Navigation + Filter --}}
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Bereiche" icon="heroicon-o-rectangle-stack" width="w-72" :defaultOpen="true">
-            <div class="p-4 space-y-4 bg-[var(--ui-muted-5)]">
+            <div class="p-4 space-y-4 bg-[var(--am-bg)]">
                 @include('asset-manager::livewire.master-data.partials.nav', ['areas' => $areas, 'counts' => $counts])
                 @include('asset-manager::livewire.master-data.partials.filters', ['areas' => $areas, 'companies' => $companiesForSelect])
             </div>
@@ -52,15 +52,15 @@
         <x-ui-page-sidebar
             :title="($creating ? 'Neu: ' : '') . $current['singular']"
             icon="heroicon-o-pencil-square" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
-            <div class="p-4 space-y-3 bg-[var(--ui-muted-5)]">
+            <div class="p-4 space-y-3 bg-[var(--am-bg)]">
                 {{-- Bearbeiten/Anlegen nur Owner/Admin (ADR 0004) — Backend: save()/delete() Gate. --}}
                 @can('asset-manager.manage')
                 @if($creating || $selectedId)
-                    <div class="flex items-center justify-between pb-2 border-b border-[var(--ui-border)]/30">
-                        <span class="text-[10px] uppercase tracking-wider text-[color:var(--ui-secondary)]">
+                    <div class="flex items-center justify-between pb-2 border-b border-[color:var(--am-border)]">
+                        <span class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">
                             {{ $creating ? 'Neu anlegen' : 'Bearbeiten' }}
                         </span>
-                        <button wire:click="cancelEdit" class="text-[10px] text-[color:var(--ui-secondary)] hover:text-red-500">
+                        <button wire:click="cancelEdit" class="text-[10px] text-[var(--am-text-secondary)] hover:text-red-500">
                             @svg('heroicon-o-x-mark', 'w-3 h-3 inline -mt-0.5')
                             Schließen
                         </button>
@@ -82,8 +82,8 @@
                     @endswitch
                 @else
                     <div class="flex flex-col items-center justify-center py-10 text-center">
-                        @svg('heroicon-o-cursor-arrow-rays', 'w-8 h-8 text-[color:var(--ui-muted)] mb-3')
-                        <p class="text-[11px] text-[color:var(--ui-secondary)]">Eine Zeile anklicken zum Bearbeiten — oder oben „Neu“ für einen neuen Eintrag.</p>
+                        @svg('heroicon-o-cursor-arrow-rays', 'w-8 h-8 text-[var(--am-text-muted)] mb-3')
+                        <p class="text-[11px] text-[var(--am-text-secondary)]">Eine Zeile anklicken zum Bearbeiten — oder oben „Neu“ für einen neuen Eintrag.</p>
                     </div>
                 @endif
                 @endcan
@@ -99,23 +99,23 @@
         <div class="flex-1 overflow-y-auto p-6 space-y-4">
 
             <div class="flex items-center gap-2">
-                @svg($current['icon'], 'w-5 h-5 text-[var(--ui-secondary)]')
-                <h2 class="text-lg font-semibold text-[var(--ui-secondary)] m-0">{{ $current['label'] }}</h2>
-                <span class="text-xs text-[var(--ui-secondary)] bg-[var(--ui-muted-10)] rounded-full px-2 py-0.5">{{ $counts[$active] ?? 0 }}</span>
+                @svg($current['icon'], 'w-5 h-5 text-[var(--am-text-secondary)]')
+                <h2 class="text-lg font-semibold text-[var(--am-text)] m-0">{{ $current['label'] }}</h2>
+                <span class="text-xs text-[var(--am-text-secondary)] bg-[var(--am-bg)] rounded-full px-2 py-0.5">{{ $counts[$active] ?? 0 }}</span>
                 <span class="flex-1"></span>
                 @can('asset-manager.manage')
-                    <x-ui-button variant="primary" size="sm" rounded="lg" wire:click="startCreate">
+                    <x-asset-manager-button variant="primary" size="sm" wire:click="startCreate">
                         @svg('heroicon-o-plus', 'w-3.5 h-3.5')
                         {{ $current['singular'] }}
-                    </x-ui-button>
+                    </x-asset-manager-button>
                 @endcan
             </div>
 
             @if($flash)
-                <div class="px-4 py-2 text-xs font-medium text-emerald-700 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">{{ $flash }}</div>
+                <div class="px-4 py-2 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg">{{ $flash }}</div>
             @endif
 
-            <div class="rounded-xl bg-white/70 backdrop-blur-sm border border-white/40 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.03)] overflow-hidden">
+            <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm overflow-hidden">
                 @switch($active)
                     @case('companies')
                         @include('asset-manager::livewire.master-data.partials.table-companies', ['rows' => $this->companies])

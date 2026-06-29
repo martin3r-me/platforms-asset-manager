@@ -17,32 +17,26 @@
     {{-- LINKS: Filter --}}
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Filter" icon="heroicon-o-funnel" width="w-72" :defaultOpen="true">
-            <div class="p-4 space-y-4 bg-[var(--ui-muted-5)]">
-                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">Suche</h3>
-                    <div class="px-3 pb-3">
-                        <input type="text" wire:model.live.debounce.300ms="search" placeholder="Anschluss / Standort / Anbieter…"
-                               class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40 focus:outline-none focus:ring-2 focus:ring-violet-500/30" />
-                    </div>
-                </section>
+            <div class="p-4 space-y-4 bg-[var(--am-bg)]">
+                <x-asset-manager-filter-section title="Suche">
+                    <x-asset-manager-input size="sm" type="text" wire:model.live.debounce.300ms="search"
+                        placeholder="Anschluss / Standort / Anbieter…" class="w-full" />
+                </x-asset-manager-filter-section>
 
                 @if($providers->isNotEmpty())
-                    <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                        <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">Anbieter</h3>
-                        <div class="px-3 pb-3">
-                            <select wire:model.live="filterProvider" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40">
-                                <option value="">Alle</option>
-                                @foreach($providers as $p)<option value="{{ $p }}">{{ $p }}</option>@endforeach
-                            </select>
-                        </div>
-                    </section>
+                    <x-asset-manager-filter-section title="Anbieter">
+                        <x-asset-manager-select size="sm" wire:model.live="filterProvider" class="w-full">
+                            <option value="">Alle</option>
+                            @foreach($providers as $p)<option value="{{ $p }}">{{ $p }}</option>@endforeach
+                        </x-asset-manager-select>
+                    </x-asset-manager-filter-section>
                 @endif
 
                 @if($search || $filterProvider)
-                    <x-ui-button variant="secondary-ghost" size="sm" rounded="lg" class="w-full" wire:click="resetFilters">
+                    <x-asset-manager-button variant="ghost" size="sm" class="w-full" wire:click="resetFilters">
                         @svg('heroicon-o-x-circle', 'w-3.5 h-3.5')
                         Filter zurücksetzen
-                    </x-ui-button>
+                    </x-asset-manager-button>
                 @endif
             </div>
         </x-ui-page-sidebar>
@@ -51,67 +45,62 @@
     {{-- RECHTS: Detail (read-only) --}}
     <x-slot name="activity">
         <x-ui-page-sidebar title="Anschluss" icon="heroicon-o-wifi" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
-            <div class="p-4 space-y-3 bg-[var(--ui-muted-5)]">
+            <div class="p-4 space-y-3 bg-[var(--am-bg)]">
                 @if($selectedItem)
                     @php
                         $rd       = $selectedItem->raw_data ?? [];
                         $kst      = $selectedLines->map(fn($l) => $l->costCenter?->code)->filter()->unique()->implode(', ');
                         $detTotal = (float) $selectedLines->sum('monthly_amount');
                     @endphp
-                    <div class="flex items-center justify-between pb-2 border-b border-[var(--ui-border)]/30">
-                        <span class="text-[10px] uppercase tracking-wider text-[color:var(--ui-secondary)]">Auswahl</span>
-                        <button wire:click="clearSelection" class="text-[10px] text-[color:var(--ui-secondary)] hover:text-red-500">
+                    <div class="flex items-center justify-between pb-2 border-b border-[color:var(--am-border)]">
+                        <span class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">Auswahl</span>
+                        <button wire:click="clearSelection" class="text-[10px] text-[var(--am-text-muted)] hover:text-red-500">
                             @svg('heroicon-o-x-mark', 'w-3 h-3 inline -mt-0.5') Schließen
                         </button>
                     </div>
 
-                    <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm p-3">
-                        <div class="text-sm font-semibold text-[var(--ui-secondary)]">{{ $selectedItem->name }}</div>
-                        <div class="text-[11px] text-[color:var(--ui-secondary)]">{{ $rd['anbieter'] ?? '—' }}</div>
+                    <section class="rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-3">
+                        <div class="text-sm font-semibold text-[var(--am-text)]">{{ $selectedItem->name }}</div>
+                        <div class="text-[11px] text-[var(--am-text-secondary)]">{{ $rd['anbieter'] ?? '—' }}</div>
                     </section>
 
-                    <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                        <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">Eigenschaften</h3>
-                        <dl class="divide-y divide-[var(--ui-border)]/30 text-[11px]">
+                    <x-asset-manager-panel title="Eigenschaften" body-class="p-0">
+                        <x-asset-manager-detail-list>
                             @foreach([
                                 ['Standort',     $rd['standort'] ?? null],
                                 ['Anschrift',    $rd['anschrift'] ?? null],
                                 ['Anbieter',     $rd['anbieter'] ?? null],
                                 ['Kostenstelle', $kst ?: null],
                             ] as [$label, $value])
-                                <div class="flex items-start justify-between gap-2 px-3 py-1.5">
-                                    <dt class="text-[color:var(--ui-secondary)]">{{ $label }}</dt>
-                                    <dd class="text-right text-[var(--ui-secondary)]">{{ $value ?: '—' }}</dd>
-                                </div>
+                                <x-asset-manager-detail-row :label="$label">{{ $value ?: '—' }}</x-asset-manager-detail-row>
                             @endforeach
-                        </dl>
-                    </section>
+                        </x-asset-manager-detail-list>
+                    </x-asset-manager-panel>
 
-                    <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                        <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">Kosten</h3>
-                        <div class="px-3 pb-2 text-[11px]">
+                    <x-asset-manager-panel title="Kosten" body-class="p-0">
+                        <div class="px-3 py-2 text-[11px]">
                             @forelse($selectedLines as $l)
                                 <div class="flex items-center justify-between py-1">
-                                    <span class="text-[color:var(--ui-secondary)] truncate pr-2">{{ $l->label }}</span>
-                                    <span class="tabular-nums text-[var(--ui-secondary)]">{{ number_format((float)$l->monthly_amount, 2, ',', '.') }} €</span>
+                                    <span class="text-[var(--am-text-secondary)] truncate pr-2">{{ $l->label }}</span>
+                                    <span class="tabular-nums text-[var(--am-text)]">{{ number_format((float)$l->monthly_amount, 2, ',', '.') }} €</span>
                                 </div>
                             @empty
-                                <div class="py-1 text-[color:var(--ui-secondary)]">Keine Kostenpositionen.</div>
+                                <div class="py-1 text-[var(--am-text-muted)]">Keine Kostenpositionen.</div>
                             @endforelse
-                            <div class="flex items-center justify-between py-1.5 mt-1 border-t border-[var(--ui-border)]/30 font-semibold">
-                                <span class="text-[var(--ui-secondary)]">Summe</span>
-                                <span class="tabular-nums text-[color:var(--ui-primary)]">{{ number_format($detTotal, 2, ',', '.') }} € / Monat</span>
+                            <div class="flex items-center justify-between py-1.5 mt-1 border-t border-[color:var(--am-border)] font-semibold">
+                                <span class="text-[var(--am-text)]">Summe</span>
+                                <span class="tabular-nums text-[var(--am-accent)]">{{ number_format($detTotal, 2, ',', '.') }} € / Monat</span>
                             </div>
                         </div>
-                    </section>
+                    </x-asset-manager-panel>
 
-                    <x-ui-button variant="secondary-ghost" size="sm" rounded="lg" class="w-full" href="{{ route('asset-manager.assets.show', $selectedItem) }}" wire:navigate>
+                    <x-asset-manager-button variant="secondary" size="sm" class="w-full" href="{{ route('asset-manager.assets.show', $selectedItem) }}" wire:navigate>
                         Vollständige Detailseite
-                    </x-ui-button>
+                    </x-asset-manager-button>
                 @else
                     <div class="flex flex-col items-center justify-center py-10 text-center">
-                        @svg('heroicon-o-cursor-arrow-rays', 'w-8 h-8 text-[color:var(--ui-muted)] mb-3')
-                        <p class="text-[11px] text-[color:var(--ui-secondary)]">Einen Anschluss in der Liste anklicken.</p>
+                        @svg('heroicon-o-cursor-arrow-rays', 'w-8 h-8 text-[var(--am-text-muted)] mb-3')
+                        <p class="text-[11px] text-[var(--am-text-secondary)]">Einen Anschluss in der Liste anklicken.</p>
                     </div>
                 @endif
             </div>
@@ -126,38 +115,40 @@
         <div class="flex-1 overflow-y-auto p-6 space-y-4">
 
             <div class="flex items-center gap-2">
-                @svg('heroicon-o-wifi', 'w-5 h-5 text-[var(--ui-secondary)]')
-                <h2 class="text-lg font-semibold text-[var(--ui-secondary)] m-0">Internet</h2>
-                <span class="text-xs text-[var(--ui-secondary)] bg-[var(--ui-muted-10)] rounded-full px-2 py-0.5">{{ $items->count() }}</span>
+                @svg('heroicon-o-wifi', 'w-5 h-5 text-[var(--am-text-secondary)]')
+                <h2 class="text-lg font-semibold text-[var(--am-text)] m-0">Internet</h2>
+                <span class="text-xs text-[var(--am-text-secondary)] bg-[var(--am-bg)] rounded-full px-2 py-0.5">{{ $items->count() }}</span>
                 <span class="flex-1"></span>
-                <span class="text-sm text-[var(--ui-secondary)]">Gesamt: <strong class="text-[color:var(--ui-primary)] tabular-nums">{{ number_format($totalMonthly, 2, ',', '.') }} € / Monat</strong></span>
+                <span class="text-sm text-[var(--am-text-secondary)]">Gesamt: <strong class="text-[var(--am-accent)] tabular-nums">{{ number_format($totalMonthly, 2, ',', '.') }} € / Monat</strong></span>
             </div>
 
-            <div class="rounded-xl bg-white/60 border border-black/5 shadow-sm overflow-hidden">
+            <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm overflow-hidden">
                 @if($items->isEmpty())
-                    <div class="p-8 text-center text-sm text-[color:var(--ui-secondary)]">Keine Internet-Anschlüsse gefunden.</div>
+                    <div class="p-8 text-center text-sm text-[var(--am-text-secondary)]">Keine Internet-Anschlüsse gefunden.</div>
                 @else
-                    <table class="w-full text-sm">
-                        <thead>
-                            <tr class="border-b border-[color:var(--ui-muted)] text-xs uppercase tracking-wider text-[color:var(--ui-body-color)] font-semibold">
-                                <th class="text-left px-4 py-3 bg-[color:var(--ui-muted-10)]">Anschluss</th>
-                                <th class="text-left px-4 py-3 bg-[color:var(--ui-muted-10)]">Standort</th>
-                                <th class="text-left px-4 py-3 bg-[color:var(--ui-muted-10)]">Anbieter</th>
-                                <th class="text-right px-4 py-3 bg-[color:var(--ui-muted-10)]">€/Monat</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-[color:var(--ui-muted)]">
-                            @foreach($items as $item)
-                                <tr wire:key="in-{{ $item->id }}" wire:click="selectItem({{ $item->id }})"
-                                    class="cursor-pointer hover:bg-[color:var(--ui-muted-10)] {{ $selectedId === $item->id ? 'bg-[color:var(--ui-primary-10)] shadow-[inset_3px_0_0_rgb(var(--ui-primary-rgb))]' : '' }}">
-                                    <td class="px-4 py-2.5 font-medium text-gray-800">{{ $item->name }}</td>
-                                    <td class="px-4 py-2.5 text-xs text-[color:var(--ui-secondary)]">{{ $item->raw_data['standort'] ?? ($item->raw_data['anschrift'] ?? '—') }}</td>
-                                    <td class="px-4 py-2.5 text-xs text-[color:var(--ui-secondary)]">{{ $item->raw_data['anbieter'] ?? '—' }}</td>
-                                    <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-[color:var(--ui-primary)]">{{ number_format($costByItem[$item->id] ?? 0, 2, ',', '.') }} €</td>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="bg-[var(--am-bg)] text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">
+                                    <th class="text-left px-4 py-3">Anschluss</th>
+                                    <th class="text-left px-4 py-3">Standort</th>
+                                    <th class="text-left px-4 py-3">Anbieter</th>
+                                    <th class="text-right px-4 py-3">€/Monat</th>
                                 </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody class="divide-y divide-[color:var(--am-border)]">
+                                @foreach($items as $item)
+                                    <tr wire:key="in-{{ $item->id }}" wire:click="selectItem({{ $item->id }})"
+                                        class="cursor-pointer hover:bg-[var(--am-bg)] {{ $selectedId === $item->id ? 'bg-[var(--am-accent-surface)] shadow-[inset_3px_0_0_var(--am-accent)]' : '' }}">
+                                        <td class="px-4 py-2.5 font-medium text-[var(--am-text)]">{{ $item->name }}</td>
+                                        <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">{{ $item->raw_data['standort'] ?? ($item->raw_data['anschrift'] ?? '—') }}</td>
+                                        <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">{{ $item->raw_data['anbieter'] ?? '—' }}</td>
+                                        <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-[var(--am-accent)]">{{ number_format($costByItem[$item->id] ?? 0, 2, ',', '.') }} €</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
                 @endif
             </div>
         </div>

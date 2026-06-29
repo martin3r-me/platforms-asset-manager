@@ -14,84 +14,57 @@
     {{-- LINKS: Eigenschaften --}}
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Eigenschaften" icon="heroicon-o-adjustments-horizontal" width="w-72" :defaultOpen="true">
-            <div class="p-4 space-y-4 bg-[var(--ui-muted-5)]">
+            <div class="p-4 space-y-4 bg-[var(--am-bg)]">
 
                 {{-- Auslastung --}}
-                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">Auslastung</h3>
+                <x-asset-manager-panel title="Auslastung">
                     @php $pct = $sku->utilizationPercent(); $color = $pct >= 95 ? 'red' : ($pct >= 80 ? 'amber' : 'emerald'); @endphp
-                    <div class="py-2 px-3">
+                    <div class="mb-1">
                         <div class="flex items-baseline justify-between mb-1.5">
-                            <span class="text-[11px] text-[color:var(--ui-secondary)]">Genutzt</span>
+                            <span class="text-[11px] text-[var(--am-text-secondary)]">Genutzt</span>
                             <span class="text-[13px] font-semibold text-{{ $color }}-700 tabular-nums">{{ $pct }}%</span>
                         </div>
-                        <div class="w-full h-1.5 rounded-full bg-[var(--ui-muted-10)] overflow-hidden">
+                        <div class="w-full h-1.5 rounded-full bg-[var(--am-bg)] overflow-hidden">
                             <div class="h-full bg-{{ $color }}-500 transition-all" style="width: {{ min($pct, 100) }}%"></div>
                         </div>
                     </div>
-                    <dl class="divide-y divide-[var(--ui-border)]/30 text-[11px]">
-                        <div class="flex items-baseline justify-between gap-3 py-1.5 px-3">
-                            <dt class="text-[color:var(--ui-secondary)]">Gekauft</dt>
-                            <dd class="text-[var(--ui-secondary)] m-0 tabular-nums">{{ $sku->purchased_units }}</dd>
-                        </div>
-                        <div class="flex items-baseline justify-between gap-3 py-1.5 px-3">
-                            <dt class="text-[color:var(--ui-secondary)]">Genutzt</dt>
-                            <dd class="text-[var(--ui-secondary)] m-0 tabular-nums">{{ $sku->consumed_units }}</dd>
-                        </div>
-                        <div class="flex items-baseline justify-between gap-3 py-1.5 px-3">
-                            <dt class="text-[color:var(--ui-secondary)]">Frei</dt>
-                            <dd class="text-[var(--ui-secondary)] m-0 tabular-nums">{{ $sku->available_units }}</dd>
-                        </div>
-                    </dl>
-                </section>
+                    <x-asset-manager-detail-list>
+                        <x-asset-manager-detail-row label="Gekauft"><span class="tabular-nums">{{ $sku->purchased_units }}</span></x-asset-manager-detail-row>
+                        <x-asset-manager-detail-row label="Genutzt"><span class="tabular-nums">{{ $sku->consumed_units }}</span></x-asset-manager-detail-row>
+                        <x-asset-manager-detail-row label="Frei"><span class="tabular-nums">{{ $sku->available_units }}</span></x-asset-manager-detail-row>
+                    </x-asset-manager-detail-list>
+                </x-asset-manager-panel>
 
                 {{-- Preis --}}
-                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">Preis</h3>
-                    <dl class="divide-y divide-[var(--ui-border)]/30 text-[11px]">
-                        <div class="flex items-baseline justify-between gap-3 py-1.5 px-3">
-                            <dt class="text-[color:var(--ui-secondary)]">Stückpreis / Monat</dt>
-                            <dd class="text-[var(--ui-secondary)] m-0 tabular-nums">
-                                @if($sku->unit_price !== null)
-                                    {{ number_format((float) $sku->unit_price, 2, ',', '.') }} €
-                                @else
-                                    —
-                                @endif
-                            </dd>
-                        </div>
-                        <div class="flex items-baseline justify-between gap-3 py-1.5 px-3">
-                            <dt class="text-[color:var(--ui-secondary)]">Gesamt / Monat</dt>
-                            <dd class="text-[var(--ui-secondary)] m-0 font-semibold tabular-nums">
-                                @if($sku->unit_price !== null)
-                                    {{ number_format($sku->monthlyCost(), 2, ',', '.') }} €
-                                @else
-                                    —
-                                @endif
-                            </dd>
-                        </div>
-                    </dl>
-                </section>
+                <x-asset-manager-panel title="Preis">
+                    <x-asset-manager-detail-list>
+                        <x-asset-manager-detail-row label="Stückpreis / Monat">
+                            @if($sku->unit_price !== null)
+                                <span class="tabular-nums">{{ number_format((float) $sku->unit_price, 2, ',', '.') }} €</span>
+                            @else
+                                <span class="text-[var(--am-text-muted)]">—</span>
+                            @endif
+                        </x-asset-manager-detail-row>
+                        <x-asset-manager-detail-row label="Gesamt / Monat">
+                            @if($sku->unit_price !== null)
+                                <span class="font-semibold tabular-nums">{{ number_format($sku->monthlyCost(), 2, ',', '.') }} €</span>
+                            @else
+                                <span class="text-[var(--am-text-muted)]">—</span>
+                            @endif
+                        </x-asset-manager-detail-row>
+                    </x-asset-manager-detail-list>
+                </x-asset-manager-panel>
 
                 {{-- SKU-Info --}}
-                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
-                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-3 pt-3 pb-1.5">SKU</h3>
-                    <dl class="divide-y divide-[var(--ui-border)]/30 text-[11px]">
-                        <div class="flex items-baseline justify-between gap-3 py-1.5 px-3">
-                            <dt class="text-[color:var(--ui-secondary)]">Part Number</dt>
-                            <dd class="text-[var(--ui-secondary)] m-0 truncate max-w-[55%] text-right">{{ $sku->sku_part_number }}</dd>
-                        </div>
-                        <div class="py-1.5 px-3">
-                            <div class="text-[color:var(--ui-secondary)] mb-1">SKU ID</div>
-                            <div class="text-[10px] font-mono text-[var(--ui-secondary)] break-all">{{ $sku->sku_id }}</div>
-                        </div>
+                <x-asset-manager-panel title="SKU">
+                    <x-asset-manager-detail-list>
+                        <x-asset-manager-detail-row label="Part Number"><span class="block truncate">{{ $sku->sku_part_number }}</span></x-asset-manager-detail-row>
+                        <x-asset-manager-detail-row label="SKU ID" mono><span class="block truncate text-[var(--am-text-muted)]">{{ $sku->sku_id }}</span></x-asset-manager-detail-row>
                         @if($sku->synced_at)
-                            <div class="flex items-baseline justify-between gap-3 py-1.5 px-3">
-                                <dt class="text-[color:var(--ui-secondary)]">Letzter Sync</dt>
-                                <dd class="text-[var(--ui-secondary)] m-0 tabular-nums">{{ $sku->synced_at->diffForHumans() }}</dd>
-                            </div>
+                            <x-asset-manager-detail-row label="Letzter Sync"><span class="tabular-nums">{{ $sku->synced_at->diffForHumans() }}</span></x-asset-manager-detail-row>
                         @endif
-                    </dl>
-                </section>
+                    </x-asset-manager-detail-list>
+                </x-asset-manager-panel>
             </div>
         </x-ui-page-sidebar>
     </x-slot>
@@ -99,12 +72,12 @@
     {{-- RECHTS: Aktivitäten --}}
     <x-slot name="activity">
         <x-ui-page-sidebar title="Aktivitäten" icon="heroicon-o-bolt" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
-            <div class="p-4 space-y-3 bg-[var(--ui-muted-5)]">
-                <div class="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-secondary)] px-1">Letzte Synchronisierungen</div>
+            <div class="p-4 space-y-3 bg-[var(--am-bg)]">
+                <div class="text-[10px] font-semibold uppercase tracking-wider text-[var(--am-text-muted)] px-1">Letzte Synchronisierungen</div>
                 @forelse($activities as $activity)
-                    <div class="p-3 rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm">
+                    <div class="p-3 rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm">
                         <div class="flex items-start justify-between gap-2 mb-1.5">
-                            <div class="text-[12px] font-medium text-[var(--ui-secondary)] leading-snug">
+                            <div class="text-[12px] font-medium text-[var(--am-text)] leading-snug">
                                 @if($activity->status === 'success')
                                     Sync erfolgreich
                                 @elseif($activity->status === 'error')
@@ -117,7 +90,7 @@
                             <x-asset-manager-badge :color="$syncColor" size="xs" class="flex-shrink-0">{{ $activity->status }}</x-asset-manager-badge>
                         </div>
                         @if($activity->status === 'success')
-                            <div class="text-[10px] text-[color:var(--ui-secondary)] mb-1 space-y-0.5">
+                            <div class="text-[10px] text-[var(--am-text-secondary)] mb-1 space-y-0.5">
                                 <div>{{ $activity->skus_synced ?? 0 }} SKUs · {{ $activity->assignments_synced ?? 0 }} Zuweisungen</div>
                                 @if(($activity->assignments_added ?? 0) > 0)   <div>+{{ $activity->assignments_added }} neu</div> @endif
                                 @if(($activity->assignments_removed ?? 0) > 0) <div>−{{ $activity->assignments_removed }} entfernt</div> @endif
@@ -125,7 +98,7 @@
                         @elseif($activity->status === 'error' && $activity->error_message)
                             <div class="text-[10px] text-red-700 mb-1 break-words">{{ Str::limit($activity->error_message, 120) }}</div>
                         @endif
-                        <div class="flex items-center gap-1.5 text-[10px] text-[color:var(--ui-secondary)]">
+                        <div class="flex items-center gap-1.5 text-[10px] text-[var(--am-text-muted)]">
                             @svg('heroicon-o-clock', 'w-3 h-3 opacity-60')
                             <span>{{ $activity->started_at->diffForHumans() }}</span>
                             @if($activity->duration_ms)
@@ -134,7 +107,7 @@
                         </div>
                     </div>
                 @empty
-                    <div class="p-3 text-center text-[11px] text-[color:var(--ui-secondary)]">
+                    <div class="p-3 text-center text-[11px] text-[var(--am-text-muted)]">
                         Noch keine Aktivitäten.
                     </div>
                 @endforelse
@@ -148,80 +121,80 @@
             <div class="space-y-5">
 
                 {{-- Header-Karte --}}
-                <div class="relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5">
-                    <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/40 to-transparent"></div>
+                <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-5">
                     <div class="flex items-start gap-4">
-                        <div class="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500/10 to-indigo-500/10 flex items-center justify-center">
-                            @svg('heroicon-o-key', 'w-6 h-6 text-violet-500')
+                        <div class="flex-shrink-0 w-12 h-12 rounded-xl bg-[var(--am-accent-surface)] flex items-center justify-center">
+                            @svg('heroicon-o-key', 'w-6 h-6 text-[var(--am-accent)]')
                         </div>
                         <div class="flex-1 min-w-0">
-                            <h1 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                            <h1 class="text-lg font-semibold text-[var(--am-text)]">
                                 {{ $sku->display_name ?? $sku->sku_part_number }}
                             </h1>
-                            <p class="text-sm text-[color:var(--ui-secondary)]">{{ $sku->sku_part_number }}</p>
+                            <p class="text-sm text-[var(--am-text-secondary)]">{{ $sku->sku_part_number }}</p>
                         </div>
                         <div class="flex-shrink-0 text-right">
                             @php $pct = $sku->utilizationPercent(); $color = $pct >= 95 ? 'red' : ($pct >= 80 ? 'amber' : 'emerald'); @endphp
                             <div class="text-2xl font-semibold text-{{ $color }}-700">{{ $pct }}%</div>
-                            <div class="text-xs text-[color:var(--ui-secondary)]">{{ $sku->consumed_units }}/{{ $sku->purchased_units }} genutzt</div>
+                            <div class="text-xs text-[var(--am-text-secondary)]">{{ $sku->consumed_units }}/{{ $sku->purchased_units }} genutzt</div>
                         </div>
                     </div>
                 </div>
 
                 {{-- Suche --}}
                 <div class="relative max-w-sm">
-                    <div class="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                        @svg('heroicon-o-magnifying-glass', 'w-4 h-4 text-[color:var(--ui-secondary)]')
+                    <div class="absolute inset-y-0 left-3 flex items-center pointer-events-none z-10">
+                        @svg('heroicon-o-magnifying-glass', 'w-4 h-4 text-[var(--am-text-muted)]')
                     </div>
-                    <input
+                    <x-asset-manager-input
                         type="text"
                         wire:model.live.debounce.300ms="search"
                         placeholder="Name oder E-Mail suchen..."
-                        class="w-full pl-9 pr-3 py-2 text-sm rounded-lg bg-black/[0.03] dark:bg-white/[0.04] border border-black/10 dark:border-white/10 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/30 transition-all"
+                        class="pl-9"
                     />
                 </div>
 
                 {{-- Tabelle --}}
-                <div class="relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm">
-                    <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/30 to-transparent"></div>
+                <div class="overflow-hidden rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm">
 
                     @if($assignments->isEmpty())
                         <div class="flex flex-col items-center justify-center py-16 text-center">
-                            @svg('heroicon-o-users', 'w-10 h-10 text-[color:var(--ui-muted)] mb-3')
-                            <p class="text-sm text-[color:var(--ui-secondary)]">
+                            @svg('heroicon-o-users', 'w-10 h-10 text-[var(--am-text-muted)] mb-3')
+                            <p class="text-sm text-[var(--am-text-secondary)]">
                                 {{ $search ? 'Keine Nutzer gefunden.' : 'Keine Lizenzzuweisungen gefunden.' }}
                             </p>
                         </div>
                     @else
-                        <table class="w-full text-sm">
-                            <thead>
-                                <tr class="border-b border-[color:var(--ui-muted)]">
-                                    <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[color:var(--ui-body-color)] bg-[color:var(--ui-muted-10)]">Name</th>
-                                    <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[color:var(--ui-body-color)] bg-[color:var(--ui-muted-10)]">E-Mail</th>
-                                    <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[color:var(--ui-body-color)] bg-[color:var(--ui-muted-10)]">Zugewiesen seit</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-[color:var(--ui-muted)]">
-                                @foreach($assignments as $assignment)
-                                    <tr class="hover:bg-[color:var(--ui-muted-10)] transition-colors">
-                                        <td class="px-5 py-3">
-                                            <div class="font-medium text-gray-900 dark:text-gray-100">
-                                                {{ $assignment->display_name ?? '—' }}
-                                            </div>
-                                        </td>
-                                        <td class="px-5 py-3 text-[color:var(--ui-secondary)]">
-                                            {{ $assignment->user_principal_name }}
-                                        </td>
-                                        <td class="px-5 py-3 text-[color:var(--ui-secondary)]">
-                                            {{ $assignment->assigned_at ? $assignment->assigned_at->format('d.m.Y') : '—' }}
-                                        </td>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="bg-[var(--am-bg)] border-b border-[color:var(--am-border)]">
+                                        <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Name</th>
+                                        <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">E-Mail</th>
+                                        <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Zugewiesen seit</th>
                                     </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody class="divide-y divide-[color:var(--am-border)]">
+                                    @foreach($assignments as $assignment)
+                                        <tr class="hover:bg-[var(--am-bg)] transition-colors">
+                                            <td class="px-5 py-3">
+                                                <div class="font-medium text-[var(--am-text)]">
+                                                    {{ $assignment->display_name ?? '—' }}
+                                                </div>
+                                            </td>
+                                            <td class="px-5 py-3 text-[var(--am-text-secondary)]">
+                                                {{ $assignment->user_principal_name }}
+                                            </td>
+                                            <td class="px-5 py-3 text-[var(--am-text-secondary)]">
+                                                {{ $assignment->assigned_at ? $assignment->assigned_at->format('d.m.Y') : '—' }}
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
 
                         @if($assignments->hasPages())
-                            <div class="px-5 py-3 border-t border-[color:var(--ui-muted)]">
+                            <div class="px-5 py-3 border-t border-[color:var(--am-border)]">
                                 {{ $assignments->links() }}
                             </div>
                         @endif
@@ -233,18 +206,18 @@
 
         {{-- BOTTOM PANEL: Raw Data --}}
         @if($sku->raw_data)
-            <div class="shrink-0 border-t border-[color:var(--ui-border)] bg-[var(--ui-muted-5)]" x-data="{ open: false }">
+            <div class="shrink-0 border-t border-[color:var(--am-border)] bg-[var(--am-bg)]" x-data="{ open: false }">
                 <button
                     type="button"
                     @click="open = !open"
-                    class="w-full cursor-pointer p-2 text-center flex items-center justify-center gap-2 hover:bg-[var(--ui-muted-10)] transition-colors text-[11px] uppercase tracking-wider text-[color:var(--ui-secondary)]">
+                    class="w-full cursor-pointer p-2 text-center flex items-center justify-center gap-2 hover:bg-[var(--am-surface)] transition-colors text-[11px] uppercase tracking-wider text-[var(--am-text-secondary)]">
                     <span class="font-semibold">Rohdaten (Graph API)</span>
-                    <span class="text-[10px]">{{ count((array) $sku->raw_data) }} Felder</span>
+                    <span class="text-[10px] text-[var(--am-text-muted)]">{{ count((array) $sku->raw_data) }} Felder</span>
                     @svg('heroicon-o-chevron-double-down', 'w-3 h-3', ['x-show' => '!open'])
                     @svg('heroicon-o-chevron-double-up',   'w-3 h-3', ['x-show' => 'open',  'style' => 'display:none'])
                 </button>
-                <div x-show="open" x-cloak class="border-t border-[color:var(--ui-border)] p-4 max-h-64 overflow-y-auto bg-white dark:bg-black/20">
-                    <pre class="text-[10px] text-[color:var(--ui-secondary)] font-mono whitespace-pre-wrap break-all">{{ json_encode($sku->raw_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
+                <div x-show="open" x-cloak class="border-t border-[color:var(--am-border)] p-4 max-h-64 overflow-y-auto bg-[var(--am-surface)]">
+                    <pre class="text-[10px] text-[var(--am-text-secondary)] font-mono whitespace-pre-wrap break-all">{{ json_encode($sku->raw_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
                 </div>
             </div>
         @endif

@@ -15,32 +15,31 @@
 
             {{-- ============ LINKS: Tenant-Liste ============ --}}
             <div class="lg:col-span-4 xl:col-span-3">
-                <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
-                    <div class="px-4 py-3 border-b border-black/5 dark:border-white/5 flex items-center justify-between">
-                        <h2 class="text-sm font-medium text-gray-900 dark:text-gray-100">Tenants</h2>
-                        <x-ui-button variant="primary" size="sm" rounded="lg" wire:click="editCreate">
+                <x-asset-manager-panel title="Tenants" body-class="p-0">
+                    <x-slot name="actions">
+                        <x-asset-manager-button variant="primary" size="sm" wire:click="editCreate">
                             @svg('heroicon-o-plus', 'w-3.5 h-3.5')
                             Tenant
-                        </x-ui-button>
-                    </div>
+                        </x-asset-manager-button>
+                    </x-slot>
 
-                    <div class="divide-y divide-[color:var(--ui-muted)]">
+                    <div class="divide-y divide-[color:var(--am-border)]">
                         @forelse($tenants as $t)
                             @php($conn = $t->connector)
                             @php($status = $conn?->connectionStatus())
                             <button wire:click="selectTenant({{ $t->id }})"
-                                class="w-full text-left px-4 py-3 flex items-center gap-3 transition-all
-                                    {{ $selectedTenant && $selectedTenant->id === $t->id ? 'bg-[color:var(--ui-primary-10)] shadow-[inset_3px_0_0_rgb(var(--ui-primary-rgb))]' : 'hover:bg-[color:var(--ui-muted-10)]' }}">
+                                class="w-full text-left px-4 py-3 flex items-center gap-3 transition-colors
+                                    {{ $selectedTenant && $selectedTenant->id === $t->id ? 'bg-[var(--am-accent-surface)] shadow-[inset_3px_0_0_var(--am-accent)]' : 'hover:bg-[var(--am-bg)]' }}">
                                 <span class="w-2 h-2 rounded-full flex-shrink-0
                                     {{ $status === 'active'       ? 'bg-emerald-500' : '' }}
                                     {{ $status === 'pending'      ? 'bg-amber-500'   : '' }}
                                     {{ $status === 'disconnected' ? 'bg-gray-400'    : '' }}
                                     {{ $status === 'incomplete'   ? 'bg-red-400'     : '' }}
-                                    {{ $status === null           ? 'bg-gray-300 dark:bg-gray-600' : '' }}">
+                                    {{ $status === null           ? 'bg-gray-300' : '' }}">
                                 </span>
                                 <span class="flex-1 min-w-0">
-                                    <span class="block text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{{ $t->name }}</span>
-                                    <span class="block text-xs text-[color:var(--ui-secondary)]">
+                                    <span class="block text-sm font-medium text-[var(--am-text)] truncate">{{ $t->name }}</span>
+                                    <span class="block text-xs text-[var(--am-text-secondary)]">
                                         @if($conn)
                                             @switch($status)
                                                 @case('active')       Anbindung aktiv @break
@@ -54,16 +53,16 @@
                                     </span>
                                 </span>
                                 @if($t->is_default)
-                                    <span class="text-[10px] font-medium px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10 text-[color:var(--ui-secondary)]">Standard</span>
+                                    <span class="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-[var(--am-bg)] text-[var(--am-text-muted)]">Standard</span>
                                 @endif
                             </button>
                         @empty
-                            <div class="px-4 py-6 text-center text-sm text-[color:var(--ui-secondary)]">
+                            <div class="px-4 py-6 text-center text-sm text-[var(--am-text-secondary)]">
                                 Noch keine Tenants.<br>Lege oben einen an.
                             </div>
                         @endforelse
                     </div>
-                </div>
+                </x-asset-manager-panel>
             </div>
 
             {{-- ============ RECHTS: Detail ============ --}}
@@ -71,93 +70,89 @@
 
                 {{-- Tenant anlegen/umbenennen (Inline-Editor) --}}
                 @if($editingTenant)
-                    <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5">
-                        <h2 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
-                            {{ $renameMode ? 'Tenant umbenennen' : 'Neuen Tenant anlegen' }}
-                        </h2>
+                    <x-asset-manager-panel title="{{ $renameMode ? 'Tenant umbenennen' : 'Neuen Tenant anlegen' }}">
                         <form wire:submit="saveTenant" class="flex flex-wrap items-end gap-3">
                             <div class="flex-1 min-w-[200px]">
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Name</label>
-                                <input type="text" wire:model="tenantName" placeholder="z. B. Kunde GmbH"
-                                    class="w-full px-3 py-2 text-sm rounded-lg bg-black/[0.02] dark:bg-white/[0.03] border border-black/10 dark:border-white/10 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/50 transition-all" />
+                                <label class="block text-sm font-medium text-[var(--am-text-secondary)] mb-1.5">Name</label>
+                                <x-asset-manager-input size="md" type="text" wire:model="tenantName" placeholder="z. B. Kunde GmbH" />
                                 @error('tenantName') <p class="mt-1 text-xs text-red-700">{{ $message }}</p> @enderror
                             </div>
-                            <x-ui-button variant="primary" size="md" rounded="lg" type="submit">
+                            <x-asset-manager-button variant="primary" size="md" type="submit">
                                 @svg('heroicon-o-check', 'w-4 h-4')
                                 Speichern
-                            </x-ui-button>
-                            <x-ui-button variant="secondary-ghost" size="md" rounded="lg" type="button" wire:click="cancelTenantEdit">
+                            </x-asset-manager-button>
+                            <x-asset-manager-button variant="ghost" size="md" type="button" wire:click="cancelTenantEdit">
                                 Abbrechen
-                            </x-ui-button>
+                            </x-asset-manager-button>
                         </form>
-                    </div>
+                    </x-asset-manager-panel>
                 @endif
 
                 {{-- Flash --}}
                 @if($flash)
-                    <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                        @svg('heroicon-o-check-circle', 'w-4 h-4 text-emerald-500 flex-shrink-0')
-                        <p class="text-sm text-emerald-700 dark:text-emerald-400">{{ $flash }}</p>
+                    <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200">
+                        @svg('heroicon-o-check-circle', 'w-4 h-4 text-emerald-600 flex-shrink-0')
+                        <p class="text-sm text-emerald-700">{{ $flash }}</p>
                     </div>
                 @endif
 
                 @if(! $selectedTenant && ! $editingTenant)
-                    <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-10 text-center">
-                        @svg('heroicon-o-building-office-2', 'w-10 h-10 mx-auto text-[color:var(--ui-muted)] dark:text-gray-600')
-                        <p class="mt-3 text-sm text-[color:var(--ui-secondary)]">Wähle links einen Tenant oder lege einen neuen an.</p>
+                    <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-10 text-center">
+                        @svg('heroicon-o-building-office-2', 'w-10 h-10 mx-auto text-[var(--am-text-muted)]')
+                        <p class="mt-3 text-sm text-[var(--am-text-secondary)]">Wähle links einen Tenant oder lege einen neuen an.</p>
                     </div>
                 @endif
 
                 @if($selectedTenant)
                     {{-- Tenant-Kopf --}}
-                    <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
+                    <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm overflow-hidden">
                         <div class="px-5 py-4 flex items-center justify-between gap-3">
                             <div class="min-w-0">
                                 <div class="flex items-center gap-2">
-                                    <h1 class="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">{{ $selectedTenant->name }}</h1>
+                                    <h1 class="text-lg font-semibold text-[var(--am-text)] truncate">{{ $selectedTenant->name }}</h1>
                                     @if($selectedTenant->is_default)
-                                        <span class="text-[10px] font-medium px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10 text-[color:var(--ui-secondary)]">Standard</span>
+                                        <span class="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-[var(--am-bg)] text-[var(--am-text-muted)]">Standard</span>
                                     @endif
                                 </div>
-                                <p class="text-xs text-[color:var(--ui-secondary)] mt-0.5">Kundenkontext · Inventar bezieht sich auf diesen Tenant</p>
+                                <p class="text-xs text-[var(--am-text-secondary)] mt-0.5">Kundenkontext · Inventar bezieht sich auf diesen Tenant</p>
                             </div>
                             <div class="flex items-center gap-2 flex-shrink-0">
-                                <x-ui-button variant="secondary-ghost" size="sm" rounded="lg" wire:click="editRename">
+                                <x-asset-manager-button variant="ghost" size="sm" wire:click="editRename">
                                     @svg('heroicon-o-pencil-square', 'w-3.5 h-3.5')
                                     Umbenennen
-                                </x-ui-button>
+                                </x-asset-manager-button>
                                 @unless($selectedTenant->is_default)
-                                    <x-ui-button variant="secondary-ghost" size="sm" rounded="lg" wire:click="setDefaultTenant({{ $selectedTenant->id }})">
+                                    <x-asset-manager-button variant="ghost" size="sm" wire:click="setDefaultTenant({{ $selectedTenant->id }})">
                                         @svg('heroicon-o-star', 'w-3.5 h-3.5')
                                         Als Standard
-                                    </x-ui-button>
+                                    </x-asset-manager-button>
                                 @endunless
-                                <x-ui-button variant="danger-ghost" size="sm" rounded="lg" wire:click="$set('confirmingTenantDelete', true)">
+                                <x-asset-manager-button variant="danger" size="sm" wire:click="$set('confirmingTenantDelete', true)">
                                     @svg('heroicon-o-trash', 'w-3.5 h-3.5')
                                     Löschen
-                                </x-ui-button>
+                                </x-asset-manager-button>
                             </div>
                         </div>
 
                         {{-- Lösch-Bestätigung --}}
                         @if($confirmingTenantDelete)
-                            <div class="px-5 py-4 border-t border-red-500/20 bg-red-500/5">
+                            <div class="px-5 py-4 border-t border-red-200 bg-red-50">
                                 <div class="flex items-start gap-3">
-                                    @svg('heroicon-o-exclamation-triangle', 'w-5 h-5 text-red-500 flex-shrink-0 mt-0.5')
+                                    @svg('heroicon-o-exclamation-triangle', 'w-5 h-5 text-red-600 flex-shrink-0 mt-0.5')
                                     <div class="flex-1">
-                                        <p class="text-sm font-medium text-red-700 dark:text-red-400">Tenant „{{ $selectedTenant->name }}" wirklich löschen?</p>
-                                        <p class="text-xs text-red-600/80 dark:text-red-400/70 mt-1">
+                                        <p class="text-sm font-medium text-red-700">Tenant „{{ $selectedTenant->name }}" wirklich löschen?</p>
+                                        <p class="text-xs text-red-700 mt-1">
                                             <strong>Alle</strong> Geräte, Lizenzen, Mitarbeiter, Assets und der Connector dieses Tenants
                                             werden unwiderruflich entfernt (Cascade). Kostenstellen/Kostenarten bleiben (team-weit).
                                         </p>
                                         <div class="flex items-center gap-2 mt-3">
-                                            <x-ui-button variant="danger-ghost" size="sm" rounded="lg" wire:click="deleteTenant">
+                                            <x-asset-manager-button variant="danger" size="sm" wire:click="deleteTenant">
                                                 @svg('heroicon-o-trash', 'w-3.5 h-3.5')
                                                 Endgültig löschen
-                                            </x-ui-button>
-                                            <x-ui-button variant="secondary-ghost" size="sm" rounded="lg" wire:click="$set('confirmingTenantDelete', false)">
+                                            </x-asset-manager-button>
+                                            <x-asset-manager-button variant="ghost" size="sm" wire:click="$set('confirmingTenantDelete', false)">
                                                 Abbrechen
-                                            </x-ui-button>
+                                            </x-asset-manager-button>
                                         </div>
                                     </div>
                                 </div>
@@ -167,9 +162,9 @@
 
                     {{-- Zentrale-App-Hinweis --}}
                     @if(! $centralAppConfigured)
-                        <div class="flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                            @svg('heroicon-o-information-circle', 'w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5')
-                            <p class="text-sm text-amber-700 dark:text-amber-400">
+                        <div class="flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200">
+                            @svg('heroicon-o-information-circle', 'w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5')
+                            <p class="text-sm text-amber-700">
                                 Die zentrale Azure-App ist noch nicht hinterlegt (<code>ASSET_MANAGER_AZURE_CLIENT_ID</code>).
                                 Neue Connectoren können erst nach Eintrag der App-Zugangsdaten Tokens holen — oder du hinterlegst
                                 pro Connector eigene App-Credentials (Erweitert).
@@ -178,16 +173,16 @@
                     @endif
 
                     {{-- Connector-Sektion --}}
-                    <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
-                        <div class="px-5 py-4 border-b border-black/5 dark:border-white/5 flex items-center justify-between">
-                            <h2 class="text-sm font-medium text-gray-900 dark:text-gray-100">Microsoft-Anbindung</h2>
+                    <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm overflow-hidden">
+                        <div class="px-5 py-4 border-b border-[color:var(--am-border)] flex items-center justify-between">
+                            <h2 class="text-sm font-medium text-[var(--am-text)]">Microsoft-Anbindung</h2>
                             @if($connector)
                                 @php($status = $connector->connectionStatus())
                                 <span class="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg
-                                    {{ $status === 'active'       ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : '' }}
-                                    {{ $status === 'pending'      ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'       : '' }}
-                                    {{ $status === 'disconnected' ? 'bg-gray-500/10 text-gray-600 dark:text-gray-400'          : '' }}
-                                    {{ $status === 'incomplete'   ? 'bg-red-500/10 text-red-700 dark:text-red-400'             : '' }}">
+                                    {{ $status === 'active'       ? 'bg-emerald-50 text-emerald-700' : '' }}
+                                    {{ $status === 'pending'      ? 'bg-amber-50 text-amber-700'       : '' }}
+                                    {{ $status === 'disconnected' ? 'bg-[var(--am-bg)] text-[var(--am-text-secondary)]'          : '' }}
+                                    {{ $status === 'incomplete'   ? 'bg-red-50 text-red-700'             : '' }}">
                                     @switch($status)
                                         @case('active')       @svg('heroicon-o-check-circle', 'w-3.5 h-3.5') Aktiv @break
                                         @case('pending')      @svg('heroicon-o-clock', 'w-3.5 h-3.5') Consent ausstehend @break
@@ -202,41 +197,41 @@
 
                             {{-- Test-Ergebnis --}}
                             @if($testResult)
-                                <div class="flex items-start gap-3 px-4 py-3 rounded-xl {{ $testSuccess ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-red-500/10 border border-red-500/20' }}">
+                                <div class="flex items-start gap-3 px-4 py-3 rounded-xl {{ $testSuccess ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200' }}">
                                     @if($testSuccess)
-                                        @svg('heroicon-o-check-circle', 'w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5')
+                                        @svg('heroicon-o-check-circle', 'w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5')
                                     @else
-                                        @svg('heroicon-o-exclamation-circle', 'w-4 h-4 text-red-500 flex-shrink-0 mt-0.5')
+                                        @svg('heroicon-o-exclamation-circle', 'w-4 h-4 text-red-600 flex-shrink-0 mt-0.5')
                                     @endif
-                                    <p class="text-sm {{ $testSuccess ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400' }}">{{ $testResult }}</p>
+                                    <p class="text-sm {{ $testSuccess ? 'text-emerald-700' : 'text-red-700' }}">{{ $testResult }}</p>
                                 </div>
                             @endif
 
                             @if($connector && $connector->last_sync_at)
-                                <p class="text-xs text-[color:var(--ui-secondary)]">Letzter Sync: {{ $connector->last_sync_at->diffForHumans() }}
+                                <p class="text-xs text-[var(--am-text-secondary)]">Letzter Sync: {{ $connector->last_sync_at->diffForHumans() }}
                                     @if($connector->sync_error) · <span class="text-red-700">{{ $connector->sync_error }}</span> @endif
                                 </p>
                             @endif
 
                             {{-- Consent-Link (bei vorhandenem Verzeichnis) --}}
                             @if($consentUrl)
-                                <div class="rounded-lg bg-blue-500/5 border border-blue-500/20 p-4 space-y-2" x-data="{ copied: false, url: @js($consentUrl) }">
-                                    <div class="flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-400">
+                                <div class="rounded-lg bg-sky-50 border border-sky-200 p-4 space-y-2" x-data="{ copied: false, url: @js($consentUrl) }">
+                                    <div class="flex items-center gap-2 text-sm font-medium text-sky-700">
                                         @svg('heroicon-o-link', 'w-4 h-4')
                                         <span>Admin-Consent-Link</span>
                                     </div>
-                                    <p class="text-xs text-blue-700/80 dark:text-blue-400/80">
+                                    <p class="text-xs text-sky-700">
                                         Diesen Link an einen <strong>Admin des Kunden-Tenants</strong> schicken. Nach der Zustimmung
                                         unten <strong>„Anbindung prüfen"</strong> klicken.
                                     </p>
                                     <div class="flex items-center gap-2">
                                         <input type="text" readonly :value="url"
-                                            class="flex-1 px-3 py-2 text-xs rounded-lg bg-white/60 dark:bg-white/5 border border-black/10 dark:border-white/10 text-gray-600 dark:text-gray-300 font-mono truncate" />
-                                        <x-ui-button variant="secondary-ghost" size="sm" rounded="lg" type="button" class="flex-shrink-0"
+                                            class="flex-1 px-3 py-2 text-xs rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] text-[var(--am-text-secondary)] font-mono truncate" />
+                                        <x-asset-manager-button variant="ghost" size="sm" type="button" class="flex-shrink-0"
                                             x-on:click="navigator.clipboard.writeText(url); copied = true; setTimeout(() => copied = false, 1500)">
                                             <span x-show="!copied">Kopieren</span>
-                                            <span x-show="copied" x-cloak class="text-emerald-700 dark:text-emerald-400">Kopiert ✓</span>
-                                        </x-ui-button>
+                                            <span x-show="copied" x-cloak class="text-emerald-700">Kopiert ✓</span>
+                                        </x-asset-manager-button>
                                     </div>
                                 </div>
                             @endif
@@ -244,34 +239,34 @@
                             {{-- Aktions-Buttons (bei vorhandenem Connector) --}}
                             @if($connector)
                                 <div class="flex flex-wrap items-center gap-2.5">
-                                    <x-ui-button variant="primary" size="md" rounded="lg" wire:click="checkConnection" wire:loading.attr="disabled" wire:target="checkConnection">
+                                    <x-asset-manager-button variant="primary" size="md" wire:click="checkConnection" wire:loading.attr="disabled" wire:target="checkConnection">
                                         <span wire:loading.remove wire:target="checkConnection" class="flex items-center gap-2">@svg('heroicon-o-signal', 'w-4 h-4') Anbindung prüfen</span>
                                         <span wire:loading wire:target="checkConnection" class="flex items-center gap-2">@svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin') Prüfe...</span>
-                                    </x-ui-button>
+                                    </x-asset-manager-button>
 
                                     @if($connector->connectionStatus() === 'active')
-                                        <x-ui-button variant="secondary-ghost" size="md" rounded="lg" wire:click="syncNow" wire:loading.attr="disabled" wire:target="syncNow">
+                                        <x-asset-manager-button variant="ghost" size="md" wire:click="syncNow" wire:loading.attr="disabled" wire:target="syncNow">
                                             <span wire:loading.remove wire:target="syncNow" class="flex items-center gap-2">@svg('heroicon-o-arrow-path', 'w-4 h-4') Jetzt synchronisieren</span>
                                             <span wire:loading wire:target="syncNow" class="flex items-center gap-2">@svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin') Starte...</span>
-                                        </x-ui-button>
+                                        </x-asset-manager-button>
 
-                                        <x-ui-button variant="secondary-ghost" size="md" rounded="lg" wire:click="importUsers" wire:loading.attr="disabled" wire:target="importUsers">
+                                        <x-asset-manager-button variant="ghost" size="md" wire:click="importUsers" wire:loading.attr="disabled" wire:target="importUsers">
                                             @svg('heroicon-o-user-plus', 'w-4 h-4') Tenant-User importieren
-                                        </x-ui-button>
+                                        </x-asset-manager-button>
                                     @endif
 
-                                    <x-ui-button variant="secondary-ghost" size="md" rounded="lg" wire:click="refreshToken"
+                                    <x-asset-manager-button variant="ghost" size="md" wire:click="refreshToken"
                                         title="Token-Cache leeren — nötig nach Permission-Änderungen in Azure">
                                         @svg('heroicon-o-key', 'w-4 h-4') Token erneuern
-                                    </x-ui-button>
+                                    </x-asset-manager-button>
 
                                     @if($connector->enabled)
-                                        <x-ui-button variant="secondary-ghost" size="md" rounded="lg" wire:click="disconnect">
+                                        <x-asset-manager-button variant="ghost" size="md" wire:click="disconnect">
                                             @svg('heroicon-o-no-symbol', 'w-4 h-4') Trennen
-                                        </x-ui-button>
+                                        </x-asset-manager-button>
                                     @else
                                         <button wire:click="reconnect"
-                                            class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 rounded-lg hover:bg-emerald-500/20 transition-all">
+                                            class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors">
                                             @svg('heroicon-o-bolt', 'w-4 h-4') Wieder verbinden
                                         </button>
                                     @endif
@@ -279,45 +274,42 @@
                             @endif
 
                             {{-- Formular: Verzeichnis (+ optional eigene App) --}}
-                            <form wire:submit="{{ $connector ? 'saveConnector' : 'addConnector' }}" class="space-y-4 pt-2 border-t border-black/5 dark:border-white/5"
+                            <form wire:submit="{{ $connector ? 'saveConnector' : 'addConnector' }}" class="space-y-4 pt-2 border-t border-[color:var(--am-border)]"
                                   x-data="{ advanced: {{ $connector && $connector->client_id ? 'true' : 'false' }} }">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                    <label class="block text-sm font-medium text-[var(--am-text-secondary)] mb-1.5">
                                         Kunden-Verzeichnis <span class="text-red-700">*</span>
-                                        <span class="font-normal text-[color:var(--ui-secondary)] ml-1">(Domain wie <code>kunde.de</code> oder Tenant-GUID)</span>
+                                        <span class="font-normal text-[var(--am-text-muted)] ml-1">(Domain wie <code>kunde.de</code> oder Tenant-GUID)</span>
                                     </label>
-                                    <input type="text" wire:model="directory" placeholder="kunde.de  ·  xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                                        class="w-full px-3 py-2 text-sm rounded-lg bg-black/[0.02] dark:bg-white/[0.03] border border-black/10 dark:border-white/10 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/50 transition-all" />
+                                    <x-asset-manager-input size="md" type="text" wire:model="directory" placeholder="kunde.de  ·  xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
                                     @error('directory') <p class="mt-1 text-xs text-red-700">{{ $message }}</p> @enderror
                                 </div>
 
                                 <button type="button" @click="advanced = !advanced"
-                                    class="inline-flex items-center gap-1.5 text-xs font-medium text-[color:var(--ui-secondary)] hover:text-gray-700 dark:hover:text-gray-200 transition-all">
+                                    class="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--am-text-secondary)] hover:text-[var(--am-text)] transition-colors">
                                     @svg('heroicon-o-chevron-right', 'w-3.5 h-3.5', ['x-bind:class' => "advanced ? 'rotate-90' : ''", 'class' => 'transition-transform'])
                                     Erweitert: eigene App-Credentials (optional, sonst zentrale App)
                                 </button>
 
                                 <div x-show="advanced" x-cloak class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Client ID <span class="font-normal text-[color:var(--ui-secondary)]">(optional)</span></label>
-                                        <input type="text" wire:model="clientId" placeholder="leer = zentrale App"
-                                            class="w-full px-3 py-2 text-sm rounded-lg bg-black/[0.02] dark:bg-white/[0.03] border border-black/10 dark:border-white/10 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/50 transition-all" />
+                                        <label class="block text-sm font-medium text-[var(--am-text-secondary)] mb-1.5">Client ID <span class="font-normal text-[var(--am-text-muted)]">(optional)</span></label>
+                                        <x-asset-manager-input size="md" type="text" wire:model="clientId" placeholder="leer = zentrale App" />
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                                            Client Secret <span class="font-normal text-[color:var(--ui-secondary)]">(optional)</span>
-                                            @if($connector && $connector->client_secret)<span class="text-[color:var(--ui-secondary)] ml-1">(leer = unverändert)</span>@endif
+                                        <label class="block text-sm font-medium text-[var(--am-text-secondary)] mb-1.5">
+                                            Client Secret <span class="font-normal text-[var(--am-text-muted)]">(optional)</span>
+                                            @if($connector && $connector->client_secret)<span class="text-[var(--am-text-muted)] ml-1">(leer = unverändert)</span>@endif
                                         </label>
-                                        <input type="password" wire:model="clientSecret" placeholder="{{ $connector && $connector->client_secret ? '••••••••• (unverändert)' : 'leer = zentrale App' }}"
-                                            class="w-full px-3 py-2 text-sm rounded-lg bg-black/[0.02] dark:bg-white/[0.03] border border-black/10 dark:border-white/10 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/50 transition-all" />
+                                        <x-asset-manager-input size="md" type="password" wire:model="clientSecret" placeholder="{{ $connector && $connector->client_secret ? '••••••••• (unverändert)' : 'leer = zentrale App' }}" />
                                     </div>
                                 </div>
 
                                 <div class="flex items-center gap-3">
-                                    <x-ui-button variant="primary" size="md" rounded="lg" type="submit">
+                                    <x-asset-manager-button variant="primary" size="md" type="submit">
                                         @svg('heroicon-o-check', 'w-4 h-4')
                                         {{ $connector ? 'Speichern' : 'Connector hinzufügen' }}
-                                    </x-ui-button>
+                                    </x-asset-manager-button>
                                 </div>
                             </form>
 

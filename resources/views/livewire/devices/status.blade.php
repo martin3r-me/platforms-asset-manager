@@ -35,50 +35,50 @@
             @foreach($statusMeta as $key => [$label, $color])
                 @php $active = ($key === 'all' && $status === '') || $status === $key; @endphp
                 <button type="button" wire:click="setStatus('{{ $key === 'all' ? '' : $key }}')"
-                    class="text-left rounded-xl border bg-white px-4 py-3 transition-all hover:shadow-sm {{ $active ? 'border-violet-400 ring-2 ring-violet-500/30' : 'border-[var(--ui-border)]/40' }}">
+                    class="text-left rounded-xl border px-4 py-3 transition-colors {{ $active ? 'border-[color:var(--am-accent)] bg-[var(--am-accent-surface)]' : 'border-[color:var(--am-border)] bg-[var(--am-surface)] hover:bg-[var(--am-bg)]' }}">
                     <div class="text-2xl font-semibold tabular-nums text-{{ $color }}-700">{{ $counts[$key] ?? 0 }}</div>
-                    <div class="mt-0.5 text-[11px] font-medium text-[var(--ui-secondary)]">{{ $label }}</div>
+                    <div class="mt-0.5 text-[11px] font-medium text-[var(--am-text-muted)]">{{ $label }}</div>
                 </button>
             @endforeach
         </div>
 
         {{-- Geräteliste (nach aktivem Status-Filter) --}}
-        <x-ui-panel>
+        <x-asset-manager-panel body-class="p-0">
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
-                        <tr class="text-left text-xs uppercase tracking-wider border-b border-[color:var(--ui-muted)]">
-                            <th class="px-4 py-2.5 bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)] font-semibold">Gerät</th>
-                            <th class="px-4 py-2.5 bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)] font-semibold">Nutzer</th>
-                            <th class="px-4 py-2.5 bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)] font-semibold">Status</th>
-                            <th class="px-4 py-2.5 bg-[color:var(--ui-muted-10)] text-[color:var(--ui-body-color)] font-semibold">Letzter Check-in</th>
+                        <tr class="text-left border-b border-[color:var(--am-border)]">
+                            <th class="px-4 py-2.5 bg-[var(--am-bg)] text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Gerät</th>
+                            <th class="px-4 py-2.5 bg-[var(--am-bg)] text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Nutzer</th>
+                            <th class="px-4 py-2.5 bg-[var(--am-bg)] text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Status</th>
+                            <th class="px-4 py-2.5 bg-[var(--am-bg)] text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Letzter Check-in</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-[var(--ui-border)]/30">
+                    <tbody class="divide-y divide-[color:var(--am-border)]">
                         @forelse($devices as $device)
-                            <tr class="hover:bg-[color:var(--ui-muted-10)] transition-colors">
+                            <tr class="hover:bg-[var(--am-bg)] transition-colors">
                                 <td class="px-4 py-2.5">
                                     <a href="{{ route('asset-manager.devices.show', $device) }}" wire:navigate
-                                       class="font-medium text-[color:var(--ui-primary)] hover:text-violet-700">
+                                       class="font-medium text-[var(--am-accent)] hover:underline">
                                         {{ $device->device_name ?: '—' }}
                                     </a>
                                     @if($device->manufacturer || $device->model)
-                                        <div class="text-[11px] text-[color:var(--ui-secondary)]">{{ trim(($device->manufacturer ?? '') . ' ' . ($device->model ?? '')) }}</div>
+                                        <div class="text-[11px] text-[var(--am-text-secondary)]">{{ trim(($device->manufacturer ?? '') . ' ' . ($device->model ?? '')) }}</div>
                                     @endif
                                 </td>
-                                <td class="px-4 py-2.5 text-[var(--ui-secondary)]">
+                                <td class="px-4 py-2.5 text-[var(--am-text-secondary)]">
                                     {{ $device->user_display_name ?: ($device->user_principal_name ?: '—') }}
                                 </td>
                                 <td class="px-4 py-2.5">
                                     <x-asset-manager-badge :color="$device->lifecycleBadgeColor()" dot size="sm">{{ $device->lifecycleLabel() }}</x-asset-manager-badge>
                                 </td>
-                                <td class="px-4 py-2.5 text-[var(--ui-secondary)] tabular-nums">
+                                <td class="px-4 py-2.5 text-[var(--am-text-secondary)] tabular-nums">
                                     {{ $device->last_check_in_at?->format('d.m.Y H:i') ?? '—' }}
                                 </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="4" class="px-4 py-10 text-center text-sm text-[color:var(--ui-secondary)]">
+                                <td colspan="4" class="px-4 py-10 text-center text-sm text-[var(--am-text-muted)]">
                                     Keine Geräte in diesem Status.
                                 </td>
                             </tr>
@@ -88,10 +88,10 @@
             </div>
 
             @if($devices->hasPages())
-                <div class="px-4 py-3 border-t border-[color:var(--ui-muted)]">
+                <div class="px-4 py-3 border-t border-[color:var(--am-border)]">
                     {{ $devices->links() }}
                 </div>
             @endif
-        </x-ui-panel>
+        </x-asset-manager-panel>
     </x-ui-page-container>
 </x-ui-page>
