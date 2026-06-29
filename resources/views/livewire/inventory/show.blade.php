@@ -10,16 +10,23 @@
             ['label' => $subject->name],
         ]">
             <x-slot name="actions">
-                {{-- Phase 2: read-only. Bearbeiten läuft (noch) über die klassischen Editor-Seiten;
-                     Phase 3/4 ersetzen diese Links durch Modals direkt hier. --}}
                 @if($canManage)
                     @if($subject->type === 'manual')
-                        <x-ui-button variant="secondary-ghost" size="sm" rounded="lg"
-                                     href="{{ route('asset-manager.assets.show', $item) }}" wire:navigate>
+                        {{-- Phase 3: manuelle Assets werden direkt hier per Modal bearbeitet. --}}
+                        <x-ui-button variant="secondary-ghost" size="sm" rounded="lg" wire:click="openAssign">
+                            @svg('heroicon-o-user-plus', 'w-3.5 h-3.5')
+                            Zuordnen
+                        </x-ui-button>
+                        <x-ui-button variant="secondary-ghost" size="sm" rounded="lg" wire:click="openEdit">
                             @svg('heroicon-o-pencil-square', 'w-3.5 h-3.5')
                             Bearbeiten
                         </x-ui-button>
+                        <x-ui-button variant="danger-ghost" size="sm" rounded="lg" wire:click="openDelete">
+                            @svg('heroicon-o-trash', 'w-3.5 h-3.5')
+                            Löschen
+                        </x-ui-button>
                     @else
+                        {{-- Phase 4 ersetzt diesen Link durch Geräte-Modals (Lifecycle/Kosten/Notizen). --}}
                         <x-ui-button variant="secondary-ghost" size="sm" rounded="lg"
                                      href="{{ route('asset-manager.devices.show', $device) }}" wire:navigate>
                             @svg('heroicon-o-pencil-square', 'w-3.5 h-3.5')
@@ -32,6 +39,14 @@
     </x-slot>
 
     <x-ui-page-container padding="p-6" spacing="space-y-5">
+
+        @if($flash)
+            <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                @svg('heroicon-o-check-circle', 'w-4 h-4 text-emerald-500 flex-shrink-0')
+                <p class="text-sm text-emerald-700 dark:text-emerald-400">{{ $flash }}</p>
+                <button wire:click="$set('flash', null)" class="ml-auto text-emerald-600 hover:text-emerald-800">×</button>
+            </div>
+        @endif
 
         {{-- Header --}}
         <div class="relative overflow-hidden rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-sm p-5">
@@ -85,6 +100,11 @@
 
                     {{-- Details --}}
                     <x-ui-panel title="Details">
+                        @if($canManage && $item)
+                            <div class="flex justify-end -mt-1 mb-2">
+                                <button type="button" wire:click="openEdit" class="text-[11px] text-[color:var(--ui-primary)] hover:underline inline-flex items-center gap-1">@svg('heroicon-o-pencil-square', 'w-3 h-3') Bearbeiten</button>
+                            </div>
+                        @endif
                         <dl class="text-sm divide-y divide-[color:var(--ui-muted)]">
                             @if($item)
                                 @if($item->source === 'intune')
@@ -108,6 +128,11 @@
 
                     {{-- Abschreibung --}}
                     <x-ui-panel title="Abschreibung">
+                        @if($canManage && $item)
+                            <div class="flex justify-end -mt-1 mb-2">
+                                <button type="button" wire:click="openDepreciation" class="text-[11px] text-[color:var(--ui-primary)] hover:underline inline-flex items-center gap-1">@svg('heroicon-o-pencil-square', 'w-3 h-3') Bearbeiten</button>
+                            </div>
+                        @endif
                         <dl class="text-sm divide-y divide-[color:var(--ui-muted)]">
                             @if($item)
                                 <div class="flex justify-between py-2"><dt class="text-[color:var(--ui-secondary)]">Kaufdatum</dt><dd class="text-gray-800 dark:text-gray-200">{{ $item->purchase_date?->format('d.m.Y') ?? '—' }}</dd></div>
@@ -126,6 +151,11 @@
 
                 {{-- Zuordnungen (E6: Zeitraum-Verknüpfung; getrennt von Geräteausgaben) --}}
                 <x-ui-panel title="Zuordnungen">
+                    @if($canManage && $item)
+                        <div class="flex justify-end -mt-1 mb-2">
+                            <button type="button" wire:click="openAssign" class="text-[11px] text-[color:var(--ui-primary)] hover:underline inline-flex items-center gap-1">@svg('heroicon-o-user-plus', 'w-3 h-3') Zuordnen</button>
+                        </div>
+                    @endif
                     @if($assignments->isEmpty())
                         <p class="text-sm text-[color:var(--ui-secondary)] py-2">Noch keine Zuordnung erfasst.</p>
                     @else
@@ -230,6 +260,11 @@
             {{-- ===================== NOTIZEN ===================== --}}
             <div x-show="tab === 'notes'" x-cloak>
                 <x-ui-panel title="Notizen">
+                    @if($canManage && $item)
+                        <div class="flex justify-end -mt-1 mb-2">
+                            <button type="button" wire:click="openNotes" class="text-[11px] text-[color:var(--ui-primary)] hover:underline inline-flex items-center gap-1">@svg('heroicon-o-pencil-square', 'w-3 h-3') Bearbeiten</button>
+                        </div>
+                    @endif
                     @php $notes = $item ? $item->notes : $device->notes; @endphp
                     @if($notes)
                         <p class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{{ $notes }}</p>
@@ -266,4 +301,13 @@
             <div x-show="tab === 'invoices'" x-cloak>@include('asset-manager::livewire.inventory.partials.tab-placeholder', ['title' => 'Rechnungen', 'icon' => 'heroicon-o-banknotes'])</div>
         </div>
     </x-ui-page-container>
+
+    {{-- Modals innerhalb <x-ui-page>. Phase 3: nur manuelle Assets (Geräte-Modals folgen Phase 4). --}}
+    @if($canManage && $item)
+        @include('asset-manager::livewire.inventory.partials.modal-edit')
+        @include('asset-manager::livewire.inventory.partials.modal-assign')
+        @include('asset-manager::livewire.inventory.partials.modal-depreciation')
+        @include('asset-manager::livewire.inventory.partials.modal-notes')
+        @include('asset-manager::livewire.inventory.partials.modal-delete')
+    @endif
 </x-ui-page>
