@@ -373,16 +373,18 @@
                             <div class="py-2 border-b border-[color:var(--ui-muted)] last:border-0">
                                 <div class="flex items-center justify-between gap-2">
                                     <span class="text-sm text-gray-700 dark:text-gray-300">
-                                        @switch($log->status)
-                                            @case('success') Sync erfolgreich @break
-                                            @case('error') Sync fehlgeschlagen @break
-                                            @default Sync gestartet
-                                        @endswitch
+                                        @if($log->status === 'success') Sync erfolgreich
+                                        @elseif($log->status === 'error') Sync fehlgeschlagen
+                                        @else Sync gestartet @endif
                                     </span>
                                     <x-asset-manager-badge :color="$syncColor" size="xs">{{ $log->status }}</x-asset-manager-badge>
                                 </div>
                                 @if($log->status === 'success')
-                                    <div class="text-[11px] text-[color:var(--ui-secondary)] mt-0.5">{{ $log->devices_synced ?? 0 }} synchronisiert@if(($log->devices_added ?? 0) > 0) · +{{ $log->devices_added }} neu @endif @if(($log->devices_removed ?? 0) > 0) · −{{ $log->devices_removed }} entfernt @endif</div>
+                                    <div class="text-[11px] text-[color:var(--ui-secondary)] mt-0.5">
+                                        {{ $log->devices_synced ?? 0 }} synchronisiert
+                                        @if(($log->devices_added ?? 0) > 0) · +{{ $log->devices_added }} neu @endif
+                                        @if(($log->devices_removed ?? 0) > 0) · −{{ $log->devices_removed }} entfernt @endif
+                                    </div>
                                 @elseif($log->status === 'error' && $log->error_message)
                                     <div class="text-[11px] text-red-700 mt-0.5 break-words">{{ Str::limit($log->error_message, 140) }}</div>
                                 @endif
