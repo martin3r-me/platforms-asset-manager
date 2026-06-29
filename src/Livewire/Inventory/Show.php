@@ -10,10 +10,13 @@ use Livewire\Component;
 use Platform\AssetManager\Concerns\AuthorizesTeamRole;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Models\AssetCategory;
+use Platform\AssetManager\Models\AssetCostCenter;
+use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetHandoverLine;
 use Platform\AssetManager\Models\AssetItem;
+use Platform\AssetManager\Models\AssetVendor;
 use Platform\AssetManager\Services\AssetWriteService;
 use Platform\AssetManager\Support\AssetSubject;
 
@@ -71,6 +74,31 @@ class Show extends Component
 
     // Notizen
     public string $nNotes = '';
+
+    // --- Geräte-Modals (nur intune, Phase 4) ---
+    public bool $showDeviceEdit  = false;
+    public bool $showDeviceCost  = false;
+    public bool $showDeviceNotes = false;
+
+    // Lifecycle / Beschaffung
+    public ?string $glStatus    = null;
+    public ?string $glWarranty  = null;
+    public ?string $glLease     = null;
+    public ?int    $glVendor    = null;
+    public ?string $glOrderNo   = null;
+    public ?string $glOrderDate = null;
+    public ?string $glLocation  = null;
+
+    // Kosten (Override)
+    public ?string $gcMonthly      = null;
+    public ?string $gcPurchase     = null;
+    public ?int    $gcDep          = null;
+    public ?string $gcPurchaseDate = null;
+    public ?int    $gcCostType     = null;
+    public ?int    $gcCostCenter   = null;
+
+    // Notizen
+    public string $gnNotes = '';
 
     public function mount(string $type, int $id): void
     {
@@ -250,6 +278,121 @@ class Show extends Component
         return redirect()->route('asset-manager.inventory.index');
     }
 
+    // ---------------- Gerät: Lifecycle / Beschaffung / Kosten / Notizen (Phase 4) ----------------
+
+    /** Geräte-Schreibpfade sind owner/admin-gated (kein AssetDevicePolicy::update — wie Devices/Show). */
+    protected function guardDeviceWrite(): AssetDevice
+    {
+        abort_unless($this->device !== null, 404);
+        abort_unless($this->canManage(), 403);
+
+        return $this->device;
+    }
+
+    public function openDeviceEdit(): void
+    {
+        $d = $this->guardDeviceWrite();
+        $this->glStatus    = $d->lifecycle_status;
+        $this->glWarranty  = $d->warranty_until?->format('Y-m-d');
+        $this->glLease     = $d->lease_until?->format('Y-m-d');
+        $this->glVendor    = $d->vendor_id;
+        $this->glOrderNo   = $d->order_no;
+        $this->glOrderDate = $d->order_date?->format('Y-m-d');
+        $this->glLocation  = $d->location;
+        $this->showDeviceEdit = true;
+    }
+
+    public function saveDeviceEdit(AssetWriteService $writer): void
+    {
+        $d = $this->guardDeviceWrite();
+
+        $this->validate([
+            'glStatus'    => ['nullable', Rule::in(AssetDevice::LIFECYCLE_STATUSES)],
+            'glWarranty'  => 'nullable|date',
+            'glLease'     => 'nullable|date',
+            'glVendor'    => ['nullable', 'integer', Rule::exists('asset_vendors', 'id')->where('team_id', $d->team_id)],
+            'glOrderNo'   => 'nullable|string|max:255',
+            'glOrderDate' => 'nullable|date',
+            'glLocation'  => 'nullable|string|max:255',
+        ]);
+
+        $writer->updateDeviceLifecycle($d, [
+            'status'    => $this->glStatus,
+            'warranty'  => $this->glWarranty,
+            'lease'     => $this->glLease,
+            'vendor'    => $this->glVendor,
+            'orderNo'   => $this->glOrderNo,
+            'orderDate' => $this->glOrderDate,
+            'location'  => $this->glLocation,
+        ], (int) Auth::id());
+
+        $this->device->refresh();
+        $this->showDeviceEdit = false;
+        $this->flash = 'Lifecycle / Beschaffung gespeichert.';
+    }
+
+    public function openDeviceCost(): void
+    {
+        $d = $this->guardDeviceWrite();
+        $this->gcMonthly      = $d->monthly_cost;
+        $this->gcPurchase     = $d->purchase_price;
+        $this->gcDep          = $d->depreciation_months;
+        $this->gcPurchaseDate = $d->purchase_date?->format('Y-m-d');
+        $this->gcCostType     = $d->cost_type_id;
+        $this->gcCostCenter   = $d->cost_center_id;
+        $this->showDeviceCost = true;
+    }
+
+    public function saveDeviceCost(AssetWriteService $writer): void
+    {
+        $d = $this->guardDeviceWrite();
+
+        if (! $this->gcCostType)   $this->gcCostType   = null;
+        if (! $this->gcCostCenter) $this->gcCostCenter = null;
+
+        $this->validate([
+            'gcMonthly'      => 'nullable|numeric|min:0',
+            'gcPurchase'     => 'nullable|numeric|min:0',
+            'gcDep'          => 'nullable|integer|min:1',
+            'gcPurchaseDate' => 'nullable|date',
+            'gcCostType'     => ['nullable', 'integer', Rule::exists('asset_cost_types', 'id')->where('team_id', $d->team_id)],
+            'gcCostCenter'   => ['nullable', 'integer', Rule::exists('asset_cost_centers', 'id')->where('team_id', $d->team_id)],
+        ]);
+
+        $writer->updateDeviceCost($d, [
+            'monthly'      => $this->gcMonthly,
+            'purchase'     => $this->gcPurchase,
+            'dep'          => $this->gcDep,
+            'purchaseDate' => $this->gcPurchaseDate,
+            'costType'     => $this->gcCostType,
+            'costCenter'   => $this->gcCostCenter,
+        ]);
+
+        $this->device->refresh();
+        $this->showDeviceCost = false;
+        $this->flash = 'Geräte-Kosten gespeichert.';
+    }
+
+    public function openDeviceNotes(): void
+    {
+        $d = $this->guardDeviceWrite();
+        $this->gnNotes = $d->notes ?? '';
+        $this->showDeviceNotes = true;
+    }
+
+    public function saveDeviceNotes(AssetWriteService $writer): void
+    {
+        $d = $this->guardDeviceWrite();
+
+        $this->validate(['gnNotes' => 'nullable|string|max:2000']);
+
+        $writer->updateDeviceNotes($d, $this->gnNotes);
+
+        $this->device->refresh();
+        $this->showDeviceNotes = false;
+        $this->flash = 'Notiz gespeichert.';
+    }
+
     public function render()
     {
         $teamId = $this->teamId();
@@ -277,8 +420,12 @@ class Show extends Component
             'assignments'   => $assignments,
             'handoverLines' => $handoverLines,
             'canManage'     => $this->canManage(),
-            'categories'    => AssetCategory::orderBy('sort_order')->get(),
-            'employees'     => AssetEmployee::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get(),
+            // Manuell: Kategorie/Mitarbeiter-Selects. Gerät: Kostenart/-stelle/Kreditor-Selects.
+            'categories'    => $this->item ? AssetCategory::orderBy('sort_order')->get() : collect(),
+            'employees'     => $this->item ? AssetEmployee::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get() : collect(),
+            'costTypes'     => $this->device ? AssetCostType::where('team_id', $teamId)->orderBy('sort_order')->orderBy('name')->get() : collect(),
+            'costCenters'   => $this->device ? AssetCostCenter::where('team_id', $teamId)->orderBy('code')->get() : collect(),
+            'vendors'       => $this->device ? AssetVendor::where('team_id', $teamId)->orderBy('name')->get() : collect(),
         ])->layout('platform::layouts.app');
     }
 }

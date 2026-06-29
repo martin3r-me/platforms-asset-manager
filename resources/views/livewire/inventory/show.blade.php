@@ -26,11 +26,10 @@
                             Löschen
                         </x-ui-button>
                     @else
-                        {{-- Phase 4 ersetzt diesen Link durch Geräte-Modals (Lifecycle/Kosten/Notizen). --}}
-                        <x-ui-button variant="secondary-ghost" size="sm" rounded="lg"
-                                     href="{{ route('asset-manager.devices.show', $device) }}" wire:navigate>
+                        {{-- Phase 4: Geräte-Lifecycle/Beschaffung direkt hier per Modal. --}}
+                        <x-ui-button variant="secondary-ghost" size="sm" rounded="lg" wire:click="openDeviceEdit">
                             @svg('heroicon-o-pencil-square', 'w-3.5 h-3.5')
-                            Im Geräte-Detail bearbeiten
+                            Bearbeiten
                         </x-ui-button>
                     @endif
                 @endif
@@ -133,6 +132,11 @@
                                 <button type="button" wire:click="openDepreciation" class="text-[11px] text-[color:var(--ui-primary)] hover:underline inline-flex items-center gap-1">@svg('heroicon-o-pencil-square', 'w-3 h-3') Bearbeiten</button>
                             </div>
                         @endif
+                        @if($canManage && $device)
+                            <div class="flex justify-end -mt-1 mb-2">
+                                <button type="button" wire:click="openDeviceCost" class="text-[11px] text-[color:var(--ui-primary)] hover:underline inline-flex items-center gap-1">@svg('heroicon-o-pencil-square', 'w-3 h-3') Bearbeiten</button>
+                            </div>
+                        @endif
                         <dl class="text-sm divide-y divide-[color:var(--ui-muted)]">
                             @if($item)
                                 <div class="flex justify-between py-2"><dt class="text-[color:var(--ui-secondary)]">Kaufdatum</dt><dd class="text-gray-800 dark:text-gray-200">{{ $item->purchase_date?->format('d.m.Y') ?? '—' }}</dd></div>
@@ -148,6 +152,26 @@
                         </dl>
                     </x-ui-panel>
                 </div>
+
+                {{-- Lifecycle & Beschaffung (nur Gerät) — manuell gepflegt, Intune liefert das nicht (ADR 0007). --}}
+                @if($device)
+                    <x-ui-panel title="Lifecycle &amp; Beschaffung">
+                        @if($canManage)
+                            <div class="flex justify-end -mt-1 mb-2">
+                                <button type="button" wire:click="openDeviceEdit" class="text-[11px] text-[color:var(--ui-primary)] hover:underline inline-flex items-center gap-1">@svg('heroicon-o-pencil-square', 'w-3 h-3') Bearbeiten</button>
+                            </div>
+                        @endif
+                        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 text-sm">
+                            <div class="flex justify-between py-2 border-b border-[color:var(--ui-muted)]"><dt class="text-[color:var(--ui-secondary)]">Lifecycle-Status</dt><dd>@if($device->lifecycle_status)<x-asset-manager-badge :color="$subject->statusColor" size="xs">{{ $device->lifecycleLabel() }}</x-asset-manager-badge>@else <span class="text-[color:var(--ui-muted)]">—</span>@endif</dd></div>
+                            <div class="flex justify-between py-2 border-b border-[color:var(--ui-muted)]"><dt class="text-[color:var(--ui-secondary)]">Standort</dt><dd class="text-gray-800 dark:text-gray-200">{{ $device->location ?: '—' }}</dd></div>
+                            <div class="flex justify-between py-2 border-b border-[color:var(--ui-muted)]"><dt class="text-[color:var(--ui-secondary)]">Garantie bis</dt><dd class="text-gray-800 dark:text-gray-200">{{ $device->warranty_until?->format('d.m.Y') ?? '—' }}</dd></div>
+                            <div class="flex justify-between py-2 border-b border-[color:var(--ui-muted)]"><dt class="text-[color:var(--ui-secondary)]">Leasing bis</dt><dd class="text-gray-800 dark:text-gray-200">{{ $device->lease_until?->format('d.m.Y') ?? '—' }}</dd></div>
+                            <div class="flex justify-between py-2 border-b border-[color:var(--ui-muted)]"><dt class="text-[color:var(--ui-secondary)]">Kreditor</dt><dd class="text-gray-800 dark:text-gray-200">{{ $device->vendor?->name ?? '—' }}</dd></div>
+                            <div class="flex justify-between py-2 border-b border-[color:var(--ui-muted)]"><dt class="text-[color:var(--ui-secondary)]">Bestellnr.</dt><dd class="text-gray-800 dark:text-gray-200">{{ $device->order_no ?: '—' }}</dd></div>
+                            <div class="flex justify-between py-2"><dt class="text-[color:var(--ui-secondary)]">Bestelldatum</dt><dd class="text-gray-800 dark:text-gray-200">{{ $device->order_date?->format('d.m.Y') ?? '—' }}</dd></div>
+                        </dl>
+                    </x-ui-panel>
+                @endif
 
                 {{-- Zuordnungen (E6: Zeitraum-Verknüpfung; getrennt von Geräteausgaben) --}}
                 <x-ui-panel title="Zuordnungen">
@@ -265,6 +289,11 @@
                             <button type="button" wire:click="openNotes" class="text-[11px] text-[color:var(--ui-primary)] hover:underline inline-flex items-center gap-1">@svg('heroicon-o-pencil-square', 'w-3 h-3') Bearbeiten</button>
                         </div>
                     @endif
+                    @if($canManage && $device)
+                        <div class="flex justify-end -mt-1 mb-2">
+                            <button type="button" wire:click="openDeviceNotes" class="text-[11px] text-[color:var(--ui-primary)] hover:underline inline-flex items-center gap-1">@svg('heroicon-o-pencil-square', 'w-3 h-3') Bearbeiten</button>
+                        </div>
+                    @endif
                     @php $notes = $item ? $item->notes : $device->notes; @endphp
                     @if($notes)
                         <p class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{{ $notes }}</p>
@@ -309,5 +338,12 @@
         @include('asset-manager::livewire.inventory.partials.modal-depreciation')
         @include('asset-manager::livewire.inventory.partials.modal-notes')
         @include('asset-manager::livewire.inventory.partials.modal-delete')
+    @endif
+
+    {{-- Phase 4: Geräte-Modals (nur intune). --}}
+    @if($canManage && $device)
+        @include('asset-manager::livewire.inventory.partials.modal-device-edit')
+        @include('asset-manager::livewire.inventory.partials.modal-device-cost')
+        @include('asset-manager::livewire.inventory.partials.modal-device-notes')
     @endif
 </x-ui-page>

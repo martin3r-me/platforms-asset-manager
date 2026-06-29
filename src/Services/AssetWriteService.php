@@ -3,6 +3,8 @@
 namespace Platform\AssetManager\Services;
 
 use Platform\AssetManager\Models\AssetAssignment;
+use Platform\AssetManager\Models\AssetDevice;
+use Platform\AssetManager\Models\AssetDeviceEvent;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetItem;
 
@@ -140,5 +142,68 @@ class AssetWriteService
         } else {
             $item->update(['assignee_id' => null, 'assigned_at' => null, 'status' => 'in_stock']);
         }
+    }
+
+    // =====================================================================
+    // Intune-Geräte (Phase 4) — Spiegel der Devices/Show-Schreibpfade. Validierung + Gate
+    // beim Aufrufer. Leere Strings/0-FKs werden zu null normalisiert (wie Devices/Show).
+    // =====================================================================
+
+    /** Kosten-Override eines Geräts (Leasing-Rate ODER Kauf/AfA + Kostenart/-stelle). */
+    public function updateDeviceCost(AssetDevice $device, array $data): void
+    {
+        $device->update([
+            'monthly_cost'        => $this->blankToNull($data['monthly'] ?? null),
+            'purchase_price'      => $this->blankToNull($data['purchase'] ?? null),
+            'depreciation_months' => ($data['dep'] ?? null) ?: null,
+            'purchase_date'       => ($data['purchaseDate'] ?? null) ?: null,
+            'cost_type_id'        => ($data['costType'] ?? null) ?: null,
+            'cost_center_id'      => ($data['costCenter'] ?? null) ?: null,
+        ]);
+    }
+
+    /**
+     * Lifecycle/Beschaffung eines Geräts. Schreibt bei Status-Wechsel ein `lifecycle_changed`-Audit
+     * mit Akteur ($userId) — identisch zu Devices/Show::saveLifecycle (Track B 2a, ADR 0007).
+     * Intune liefert den Lifecycle nicht; er wird manuell gepflegt → „wer/wann" sonst nicht nachvollziehbar.
+     */
+    public function updateDeviceLifecycle(AssetDevice $device, array $data, ?int $userId = null): void
+    {
+        $oldStatus = $device->lifecycle_status;
+
+        $device->update([
+            'lifecycle_status' => ($data['status'] ?? null) ?: null,
+            'warranty_until'   => ($data['warranty'] ?? null) ?: null,
+            'lease_until'      => ($data['lease'] ?? null) ?: null,
+            'vendor_id'        => ($data['vendor'] ?? null) ?: null,
+            'order_no'         => ($data['orderNo'] ?? null) ?: null,
+            'order_date'       => ($data['orderDate'] ?? null) ?: null,
+            'location'         => ($data['location'] ?? null) ?: null,
+        ]);
+        $device->refresh();
+
+        $newStatus = $device->lifecycle_status;
+        if ($oldStatus !== $newStatus) {
+            AssetDeviceEvent::record(
+                $device,
+                'lifecycle_changed',
+                'Lifecycle-Status geändert',
+                AssetDevice::lifecycleLabelFor($oldStatus),
+                AssetDevice::lifecycleLabelFor($newStatus),
+                $userId,
+            );
+        }
+    }
+
+    /** Operative Freitext-Notiz eines Geräts. */
+    public function updateDeviceNotes(AssetDevice $device, ?string $notes): void
+    {
+        $device->update(['notes' => ($notes !== null && $notes !== '') ? $notes : null]);
+    }
+
+    /** Leerer String/null → null (sonst Wert unverändert; "0" bleibt erhalten wie in Devices/Show). */
+    private function blankToNull($value)
+    {
+        return ($value === '' || $value === null) ? null : $value;
     }
 }
