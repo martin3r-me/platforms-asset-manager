@@ -85,6 +85,21 @@ class AssetManagerServiceProvider extends ServiceProvider
         // Modul-lokales Status-/Kategorie-Badge (WCAG-AA, Farbfamilien-Pass-through, siehe ADR 0011).
         Blade::component('asset-manager::components.badge', 'asset-manager-badge');
 
+        // Modul-lokale Design-System-Schicht (flach/clean, Navy-Primary, siehe ADR 0013 + DESIGN.md).
+        // Token-Injektion (--am-*) + wiederverwendbare UI-Bausteine. UI-/Core-Modul bleiben unberührt.
+        Blade::component('asset-manager::components.theme', 'asset-manager-theme');
+        Blade::component('asset-manager::components.button', 'asset-manager-button');
+        Blade::component('asset-manager::components.panel', 'asset-manager-panel');
+        Blade::component('asset-manager::components.stat-card', 'asset-manager-stat-card');
+        Blade::component('asset-manager::components.input', 'asset-manager-input');
+        Blade::component('asset-manager::components.select', 'asset-manager-select');
+        Blade::component('asset-manager::components.textarea', 'asset-manager-textarea');
+        Blade::component('asset-manager::components.filter-section', 'asset-manager-filter-section');
+        Blade::component('asset-manager::components.nav-item', 'asset-manager-nav-item');
+        Blade::component('asset-manager::components.detail-list', 'asset-manager-detail-list');
+        Blade::component('asset-manager::components.detail-row', 'asset-manager-detail-row');
+        Blade::component('asset-manager::components.tabs', 'asset-manager-tabs');
+
         $this->registerLivewireComponents();
 
         $this->registerTools();
