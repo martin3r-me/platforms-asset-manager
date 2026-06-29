@@ -3,16 +3,17 @@
 /**
  * Host-Feature-Test (post-deploy, im Modul-Repo nicht lokal ausführbar — vgl. tests/README.md).
  *
- * Track B 2a — Audit manueller Lifecycle-Änderungen: Eine Status-Änderung über die Geräte-Detailseite
- * schreibt ein `lifecycle_changed`-Event mit Akteur (user_id) und altem→neuem Label. Intune liefert den
- * Lifecycle nicht; er wird manuell gepflegt → „wer/wann" ist sonst nirgends nachvollziehbar (L1a).
+ * Track B 2a — Audit manueller Lifecycle-Änderungen: Eine Status-Änderung über die vereinte
+ * Inventar-Detailseite (Inventory/Show, Geräte-Modal) schreibt ein `lifecycle_changed`-Event mit
+ * Akteur (user_id) und altem→neuem Label. Intune liefert den Lifecycle nicht; er wird manuell gepflegt
+ * → „wer/wann" ist sonst nirgends nachvollziehbar (L1a). Phase 6: von Devices/Show hierher umgezogen.
  */
 
 namespace Platform\AssetManager\Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
-use Platform\AssetManager\Livewire\Devices\Show as DevicesShow;
+use Platform\AssetManager\Livewire\Inventory\Show as InventoryShow;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceEvent;
 use Platform\AssetManager\Models\AssetTenant;
@@ -46,10 +47,10 @@ class LifecycleAuditTest extends TestCase
 
         $this->actingAs($owner);
 
-        Livewire::test(DevicesShow::class, ['device' => $device])
-            ->call('editLifecycle')
-            ->set('lStatus', 'retired')
-            ->call('saveLifecycle')
+        Livewire::test(InventoryShow::class, ['type' => 'intune', 'id' => $device->id])
+            ->call('openDeviceEdit')
+            ->set('glStatus', 'retired')
+            ->call('saveDeviceEdit')
             ->assertHasNoErrors();
 
         $this->assertDatabaseHas('asset_device_events', [
@@ -77,10 +78,10 @@ class LifecycleAuditTest extends TestCase
         $this->actingAs($owner);
 
         // Nur ein anderes Lifecycle-Feld ändern (Standort), Status bleibt 'in_use' → kein lifecycle_changed.
-        Livewire::test(DevicesShow::class, ['device' => $device])
-            ->call('editLifecycle')
-            ->set('lLocation', 'Lager Bonn')
-            ->call('saveLifecycle')
+        Livewire::test(InventoryShow::class, ['type' => 'intune', 'id' => $device->id])
+            ->call('openDeviceEdit')
+            ->set('glLocation', 'Lager Bonn')
+            ->call('saveDeviceEdit')
             ->assertHasNoErrors();
 
         $this->assertSame(0, AssetDeviceEvent::where('asset_device_id', $device->id)

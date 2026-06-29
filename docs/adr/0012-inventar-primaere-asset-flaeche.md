@@ -25,9 +25,10 @@ Read-/Detail-/Service-Layer**, nicht in der DB:
   geteilt von Anlage-Modal (Liste) und Edit-Modals (Detail). Rechte prüft der Caller (Gate/Policy).
 - **Modals statt Seiten:** Anlegen/Bearbeiten/Zuordnen/Abschreibung/Notizen/Löschen laufen als
   `<x-ui-modal>`-Popups; die Detailseite ist read-only mit Edit-Triggern.
-- Zeilen-Links (`InventoryRow::detailRoute`) zeigen auf `inventory.show`; `assets.show` redirectet
-  dorthin. `devices.show` bleibt vorerst als Geräte-Diagnose-Tiefenansicht (Sync-/Event-Timelines noch
-  nicht portiert) erhalten.
+- Zeilen-Links (`InventoryRow::detailRoute`) zeigen auf `inventory.show`; **`assets.show` UND `devices.show`
+  redirecten dorthin** (Phase 6: Geräte-Diagnose — Events/Sync-Timelines, Rohdaten, Geräteausgabe-Anlage —
+  ist als device-only „Verlauf"-Tab + Karten in `inventory.show` portiert). `devices.index` (Intune-Liste)
+  bleibt als gefilterter Einstieg.
 
 ## Bewusste Abgrenzungen / Trade-offs
 
@@ -40,10 +41,9 @@ Read-/Detail-/Service-Layer**, nicht in der DB:
 - **Status bleibt zweigeteilt** — Item-`status` (4) vs. Geräte-`lifecycle_status` (6, [ADR 0007]) sind
   zwei Maschinen; „Status" ist nur ein **Anzeige-Dach** (eine Badge), Bearbeiten ist typ-spezifisch.
 - **Lizenzen draußen** — per-User-SKU passt nicht in eine Hardware-Zeile; eigene Sicht bleibt.
-- **Temporäre Doppelung Geräte-Schreiblogik** — `Devices/Show` wurde bewusst **nicht** angefasst
-  (hält `LifecycleAuditTest` grün, der die Komponente direkt testet); die Geräte-Schreibpfade
-  existieren übergangsweise doppelt (dort inline + im Service). Aufzulösen, sobald `devices.show`
-  redirectet/entfernt und der Audit-Test auf `Inventory/Show` umgezogen ist.
+- **Geräte-Schreiblogik = nur noch `AssetWriteService`** — `Devices/Show` (Komponente + Blade) ist in
+  Phase 6 **entfernt**; die früher temporäre Doppelung (inline vs. Service) ist damit aufgelöst.
+  `LifecycleAuditTest` testet jetzt `Inventory/Show::saveDeviceEdit` (umgezogen).
 - **Terminologie** — „Inventar" = Dach, „Asset" = nur manuelles Item, „Zuordnung" (nicht
   Zuweisung/Besitzer), „Geräteausgabe" ≠ „Übergabe" (siehe `CONTEXT.md`).
 

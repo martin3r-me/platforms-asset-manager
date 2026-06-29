@@ -77,14 +77,19 @@
         {{-- Tab-Leiste (Alpine @entangle — NICHT x-ui-tab, dessen Active-State ist fehlerhaft) --}}
         <div x-data="{ tab: $wire.entangle('tab') }" class="space-y-5">
             <div class="flex flex-wrap gap-1.5 border-b border-[color:var(--ui-border)] pb-2">
-                @foreach([
-                    'overview'  => 'Übersicht',
-                    'documents' => 'Dokumente',
-                    'notes'     => 'Notizen',
-                    'tickets'   => 'Tickets',
-                    'invoices'  => 'Rechnungen',
-                    'costs'     => 'Kosten',
-                ] as $key => $label)
+                @php
+                    $tabs = [
+                        'overview'  => 'Übersicht',
+                        'documents' => 'Dokumente',
+                        'notes'     => 'Notizen',
+                        'tickets'   => 'Tickets',
+                        'invoices'  => 'Rechnungen',
+                        'costs'     => 'Kosten',
+                    ];
+                    // „Verlauf" (Events + Sync-Logs) nur bei Geräten (Phase 6).
+                    if ($device) { $tabs['verlauf'] = 'Verlauf'; }
+                @endphp
+                @foreach($tabs as $key => $label)
                     <button type="button" @click="tab = '{{ $key }}'"
                             :class="tab === '{{ $key }}' ? 'bg-[rgb(var(--ui-primary-rgb))] text-[color:var(--ui-on-primary)] shadow-sm' : 'text-[color:var(--ui-secondary)] hover:bg-[var(--ui-muted-10)]'"
                             class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors">
@@ -121,6 +126,12 @@
                                 <div class="flex justify-between py-2"><dt class="text-[color:var(--ui-secondary)]">Speicher</dt><dd class="text-gray-800 dark:text-gray-200">{{ $device->storageSummary() }}</dd></div>
                                 <div class="flex justify-between py-2"><dt class="text-[color:var(--ui-secondary)]">Arbeitsspeicher</dt><dd class="text-gray-800 dark:text-gray-200">{{ $device->memoryLabel() }}</dd></div>
                                 <div class="flex justify-between py-2"><dt class="text-[color:var(--ui-secondary)]">Letzter Check-in</dt><dd class="text-gray-800 dark:text-gray-200">{{ $device->last_check_in_at?->format('d.m.Y H:i') ?? '—' }}</dd></div>
+                                <div class="flex justify-between py-2"><dt class="text-[color:var(--ui-secondary)]">Geräte-Typ</dt><dd class="text-gray-800 dark:text-gray-200">{{ $device->device_type ?: '—' }}</dd></div>
+                                <div class="flex justify-between py-2"><dt class="text-[color:var(--ui-secondary)]">Management</dt><dd class="text-gray-800 dark:text-gray-200">{{ $device->management_state ?: '—' }}</dd></div>
+                                <div class="flex justify-between py-2"><dt class="text-[color:var(--ui-secondary)]">Enrollment</dt><dd class="text-gray-800 dark:text-gray-200">{{ $device->enrollment_type ?: '—' }}</dd></div>
+                                <div class="flex justify-between py-2"><dt class="text-[color:var(--ui-secondary)]">Enrollt am</dt><dd class="text-gray-800 dark:text-gray-200">{{ $device->enrolled_at?->format('d.m.Y') ?? '—' }}</dd></div>
+                                <div class="flex justify-between py-2"><dt class="text-[color:var(--ui-secondary)]">Nutzer (UPN)</dt><dd class="text-gray-800 dark:text-gray-200 truncate max-w-[55%] text-right">{{ $device->user_principal_name ?: '—' }}</dd></div>
+                                <div class="flex justify-between py-2"><dt class="text-[color:var(--ui-secondary)]">Intune-ID</dt><dd class="font-mono text-[10px] text-[color:var(--ui-secondary)] truncate max-w-[55%] text-right">{{ $device->intune_id ?: '—' }}</dd></div>
                             @endif
                         </dl>
                     </x-ui-panel>
@@ -256,6 +267,19 @@
                 {{-- Geräteausgaben (nur Gerät, E6) --}}
                 @if($device)
                     <x-ui-panel title="Geräteausgaben">
+                        <div class="flex items-center justify-between -mt-1 mb-2 gap-2">
+                            <div>
+                                @if($hasOpenHandover)
+                                    <x-asset-manager-badge color="emerald" size="xs" icon="heroicon-o-check-circle">Aktuell ausgegeben</x-asset-manager-badge>
+                                @elseif($device->user_principal_name)
+                                    <x-asset-manager-badge color="amber" size="xs" icon="heroicon-o-exclamation-triangle">Ohne offene Ausgabe</x-asset-manager-badge>
+                                @endif
+                            </div>
+                            @can('asset-manager.manage')
+                                <a href="{{ route('asset-manager.handovers.index', ['device' => $device->id, 'new' => 1]) }}"
+                                   class="text-[11px] text-[color:var(--ui-primary)] hover:underline inline-flex items-center gap-1">@svg('heroicon-o-clipboard-document-check', 'w-3 h-3') Ausgabe erfassen</a>
+                            @endcan
+                        </div>
                         @if($handoverLines->isEmpty())
                             <p class="text-sm text-[color:var(--ui-secondary)] py-1">Keine Geräteausgaben für dieses Gerät.</p>
                         @else
@@ -323,6 +347,65 @@
                     <p class="text-[11px] text-[color:var(--ui-secondary)] mt-3">Rohe AfA/Leasing-Kosten je Objekt — nicht die kostenstellen-zugeteilte Summe der Kostenaufteilung.</p>
                 </x-ui-panel>
             </div>
+
+            {{-- ===================== VERLAUF (nur Gerät, Phase 6) ===================== --}}
+            @if($device)
+                <div x-show="tab === 'verlauf'" x-cloak class="space-y-5">
+                    {{-- Events --}}
+                    <x-ui-panel title="Verlauf">
+                        @forelse($events as $ev)
+                            <div class="py-2 border-b border-[color:var(--ui-muted)] last:border-0">
+                                <x-asset-manager-badge :color="$ev->eventColor()" dot size="xs">{{ $ev->eventLabel() }}</x-asset-manager-badge>
+                                @if($ev->old_value !== null || $ev->new_value !== null)
+                                    <div class="text-[11px] text-[color:var(--ui-secondary)] mt-1">{{ $ev->old_value ?: '—' }} → {{ $ev->new_value ?: '—' }}</div>
+                                @endif
+                                <div class="text-[10px] text-[color:var(--ui-secondary)] mt-0.5">{{ $ev->created_at?->diffForHumans() }}@if($ev->actor) · {{ $ev->actor->name }}@endif</div>
+                            </div>
+                        @empty
+                            <p class="text-sm text-[color:var(--ui-secondary)]">Noch keine Änderungen erfasst.</p>
+                        @endforelse
+                    </x-ui-panel>
+
+                    {{-- Sync-Logs --}}
+                    <x-ui-panel title="Letzte Synchronisierungen">
+                        @forelse($syncLogs as $log)
+                            @php $syncColor = ['success' => 'emerald', 'error' => 'red', 'started' => 'amber'][$log->status] ?? 'gray'; @endphp
+                            <div class="py-2 border-b border-[color:var(--ui-muted)] last:border-0">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="text-sm text-gray-700 dark:text-gray-300">
+                                        @switch($log->status)
+                                            @case('success') Sync erfolgreich @break
+                                            @case('error') Sync fehlgeschlagen @break
+                                            @default Sync gestartet
+                                        @endswitch
+                                    </span>
+                                    <x-asset-manager-badge :color="$syncColor" size="xs">{{ $log->status }}</x-asset-manager-badge>
+                                </div>
+                                @if($log->status === 'success')
+                                    <div class="text-[11px] text-[color:var(--ui-secondary)] mt-0.5">{{ $log->devices_synced ?? 0 }} synchronisiert@if(($log->devices_added ?? 0) > 0) · +{{ $log->devices_added }} neu @endif @if(($log->devices_removed ?? 0) > 0) · −{{ $log->devices_removed }} entfernt @endif</div>
+                                @elseif($log->status === 'error' && $log->error_message)
+                                    <div class="text-[11px] text-red-700 mt-0.5 break-words">{{ Str::limit($log->error_message, 140) }}</div>
+                                @endif
+                                <div class="text-[10px] text-[color:var(--ui-secondary)] mt-0.5">{{ $log->started_at?->diffForHumans() }}@if($log->duration_ms) · {{ number_format($log->duration_ms / 1000, 1) }}s @endif</div>
+                            </div>
+                        @empty
+                            <p class="text-sm text-[color:var(--ui-secondary)]">Noch keine Synchronisierungen.</p>
+                        @endforelse
+                    </x-ui-panel>
+
+                    {{-- Rohdaten (Graph-API) --}}
+                    @if($device->raw_data)
+                        <x-ui-panel title="Rohdaten (Graph-API)">
+                            <div x-data="{ open: false }">
+                                <button type="button" @click="open = !open" class="text-[11px] text-[color:var(--ui-primary)] hover:underline inline-flex items-center gap-1">
+                                    <span x-text="open ? 'Ausblenden' : 'Anzeigen'"></span> ({{ count((array) $device->raw_data) }} Felder)
+                                </button>
+                                <pre x-show="open" x-cloak class="mt-2 text-[10px] text-[color:var(--ui-secondary)] font-mono whitespace-pre-wrap break-all max-h-72 overflow-y-auto">{{ json_encode($device->raw_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
+                            </div>
+                        </x-ui-panel>
+                    @endif
+                </div>
+            @endif
 
             {{-- ===================== PLATZHALTER ===================== --}}
             <div x-show="tab === 'documents'" x-cloak>@include('asset-manager::livewire.inventory.partials.tab-placeholder', ['title' => 'Dokumente', 'icon' => 'heroicon-o-document-text'])</div>

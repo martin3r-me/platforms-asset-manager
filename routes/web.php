@@ -3,7 +3,6 @@
 use Platform\AssetManager\Livewire\Dashboard;
 use Platform\AssetManager\Livewire\Connectors\Index as ConnectorsIndex;
 use Platform\AssetManager\Livewire\Devices\Index as DevicesIndex;
-use Platform\AssetManager\Livewire\Devices\Show as DevicesShow;
 use Platform\AssetManager\Livewire\Devices\Status as DevicesStatus;
 use Platform\AssetManager\Livewire\Compliance\Index as ComplianceIndex;
 use Platform\AssetManager\Livewire\Licenses\Index as LicensesIndex;
@@ -35,7 +34,9 @@ Route::get('/', Dashboard::class)->name('asset-manager.dashboard');
 Route::get('/devices', DevicesIndex::class)->name('asset-manager.devices.index');
 // Literal-Route VOR der {device}-Wildcard registrieren, sonst matcht {device}='status'.
 Route::get('/devices/status', DevicesStatus::class)->name('asset-manager.devices.status');
-Route::get('/devices/{device}', DevicesShow::class)->name('asset-manager.devices.show');
+// Geräte-Detailseite ist in der vereinten Inventar-Detailseite aufgegangen (ADR 0012, Phase 6).
+// Redirect erhält Bookmarks/route()-Aufrufe; {device} ist die ID (kein Model-Binding im Closure).
+Route::get('/devices/{device}', fn ($device) => redirect()->route('asset-manager.inventory.show', ['type' => 'intune', 'id' => $device]))->name('asset-manager.devices.show');
 
 Route::get('/compliance', ComplianceIndex::class)->name('asset-manager.compliance.index');
 

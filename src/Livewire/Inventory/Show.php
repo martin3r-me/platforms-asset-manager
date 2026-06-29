@@ -13,6 +13,8 @@ use Platform\AssetManager\Models\AssetCategory;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetDevice;
+use Platform\AssetManager\Models\AssetDeviceEvent;
+use Platform\AssetManager\Models\AssetDeviceSyncLog;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetHandoverLine;
 use Platform\AssetManager\Models\AssetItem;
@@ -25,9 +27,10 @@ use Platform\AssetManager\Support\AssetSubject;
  * ENTWEDER ein manuelles Asset (AssetItem) ODER ein Intune-Gerät (AssetDevice) geladen und mit
  * geteiltem Header + Tab-Leiste + Karten gerendert.
  *
- * Phase 3: Edit-/Zuordnen-/Abschreibung-/Notizen-/Lösch-Modals für **manuelle** Assets (alle über
- * AssetWriteService bzw. Item-Policy gated). Geräte-Editier-Modals folgen in Phase 4 — bis dahin
- * verlinkt der Geräte-„Bearbeiten"-Button auf die klassische devices.show.
+ * Die EINZIGE Detailseite (E3): manuelle Assets (Bearbeiten/Zuordnen/Abschreibung/Notizen/Löschen) UND
+ * Geräte (Lifecycle/Beschaffung/Kosten/Notizen + Diagnose-„Verlauf"-Tab) werden hier per Modal bearbeitet,
+ * alles über AssetWriteService bzw. Item-Policy/`asset-manager.manage` gated. assets.show/devices.show
+ * sind Redirects hierher (Phase 6).
  *
  * Tenant ist nur Arbeitsfilter (ADR 0003): die Detailseite erzwingt NUR den Team-Check.
  */
@@ -397,29 +400,44 @@ class Show extends Component
     {
         $teamId = $this->teamId();
 
-        if ($this->item) {
-            $subject       = AssetSubject::fromItem($this->item);
-            $assignments   = $this->item->assignments()->with('employee')->limit(20)->get();
-            $handoverLines = collect();
-        } else {
-            $subject       = AssetSubject::fromDevice($this->device);
-            $assignments   = $this->device->assignments()->with('employee')->limit(20)->get();
+        // Defaults (manuelle Assets haben keine Geräte-Diagnose).
+        $handoverLines   = collect();
+        $events          = collect();
+        $syncLogs        = collect();
+        $hasOpenHandover = false;
 
-            // Geräteausgabe-Zeilen dieses Geräts (E6) — gleiche Query wie Devices/Show.
+        if ($this->item) {
+            $subject     = AssetSubject::fromItem($this->item);
+            $assignments = $this->item->assignments()->with('employee')->limit(20)->get();
+        } else {
+            $subject     = AssetSubject::fromDevice($this->device);
+            $assignments = $this->device->assignments()->with('employee')->limit(20)->get();
+
+            // Geräteausgabe-Zeilen dieses Geräts (E6) — gleiche Query wie vormals Devices/Show.
             $handoverLines = AssetHandoverLine::with('handover.employee')
                 ->whereHas('handover', fn ($q) => $q->where('team_id', $teamId))
                 ->where('asset_device_id', $this->device->id)
                 ->orderByDesc('id')
                 ->get();
+            $hasOpenHandover = $handoverLines->contains(fn ($l) => $l->returned_at === null);
+
+            // Diagnose (Phase 6, „Verlauf"-Tab) — Events + Sync-Logs wie vormals Devices/Show::render.
+            $events = AssetDeviceEvent::where('asset_device_id', $this->device->id)
+                ->with('actor')->orderByDesc('created_at')->limit(20)->get();
+            $syncLogs = AssetDeviceSyncLog::where('team_id', $teamId)
+                ->orderByDesc('started_at')->limit(10)->get();
         }
 
         return view('asset-manager::livewire.inventory.show', [
-            'subject'       => $subject,
-            'item'          => $this->item,
-            'device'        => $this->device,
-            'assignments'   => $assignments,
-            'handoverLines' => $handoverLines,
-            'canManage'     => $this->canManage(),
+            'subject'         => $subject,
+            'item'            => $this->item,
+            'device'          => $this->device,
+            'assignments'     => $assignments,
+            'handoverLines'   => $handoverLines,
+            'hasOpenHandover' => $hasOpenHandover,
+            'events'          => $events,
+            'syncLogs'        => $syncLogs,
+            'canManage'       => $this->canManage(),
             // Manuell: Kategorie/Mitarbeiter-Selects. Gerät: Kostenart/-stelle/Kreditor-Selects.
             'categories'    => $this->item ? AssetCategory::orderBy('sort_order')->get() : collect(),
             'employees'     => $this->item ? AssetEmployee::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get() : collect(),
