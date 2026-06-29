@@ -13,13 +13,12 @@
     </x-ui-sidebar-list>
 
     <x-ui-sidebar-list label="Assets">
-        <x-ui-sidebar-item :href="route('asset-manager.inventory.index')" :active="request()->routeIs('asset-manager.inventory.*')">
+        {{-- „Inventar" ist der EINE vereinte Asset-Einstieg (manuelle Assets + Intune-Geräte, E1).
+             „Alle Assets" (manuelle Teilmenge) entfällt hier — Inventar deckt sie ab (Filter „Nur manuelle
+             Assets"); die Bulk-Anlage bleibt unter /assets per URL erreichbar. --}}
+        <x-ui-sidebar-item :href="route('asset-manager.inventory.index')" :active="request()->routeIs('asset-manager.inventory.*') || request()->routeIs('asset-manager.assets.*')">
             @svg('heroicon-o-rectangle-group', 'w-4 h-4 text-[var(--ui-secondary)]')
             <span class="ml-2 text-sm">Inventar</span>
-        </x-ui-sidebar-item>
-        <x-ui-sidebar-item :href="route('asset-manager.assets.index')" :active="request()->routeIs('asset-manager.assets.*')">
-            @svg('heroicon-o-cube-transparent', 'w-4 h-4 text-[var(--ui-secondary)]')
-            <span class="ml-2 text-sm">Alle Assets</span>
         </x-ui-sidebar-item>
         <x-ui-sidebar-item :href="route('asset-manager.devices.index')" :active="request()->routeIs('asset-manager.devices.*')">
             @svg('heroicon-o-computer-desktop', 'w-4 h-4 text-[var(--ui-secondary)]')
@@ -115,11 +114,8 @@
             <a href="{{ route('asset-manager.dashboard') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.dashboard') ? 'bg-[var(--ui-primary-10)] text-[var(--ui-primary)]' : 'text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]' }}">
                 @svg('heroicon-o-home', 'w-5 h-5')
             </a>
-            <a href="{{ route('asset-manager.inventory.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.inventory.*') ? 'bg-[var(--ui-primary-10)] text-[var(--ui-primary)]' : 'text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]' }}">
+            <a href="{{ route('asset-manager.inventory.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.inventory.*') || request()->routeIs('asset-manager.assets.*') ? 'bg-[var(--ui-primary-10)] text-[var(--ui-primary)]' : 'text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]' }}">
                 @svg('heroicon-o-rectangle-group', 'w-5 h-5')
-            </a>
-            <a href="{{ route('asset-manager.assets.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.assets.*') ? 'bg-[var(--ui-primary-10)] text-[var(--ui-primary)]' : 'text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]' }}">
-                @svg('heroicon-o-cube-transparent', 'w-5 h-5')
             </a>
             <a href="{{ route('asset-manager.devices.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.devices.*') ? 'bg-[var(--ui-primary-10)] text-[var(--ui-primary)]' : 'text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]' }}">
                 @svg('heroicon-o-computer-desktop', 'w-5 h-5')
