@@ -155,7 +155,7 @@
 
                 {{-- Lifecycle & Beschaffung (nur Gerät) — manuell gepflegt, Intune liefert das nicht (ADR 0007). --}}
                 @if($device)
-                    <x-ui-panel title="Lifecycle &amp; Beschaffung">
+                    <x-ui-panel :title="'Lifecycle & Beschaffung'">
                         @if($canManage)
                             <div class="flex justify-end -mt-1 mb-2">
                                 <button type="button" wire:click="openDeviceEdit" class="text-[11px] text-[color:var(--ui-primary)] hover:underline inline-flex items-center gap-1">@svg('heroicon-o-pencil-square', 'w-3 h-3') Bearbeiten</button>

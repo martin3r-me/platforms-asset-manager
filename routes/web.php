@@ -52,7 +52,9 @@ Route::get('/assets', AssetsIndex::class)->name('asset-manager.assets.index');
 // leitet weiter und öffnet das Modal (?create=1) — Name bleibt erhalten, route()-Aufrufe/Bookmarks
 // brechen nicht (Muster wie die MasterData-Redirects unten).
 Route::get('/assets/create', fn () => redirect()->route('asset-manager.inventory.index', ['create' => 1]))->name('asset-manager.assets.create');
-Route::get('/assets/{item}', AssetsShow::class)->name('asset-manager.assets.show');
+// Manuelle Asset-Detailseite ist in der vereinten Inventar-Detailseite aufgegangen (ADR 0012).
+// Redirect erhält Bookmarks/route()-Aufrufe; {item} ist die ID (kein Model-Binding im Closure).
+Route::get('/assets/{item}', fn ($item) => redirect()->route('asset-manager.inventory.show', ['type' => 'manual', 'id' => $item]))->name('asset-manager.assets.show');
 
 Route::get('/employees', EmployeesIndex::class)->name('asset-manager.employees.index');
 Route::get('/employees/{employee}', EmployeesShow::class)->name('asset-manager.employees.show');
