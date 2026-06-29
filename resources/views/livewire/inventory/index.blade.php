@@ -31,8 +31,158 @@
         </x-asset-manager-page-actionbar>
     </x-slot>
 
-    {{-- Voll-Breite-Übersicht: keine in-page-Sidebars (wie compliance/reports), Filter inline. --}}
-    <x-ui-page-container padding="p-6" spacing="space-y-5">
+    {{-- LINKS: Filter (Token-Sektionen wie assets/index — nicht die fetten x-ui-Tische). --}}
+    <x-slot name="sidebar">
+        <x-ui-page-sidebar title="Filter" icon="heroicon-o-funnel" width="w-72" :defaultOpen="true">
+            <div class="p-4 space-y-4 bg-[var(--ui-muted-5)]">
+
+                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Suche</h3>
+                    <div class="px-3 pb-3">
+                        <input type="text" wire:model.live.debounce.300ms="search"
+                            placeholder="Name, Hersteller, Seriennr., Nutzer..."
+                            class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40 text-[var(--ui-secondary)] focus:outline-none focus:ring-2 focus:ring-violet-500/30" />
+                    </div>
+                </section>
+
+                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Typ</h3>
+                    <div class="px-3 pb-3">
+                        <select wire:model.live="filterType" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40 text-[var(--ui-secondary)]">
+                            <option value="">Alle</option>
+                            <option value="manual">Manuelle Assets</option>
+                            <option value="intune">Intune-Geräte</option>
+                        </select>
+                    </div>
+                </section>
+
+                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Zuordnung</h3>
+                    <div class="px-3 pb-3">
+                        <select wire:model.live="filterAssignment" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40 text-[var(--ui-secondary)]">
+                            <option value="">Alle</option>
+                            <option value="assigned">Zugeordnet</option>
+                            <option value="unassigned">Nicht zugeordnet</option>
+                        </select>
+                    </div>
+                </section>
+
+                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Status / Lebenszyklus</h3>
+                    <div class="px-3 pb-3">
+                        <select wire:model.live="filterStatus" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40 text-[var(--ui-secondary)]">
+                            <option value="">Alle</option>
+                            <optgroup label="Manuelle Assets">
+                                <option value="in_stock">Lager</option>
+                                <option value="assigned">Zugewiesen</option>
+                            </optgroup>
+                            <optgroup label="Geräte (Lebenszyklus)">
+                                <option value="in_use">In Betrieb</option>
+                                <option value="spare">Reserve / Lager</option>
+                                <option value="repair">In Reparatur</option>
+                                <option value="defect">Defekt / Kaputt</option>
+                            </optgroup>
+                            <optgroup label="Ausgemustert / Verloren">
+                                <option value="retired">Ausgemustert</option>
+                                <option value="lost">Verloren</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                </section>
+
+                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Kategorie <span class="normal-case text-[var(--ui-muted)]/70">· nur manuelle</span></h3>
+                    <div class="px-3 pb-3">
+                        <select wire:model.live="filterCategory" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40 text-[var(--ui-secondary)]">
+                            <option value="">Alle</option>
+                            @foreach($categories as $cat)
+                                <option value="{{ $cat->id }}">{{ $cat->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </section>
+
+                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Kostenstelle <span class="normal-case text-[var(--ui-muted)]/70">· nur Geräte</span></h3>
+                    <div class="px-3 pb-3">
+                        <select wire:model.live="filterCostCenter" class="w-full px-2 py-1.5 text-[11px] rounded-md bg-[var(--ui-muted-5)] border border-[var(--ui-border)]/40 text-[var(--ui-secondary)]">
+                            <option value="">Alle</option>
+                            @foreach($costCenters as $cc)
+                                <option value="{{ $cc->id }}">{{ trim(($cc->code ? $cc->code . ' · ' : '') . $cc->name) }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </section>
+
+                @if($this->hasFilters)
+                    <x-ui-button variant="secondary-ghost" size="sm" rounded="lg" class="w-full" wire:click="resetFilters">
+                        @svg('heroicon-o-x-circle', 'w-3.5 h-3.5')
+                        Filter zurücksetzen
+                    </x-ui-button>
+                @endif
+            </div>
+        </x-ui-page-sidebar>
+    </x-slot>
+
+    {{-- RECHTS: Kennzahlen + Schnellaktionen --}}
+    <x-slot name="activity">
+        <x-ui-page-sidebar title="Übersicht" icon="heroicon-o-chart-bar" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
+            <div class="p-4 space-y-4 bg-[var(--ui-muted-5)]">
+
+                {{-- Quick-Stats --}}
+                <section class="space-y-2">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-1">Kennzahlen</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm p-3">
+                            <div class="text-xl font-semibold text-gray-900 dark:text-gray-100">{{ $counts['total'] }}</div>
+                            <div class="text-[10px] text-[color:var(--ui-secondary)]">Hardware gesamt</div>
+                        </div>
+                        <div class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm p-3">
+                            <div class="text-xl font-semibold text-emerald-700 dark:text-emerald-400">{{ $counts['assigned'] }}</div>
+                            <div class="text-[10px] text-[color:var(--ui-secondary)]">Zugewiesen</div>
+                        </div>
+                        <div class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm p-3">
+                            <div class="text-xl font-semibold text-gray-600 dark:text-gray-300">{{ $counts['manual'] }}</div>
+                            <div class="text-[10px] text-[color:var(--ui-secondary)]">Manuelle Assets</div>
+                        </div>
+                        <div class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm p-3">
+                            <div class="text-xl font-semibold text-[color:var(--ui-primary)]">{{ $counts['intune'] }}</div>
+                            <div class="text-[10px] text-[color:var(--ui-secondary)]">Intune-Geräte</div>
+                        </div>
+                    </div>
+                </section>
+
+                {{-- Schnellaktionen --}}
+                <section class="space-y-2">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-1">Schnellaktionen</h3>
+                    @can('asset-manager.manage')
+                        <x-ui-button variant="primary" size="md" rounded="lg" class="w-full" wire:click="openCreate">
+                            @svg('heroicon-o-plus', 'w-4 h-4')
+                            Asset anlegen
+                        </x-ui-button>
+                    @endcan
+                    <x-ui-button variant="secondary-ghost" size="md" rounded="lg" class="w-full"
+                                 href="{{ route('asset-manager.employees.index') }}" wire:navigate>
+                        @svg('heroicon-o-users', 'w-4 h-4')
+                        Zu den Mitarbeitern
+                    </x-ui-button>
+                    <x-ui-button variant="secondary-ghost" size="md" rounded="lg" class="w-full"
+                                 href="{{ route('asset-manager.devices.index') }}" wire:navigate>
+                        @svg('heroicon-o-computer-desktop', 'w-4 h-4')
+                        Nur Intune-Geräte
+                    </x-ui-button>
+                    <x-ui-button variant="secondary-ghost" size="md" rounded="lg" class="w-full"
+                                 href="{{ route('asset-manager.assets.index') }}" wire:navigate>
+                        @svg('heroicon-o-cube-transparent', 'w-4 h-4')
+                        Nur manuelle Assets
+                    </x-ui-button>
+                </section>
+            </div>
+        </x-ui-page-sidebar>
+    </x-slot>
+
+    <div class="flex-1 flex flex-col min-h-0 min-w-0">
+        <div class="flex-1 overflow-y-auto p-6 space-y-5">
 
         @if($flash)
             <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
@@ -42,51 +192,10 @@
             </div>
         @endif
 
-        {{-- Stats --}}
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm p-4">
-                <div class="text-2xl font-semibold text-gray-900 dark:text-gray-100">{{ $counts['total'] }}</div>
-                <div class="text-xs text-[color:var(--ui-secondary)]">Hardware gesamt</div>
-            </div>
-            <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm p-4">
-                <div class="text-2xl font-semibold text-gray-600 dark:text-gray-300">{{ $counts['manual'] }}</div>
-                <div class="text-xs text-[color:var(--ui-secondary)]">Manuelle Assets</div>
-            </div>
-            <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm p-4">
-                <div class="text-2xl font-semibold text-[color:var(--ui-primary)]">{{ $counts['intune'] }}</div>
-                <div class="text-xs text-[color:var(--ui-secondary)]">Intune-Geräte</div>
-            </div>
-            <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm p-4">
-                <div class="text-2xl font-semibold text-emerald-700 dark:text-emerald-400">{{ $counts['assigned'] }}</div>
-                <div class="text-xs text-[color:var(--ui-secondary)]">Zugewiesen</div>
-            </div>
-        </div>
-
-        {{-- Filter-Toolbar --}}
-        <div class="rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm p-3 flex flex-wrap items-center gap-2">
-            <div class="relative flex-1 min-w-[12rem]">
-                @svg('heroicon-o-magnifying-glass', 'w-4 h-4 text-[color:var(--ui-secondary)] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none')
-                <input type="text" wire:model.live.debounce.300ms="search"
-                       placeholder="Name, Hersteller, Seriennr., Nutzer..."
-                       class="w-full pl-8 pr-2 py-1.5 text-xs rounded-md bg-black/[0.02] dark:bg-white/[0.03] border border-black/10 dark:border-white/10 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500/30" />
-            </div>
-            <select wire:model.live="filterType" class="px-2 py-1.5 text-xs rounded-md bg-black/[0.02] dark:bg-white/[0.03] border border-black/10 dark:border-white/10">
-                <option value="">Alle Typen</option>
-                <option value="manual">Manuelle Assets</option>
-                <option value="intune">Intune-Geräte</option>
-            </select>
-            <select wire:model.live="filterAssignment" class="px-2 py-1.5 text-xs rounded-md bg-black/[0.02] dark:bg-white/[0.03] border border-black/10 dark:border-white/10">
-                <option value="">Alle Zuweisungen</option>
-                <option value="assigned">Zugewiesen</option>
-                <option value="unassigned">Nicht zugewiesen</option>
-            </select>
-            @if($search || $filterType || $filterAssignment)
-                <x-ui-button variant="secondary-ghost" size="sm" rounded="lg" wire:click="resetFilters">
-                    @svg('heroicon-o-x-circle', 'w-3.5 h-3.5')
-                    Zurücksetzen
-                </x-ui-button>
-            @endif
-            <div class="ml-auto flex items-center gap-1.5 text-xs text-[color:var(--ui-secondary)]">
+        {{-- Schlanke Kopfzeile: Treffer + Seitengröße (Filter sind in der linken Sidebar). --}}
+        <div class="flex items-center justify-between gap-2 px-1">
+            <div class="text-xs text-[color:var(--ui-secondary)]">{{ $totalFiltered }} Einträge</div>
+            <div class="flex items-center gap-1.5 text-xs text-[color:var(--ui-secondary)]">
                 <span>Pro Seite</span>
                 <select wire:model.live="perPage" class="px-2 py-1 text-xs rounded-md bg-black/[0.04] dark:bg-white/[0.06] border border-black/10 dark:border-white/10">
                     <option value="25">25</option>
@@ -102,7 +211,7 @@
                 <div class="flex flex-col items-center justify-center py-16 text-center">
                     @svg('heroicon-o-rectangle-group', 'w-10 h-10 text-[color:var(--ui-muted)] mb-3')
                     <p class="text-sm text-[color:var(--ui-secondary)]">
-                        @if($search || $filterType || $filterAssignment)
+                        @if($this->hasFilters)
                             Keine Hardware für diese Filter.
                         @else
                             Noch keine Hardware erfasst — weder manuelle Assets noch Intune-Geräte.
@@ -110,7 +219,6 @@
                     </p>
                 </div>
             @else
-                <div class="px-5 pt-3 text-[11px] text-[color:var(--ui-secondary)]">{{ $totalFiltered }} Einträge</div>
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="border-b border-[color:var(--ui-muted)] bg-[color:var(--ui-muted-10)]">
@@ -203,7 +311,8 @@
         <p class="text-[11px] text-[color:var(--ui-secondary)] px-1">
             Monatskosten = AfA/Leasing je Objekt (rohe Gerätekosten) — nicht die kostenstellen-zugeteilte Summe aus der Kostenaufteilung.
         </p>
-    </x-ui-page-container>
+        </div>
+    </div>
 
     {{-- Modals innerhalb <x-ui-page> (Referenz-Doku: „Modals immer innerhalb von x-ui-page"). --}}
     @can('asset-manager.manage')

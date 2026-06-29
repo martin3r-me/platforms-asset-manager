@@ -37,7 +37,121 @@
         </x-asset-manager-page-actionbar>
     </x-slot>
 
-    <x-ui-page-container padding="p-6" spacing="space-y-5">
+    {{-- LINKS: Steckbrief (typ-übergreifende Schlüsseldaten aus AssetSubject). --}}
+    <x-slot name="sidebar">
+        <x-ui-page-sidebar title="Steckbrief" icon="heroicon-o-identification" width="w-72" :defaultOpen="true">
+            <div class="p-4 space-y-4 bg-[var(--ui-muted-5)]">
+
+                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Klassifikation</h3>
+                    <div class="px-3 pb-3 space-y-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-[10px] text-[color:var(--ui-secondary)]">Typ</span>
+                            <x-asset-manager-badge :color="$subject->typeColor" size="xs"
+                                :icon="$subject->type === 'intune' ? 'heroicon-o-cloud' : 'heroicon-o-wrench-screwdriver'">{{ $subject->typeLabel }}</x-asset-manager-badge>
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-[10px] text-[color:var(--ui-secondary)]">Status</span>
+                            @if($subject->statusLabel === '—')
+                                <span class="text-[11px] text-[color:var(--ui-muted)]">—</span>
+                            @else
+                                <x-asset-manager-badge :color="$subject->statusColor" dot size="xs">{{ $subject->statusLabel }}</x-asset-manager-badge>
+                            @endif
+                        </div>
+                        @if($subject->manufacturer || $subject->model)
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-[10px] text-[color:var(--ui-secondary)]">Modell</span>
+                                <span class="text-[11px] text-gray-700 dark:text-gray-300 text-right">{{ trim($subject->manufacturer . ' ' . $subject->model) }}</span>
+                            </div>
+                        @endif
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-[10px] text-[color:var(--ui-secondary)]">Seriennr.</span>
+                            <span class="text-[11px] text-gray-700 dark:text-gray-300 text-right break-all">{{ $subject->serialNumber ?: '—' }}</span>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="rounded-lg bg-white border border-[var(--ui-border)]/40 shadow-sm overflow-hidden">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-3 pt-3 pb-1.5">Zuordnung &amp; Kosten</h3>
+                    <div class="px-3 pb-3 space-y-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-[10px] text-[color:var(--ui-secondary)]">Zugeordnet</span>
+                            <span class="text-[11px] text-gray-700 dark:text-gray-300 text-right">{{ $subject->assignedToLabel ?: '—' }}</span>
+                        </div>
+                        @if($device && $device->location)
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-[10px] text-[color:var(--ui-secondary)]">Standort</span>
+                                <span class="text-[11px] text-gray-700 dark:text-gray-300 text-right">{{ $device->location }}</span>
+                            </div>
+                        @endif
+                        @if($device && $device->costCenter)
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-[10px] text-[color:var(--ui-secondary)]">Kostenstelle</span>
+                                <span class="text-[11px] text-gray-700 dark:text-gray-300 text-right">{{ $device->costCenter->name }}</span>
+                            </div>
+                        @endif
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-[10px] text-[color:var(--ui-secondary)]">Monatskosten</span>
+                            <span class="text-[11px] tabular-nums text-gray-700 dark:text-gray-300">
+                                {{ $subject->monthlyCost > 0 ? number_format($subject->monthlyCost, 2, ',', '.') . ' €' : '—' }}
+                            </span>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </x-ui-page-sidebar>
+    </x-slot>
+
+    {{-- RECHTS: Aktionen (spiegelt die Actionbar als große Buttons) + Absprünge. --}}
+    <x-slot name="activity">
+        <x-ui-page-sidebar title="Aktionen" icon="heroicon-o-bolt" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
+            <div class="p-4 space-y-4 bg-[var(--ui-muted-5)]">
+                @if($canManage)
+                    <section class="space-y-2">
+                        <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-1">Bearbeiten</h3>
+                        @if($subject->type === 'manual')
+                            <x-ui-button variant="primary" size="md" rounded="lg" class="w-full" wire:click="openAssign">
+                                @svg('heroicon-o-user-plus', 'w-4 h-4')
+                                Zuordnen
+                            </x-ui-button>
+                            <x-ui-button variant="secondary-ghost" size="md" rounded="lg" class="w-full" wire:click="openEdit">
+                                @svg('heroicon-o-pencil-square', 'w-4 h-4')
+                                Bearbeiten
+                            </x-ui-button>
+                            <x-ui-button variant="danger-ghost" size="md" rounded="lg" class="w-full" wire:click="openDelete">
+                                @svg('heroicon-o-trash', 'w-4 h-4')
+                                Löschen
+                            </x-ui-button>
+                        @else
+                            <x-ui-button variant="primary" size="md" rounded="lg" class="w-full" wire:click="openDeviceEdit">
+                                @svg('heroicon-o-pencil-square', 'w-4 h-4')
+                                Lifecycle / Beschaffung bearbeiten
+                            </x-ui-button>
+                        @endif
+                    </section>
+                @endif
+
+                <section class="space-y-2">
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] px-1">Absprünge</h3>
+                    @if($subject->type === 'intune')
+                        <x-ui-button variant="secondary-ghost" size="md" rounded="lg" class="w-full"
+                                     href="{{ route('asset-manager.handovers.index') }}" wire:navigate>
+                            @svg('heroicon-o-clipboard-document-check', 'w-4 h-4')
+                            Geräteausgaben
+                        </x-ui-button>
+                    @endif
+                    <x-ui-button variant="secondary-ghost" size="md" rounded="lg" class="w-full"
+                                 href="{{ route('asset-manager.inventory.index') }}" wire:navigate>
+                        @svg('heroicon-o-rectangle-group', 'w-4 h-4')
+                        Zurück zum Inventar
+                    </x-ui-button>
+                </section>
+            </div>
+        </x-ui-page-sidebar>
+    </x-slot>
+
+    <div class="flex-1 flex flex-col min-h-0 min-w-0">
+        <div class="flex-1 overflow-y-auto p-6 space-y-5">
 
         @if($flash)
             <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
@@ -414,7 +528,8 @@
             <div x-show="tab === 'tickets'" x-cloak>@include('asset-manager::livewire.inventory.partials.tab-placeholder', ['title' => 'Tickets', 'icon' => 'heroicon-o-ticket'])</div>
             <div x-show="tab === 'invoices'" x-cloak>@include('asset-manager::livewire.inventory.partials.tab-placeholder', ['title' => 'Rechnungen', 'icon' => 'heroicon-o-banknotes'])</div>
         </div>
-    </x-ui-page-container>
+        </div>
+    </div>
 
     {{-- Modals innerhalb <x-ui-page>. Phase 3: nur manuelle Assets (Geräte-Modals folgen Phase 4). --}}
     @if($canManage && $item)

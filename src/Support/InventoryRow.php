@@ -30,6 +30,12 @@ class InventoryRow
         public string $statusSortKey,
         public float $monthlyCost,
         public string $detailRoute,
+        // Typ-spezifische Facetten für die Filter-Sidebar — nur jeweils EINE Welt füllt sie:
+        public ?int $categoryId = null,        // nur manuelle Assets (asset_items.category_id)
+        public ?string $categoryName = null,
+        public ?int $costCenterId = null,      // nur Geräte (asset_devices.cost_center_id)
+        public ?string $costCenterName = null,
+        public ?string $location = null,       // nur Geräte (asset_devices.location)
     ) {}
 
     public static function fromItem(AssetItem $item): self
@@ -47,6 +53,8 @@ class InventoryRow
             statusSortKey: (string) ($item->status ?? ''),
             monthlyCost:   $item->monthlyCost(),
             detailRoute:   route('asset-manager.inventory.show', ['type' => 'manual', 'id' => $item->id]),
+            categoryId:    $item->category_id,
+            categoryName:  $item->category?->name,
         );
     }
 
@@ -55,18 +63,21 @@ class InventoryRow
         $hasLifecycle = filled($device->lifecycle_status);
 
         return new self(
-            type:          'intune',
-            id:            $device->id,
-            name:          $device->device_name ?: '—',
-            manufacturer:  $device->manufacturer,
-            model:         $device->model,
-            serialNumber:  $device->serial_number,
-            assignedTo:    $device->user_display_name ?: $device->user_principal_name,
-            statusLabel:   $hasLifecycle ? $device->lifecycleLabel() : '—',
-            statusColor:   $hasLifecycle ? self::safeColor($device->lifecycleBadgeColor()) : 'gray',
-            statusSortKey: (string) ($device->lifecycle_status ?? ''),
-            monthlyCost:   $monthlyCost,
-            detailRoute:   route('asset-manager.inventory.show', ['type' => 'intune', 'id' => $device->id]),
+            type:           'intune',
+            id:             $device->id,
+            name:           $device->device_name ?: '—',
+            manufacturer:   $device->manufacturer,
+            model:          $device->model,
+            serialNumber:   $device->serial_number,
+            assignedTo:     $device->user_display_name ?: $device->user_principal_name,
+            statusLabel:    $hasLifecycle ? $device->lifecycleLabel() : '—',
+            statusColor:    $hasLifecycle ? self::safeColor($device->lifecycleBadgeColor()) : 'gray',
+            statusSortKey:  (string) ($device->lifecycle_status ?? ''),
+            monthlyCost:    $monthlyCost,
+            detailRoute:    route('asset-manager.inventory.show', ['type' => 'intune', 'id' => $device->id]),
+            costCenterId:   $device->cost_center_id,
+            costCenterName: $device->costCenter?->name,
+            location:       $device->location,
         );
     }
 

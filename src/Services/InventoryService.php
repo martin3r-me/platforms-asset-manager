@@ -29,7 +29,7 @@ class InventoryService
      */
     public function rows(int $teamId, ?int $tenantId = null): Collection
     {
-        $items = AssetItem::with('assignee')
+        $items = AssetItem::with('assignee', 'category')
             ->where('team_id', $teamId)
             ->forTenant($tenantId)
             ->get()
@@ -41,7 +41,8 @@ class InventoryService
             $modelByKey[AssetDeviceModel::normalizeKey($model->manufacturer, $model->model)] = $model;
         }
 
-        $devices = AssetDevice::where('team_id', $teamId)
+        $devices = AssetDevice::with('costCenter')
+            ->where('team_id', $teamId)
             ->forTenant($tenantId)
             ->get()
             ->map(function (AssetDevice $device) use ($modelByKey) {
@@ -71,12 +72,24 @@ class InventoryService
         return $items->concat($devices)->values();
     }
 
-    /** Filtert die gemergte Collection — Suche/Typ/Zuweisung identisch über beide Quellen. */
-    public function filter(Collection $rows, string $search, string $type, string $assignment): Collection
-    {
+    /**
+     * Filtert die gemergte Collection. Suche/Typ/Zuweisung/Status wirken über BEIDE Quellen
+     * (`statusSortKey` trägt `status` bzw. `lifecycle_status`). Die typ-spezifischen Facetten
+     * schließen die jeweils andere Welt implizit aus: ein Kategorie-Filter lässt nur manuelle
+     * Zeilen übrig, ein Kostenstellen-Filter nur Geräte.
+     */
+    public function filter(
+        Collection $rows,
+        string $search,
+        string $type,
+        string $assignment,
+        string $status = '',
+        ?int $categoryId = null,
+        ?int $costCenterId = null,
+    ): Collection {
         $needle = mb_strtolower(trim($search));
 
-        return $rows->filter(function (InventoryRow $row) use ($needle, $type, $assignment) {
+        return $rows->filter(function (InventoryRow $row) use ($needle, $type, $assignment, $status, $categoryId, $costCenterId) {
             if ($type !== '' && $row->type !== $type) {
                 return false;
             }
@@ -84,6 +97,17 @@ class InventoryService
                 return false;
             }
             if ($assignment === 'unassigned' && filled($row->assignedTo)) {
+                return false;
+            }
+            if ($status !== '' && $row->statusSortKey !== $status) {
+                return false;
+            }
+            // Kategorie ist eine reine Item-Facette → Geräte fallen implizit raus.
+            if ($categoryId !== null && $row->categoryId !== $categoryId) {
+                return false;
+            }
+            // Kostenstelle ist eine reine Geräte-Facette → manuelle Assets fallen implizit raus.
+            if ($costCenterId !== null && $row->costCenterId !== $costCenterId) {
                 return false;
             }
             if ($needle !== '') {

@@ -10,6 +10,7 @@ use Livewire\WithPagination;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Concerns\ScopesToTenant;
 use Platform\AssetManager\Models\AssetCategory;
+use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Services\AssetWriteService;
@@ -31,6 +32,9 @@ class Index extends Component
     public string $search           = '';
     public string $filterType       = '';   // '' | 'manual' | 'intune'
     public string $filterAssignment = '';   // '' | 'assigned' | 'unassigned'
+    public string $filterStatus     = '';   // '' | item-status | device-lifecycle (statusSortKey)
+    public ?int   $filterCategory   = null; // nur manuelle Assets
+    public ?int   $filterCostCenter = null; // nur Geräte
     public int    $perPage          = 25;
     public string $sortField        = 'name';
     public string $sortDirection    = 'asc';
@@ -54,6 +58,9 @@ class Index extends Component
         'search'           => ['except' => ''],
         'filterType'       => ['except' => ''],
         'filterAssignment' => ['except' => ''],
+        'filterStatus'     => ['except' => ''],
+        'filterCategory'   => ['except' => null],
+        'filterCostCenter' => ['except' => null],
         'perPage'          => ['except' => 25],
         'sortField'        => ['except' => 'name'],
         'sortDirection'    => ['except' => 'asc'],
@@ -70,6 +77,9 @@ class Index extends Component
     public function updatingSearch(): void           { $this->resetPage(); }
     public function updatingFilterType(): void       { $this->resetPage(); }
     public function updatingFilterAssignment(): void { $this->resetPage(); }
+    public function updatingFilterStatus(): void     { $this->resetPage(); }
+    public function updatingFilterCategory(): void   { $this->resetPage(); }
+    public function updatingFilterCostCenter(): void { $this->resetPage(); }
     public function updatingPerPage(): void          { $this->resetPage(); }
 
     public function sortBy(string $field): void
@@ -85,8 +95,19 @@ class Index extends Component
 
     public function resetFilters(): void
     {
-        $this->reset(['search', 'filterType', 'filterAssignment']);
+        $this->reset(['search', 'filterType', 'filterAssignment', 'filterStatus', 'filterCategory', 'filterCostCenter']);
         $this->resetPage();
+    }
+
+    /** Sind irgendwelche Filter aktiv? (steuert „Zurücksetzen" + Empty-State-Text in der View) */
+    public function getHasFiltersProperty(): bool
+    {
+        return $this->search !== ''
+            || $this->filterType !== ''
+            || $this->filterAssignment !== ''
+            || $this->filterStatus !== ''
+            || $this->filterCategory !== null
+            || $this->filterCostCenter !== null;
     }
 
     // ---------------------------------------------------------------------
@@ -165,7 +186,15 @@ class Index extends Component
         $teamId = $this->teamId();
 
         $rows     = $inventory->rows($teamId, $this->selectedTenantId);
-        $filtered = $inventory->filter($rows, $this->search, $this->filterType, $this->filterAssignment);
+        $filtered = $inventory->filter(
+            $rows,
+            $this->search,
+            $this->filterType,
+            $this->filterAssignment,
+            $this->filterStatus,
+            $this->filterCategory,
+            $this->filterCostCenter,
+        );
         $sorted   = $inventory->sort($filtered, $this->sortField, $this->sortDirection);
         $items    = $inventory->paginate($sorted, $this->perPage, $this->getPage());
 
@@ -175,6 +204,7 @@ class Index extends Component
             'totalFiltered' => $sorted->count(),
             'categories'    => AssetCategory::orderBy('sort_order')->get(),
             'employees'     => AssetEmployee::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get(),
+            'costCenters'   => AssetCostCenter::where('team_id', $teamId)->where('is_active', true)->orderBy('name')->get(),
         ])->layout('platform::layouts.app');
     }
 }
