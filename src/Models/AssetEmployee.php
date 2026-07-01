@@ -30,6 +30,12 @@ class AssetEmployee extends Model
         'cost_center',
         'cost_center_id',
         'job_title',
+        'mobile_phone',
+        'business_phone',
+        'phone_overridden',
+        'sim_number',
+        'contract_number',
+        'data_volume',
         'is_active',
         'account_type',
         'source',
@@ -39,9 +45,10 @@ class AssetEmployee extends Model
     ];
 
     protected $casts = [
-        'is_active' => 'boolean',
-        'raw_data'  => 'array',
-        'synced_at' => 'datetime',
+        'is_active'        => 'boolean',
+        'phone_overridden' => 'boolean',
+        'raw_data'         => 'array',
+        'synced_at'        => 'datetime',
     ];
 
     public function team(): BelongsTo

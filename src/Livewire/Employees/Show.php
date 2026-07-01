@@ -6,12 +6,14 @@ use Livewire\Component;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetCostCenter;
+use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetHandover;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetUserLicense;
+use Platform\AssetManager\Services\ControllingContext;
 use Platform\AssetManager\Services\CostAggregationService;
 use Platform\AssetManager\Services\EmployeeService;
 
@@ -28,6 +30,15 @@ class Show extends Component
     public bool    $saved       = false;
     public bool    $anonymized  = false;
 
+    // Mobilfunk (ADR 0014): Rufnummern aus Entra + manuelle Metadaten am Mitarbeiter (1:1, kein eigenes Modell).
+    public string  $mobilePhone    = '';
+    public string  $businessPhone  = '';
+    public string  $simNumber      = '';
+    public string  $contractNumber = '';
+    public string  $dataVolume     = '';
+    // Toggle: true = Rufnummern werden aus Entra gepflegt; false = manuell übersteuert (phone_overridden).
+    public bool    $phoneFromEntra = true;
+
     public function mount(AssetEmployee $employee): void
     {
         abort_unless($employee->team_id === Auth::user()->currentTeam->id, 403);
@@ -38,6 +49,13 @@ class Show extends Component
         $this->costCenter  = $employee->cost_center ?? '';
         $this->jobTitle    = $employee->job_title ?? '';
         $this->isActive    = $employee->is_active;
+
+        $this->mobilePhone    = $employee->mobile_phone ?? '';
+        $this->businessPhone  = $employee->business_phone ?? '';
+        $this->simNumber      = $employee->sim_number ?? '';
+        $this->contractNumber = $employee->contract_number ?? '';
+        $this->dataVolume     = $employee->data_volume ?? '';
+        $this->phoneFromEntra = ! $employee->phone_overridden;
     }
 
     public function save(): void
@@ -45,12 +63,18 @@ class Show extends Component
         Gate::authorize('asset-manager.manage');
 
         $this->validate([
-            'displayName' => 'nullable|string|max:255',
-            'email'       => 'nullable|email|max:255',
-            'department'  => 'nullable|string|max:255',
-            'costCenter'  => 'nullable|string|max:255',
-            'jobTitle'    => 'nullable|string|max:255',
-            'isActive'    => 'boolean',
+            'displayName'    => 'nullable|string|max:255',
+            'email'          => 'nullable|email|max:255',
+            'department'     => 'nullable|string|max:255',
+            'costCenter'     => 'nullable|string|max:255',
+            'jobTitle'       => 'nullable|string|max:255',
+            'mobilePhone'    => 'nullable|string|max:64',
+            'businessPhone'  => 'nullable|string|max:64',
+            'simNumber'      => 'nullable|string|max:64',
+            'contractNumber' => 'nullable|string|max:64',
+            'dataVolume'     => 'nullable|string|max:64',
+            'phoneFromEntra' => 'boolean',
+            'isActive'       => 'boolean',
         ]);
 
         // Kostenstellen-Code team-scoped auflösen und cost_center + cost_center_id KONSISTENT setzen.
@@ -62,13 +86,20 @@ class Show extends Component
             : null;
 
         $this->employee->update([
-            'display_name'   => $this->displayName ?: null,
-            'email'          => $this->email ?: null,
-            'department'     => $this->department ?: null,
-            'cost_center'    => $center?->code ?? ($code !== '' ? $code : null),
-            'cost_center_id' => $center?->id,
-            'job_title'      => $this->jobTitle ?: null,
-            'is_active'      => $this->isActive,
+            'display_name'     => $this->displayName ?: null,
+            'email'            => $this->email ?: null,
+            'department'       => $this->department ?: null,
+            'cost_center'      => $center?->code ?? ($code !== '' ? $code : null),
+            'cost_center_id'   => $center?->id,
+            'job_title'        => $this->jobTitle ?: null,
+            // Mobilfunk: manuelle Übersteuerung schützt die Nummern vor dem nächsten Entra-Sync (ADR 0014).
+            'mobile_phone'     => $this->mobilePhone ?: null,
+            'business_phone'   => $this->businessPhone ?: null,
+            'phone_overridden' => ! $this->phoneFromEntra,
+            'sim_number'       => $this->simNumber ?: null,
+            'contract_number'  => $this->contractNumber ?: null,
+            'data_volume'      => $this->dataVolume ?: null,
+            'is_active'        => $this->isActive,
         ]);
 
         $this->saved = true;
@@ -140,18 +171,32 @@ class Show extends Component
         // $deviceRows wird durchgereicht, damit deviceCostRows() nicht ein zweites Mal läuft.
         $cost = app(CostAggregationService::class)->employeeCost($teamId, $this->employee, $deviceRows);
 
+        // Mobilfunk-Kosten dieses Mitarbeiters (ADR 0014): Summe der aktiven Mobilfunk-Kostenpositionen
+        // (cost_line, cost_type.key='mobilfunk'). Nur wenn Controlling aktiv — sonst kein Preis im Block.
+        // Der Preis lebt in der Kostenposition, NICHT am Mitarbeiter (keine Doppelpflege).
+        $controllingEnabled = app(ControllingContext::class)->enabledFor($teamId);
+        $mobileCost = $controllingEnabled
+            ? (float) AssetCostLine::active()->validOn(now())
+                ->where('team_id', $teamId)
+                ->where('assignee_id', $this->employee->id)
+                ->whereHas('costType', fn ($q) => $q->where('key', 'mobilfunk'))
+                ->sum('monthly_amount')
+            : 0.0;
+
         return view('asset-manager::livewire.employees.show', [
-            'employee'     => $this->employee,
-            'items'        => $items,
-            'devices'      => $devices,
-            'handovers'    => $handovers,
-            'deviceRows'   => $deviceRows,
-            'licenses'     => $licenses,
-            'skuMap'       => $skuMap,
-            'hardwareCost' => $cost['hardware'],
-            'deviceCost'   => $cost['device'],
-            'licenseCost'  => $cost['license'],
-            'totalCost'    => $cost['total'],
+            'employee'           => $this->employee,
+            'items'              => $items,
+            'devices'            => $devices,
+            'handovers'          => $handovers,
+            'deviceRows'         => $deviceRows,
+            'licenses'           => $licenses,
+            'skuMap'             => $skuMap,
+            'hardwareCost'       => $cost['hardware'],
+            'deviceCost'         => $cost['device'],
+            'licenseCost'        => $cost['license'],
+            'totalCost'          => $cost['total'],
+            'controllingEnabled' => $controllingEnabled,
+            'mobileCost'         => $mobileCost,
         ])->layout('platform::layouts.app');
     }
 }

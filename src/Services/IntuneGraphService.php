@@ -289,7 +289,7 @@ class IntuneGraphService
         }
 
         $users = [];
-        $url   = "{$this->graphBase}/users?\$select=id,displayName,userPrincipalName,assignedLicenses&\$top=999";
+        $url   = "{$this->graphBase}/users?\$select=id,displayName,userPrincipalName,department,jobTitle,mobilePhone,businessPhones,assignedLicenses&\$top=999";
 
         $retried        = false;
         $throttleRetries = 0;
