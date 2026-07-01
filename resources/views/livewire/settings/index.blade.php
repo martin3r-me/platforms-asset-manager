@@ -51,6 +51,39 @@
                 </div>
             </x-asset-manager-panel>
 
+            {{-- Gefahrenzone — kompletter Team-Reset --}}
+            <x-asset-manager-panel title="Gefahrenzone">
+                <div class="flex items-start justify-between gap-6">
+                    <div class="min-w-0">
+                        <p class="text-xs text-[var(--am-text-secondary)]">
+                            Setzt das Modul für dieses Team komplett auf null: löscht <strong>alle</strong> Einträge
+                            (Inventar &amp; Geräte, Mitarbeiter, Zuordnungen, Ausgaben, Kostenzeilen, Lizenzen, Verlauf
+                            und selbst gepflegte Stammdaten). <strong>Erhalten bleiben</strong> die Intune-Anbindung
+                            und die Controlling-Einstellung — die Azure-Verbindung muss also nicht neu eingerichtet
+                            werden, und der nächste Sync holt die Geräte automatisch zurück.
+                        </p>
+                        <p class="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-red-600">
+                            @svg('heroicon-o-exclamation-triangle', 'w-4 h-4')
+                            Diese Aktion kann nicht rückgängig gemacht werden.
+                        </p>
+                    </div>
+                    <div class="flex-shrink-0">
+                        @if($canManage)
+                            <x-asset-manager-button variant="danger" size="md" type="button" wire:click="openReset">
+                                @svg('heroicon-o-trash', 'w-4 h-4')
+                                Zurücksetzen
+                            </x-asset-manager-button>
+                        @else
+                            <span class="text-xs text-[var(--am-text-muted)]">Nur Owner/Admin</span>
+                        @endif
+                    </div>
+                </div>
+            </x-asset-manager-panel>
+
         </div>
     </x-ui-page-container>
+
+    @if($canManage)
+        @include('asset-manager::livewire.settings.partials.modal-reset')
+    @endif
 </x-ui-page>
