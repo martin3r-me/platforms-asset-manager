@@ -80,12 +80,51 @@ class EmployeeService
 
         if (! $employee->phone_overridden) {
             if (! empty($graphUser['mobilePhone'])) {
-                $employee->mobile_phone = $graphUser['mobilePhone'];
+                $employee->mobile_phone = self::normalizePhone($graphUser['mobilePhone']);
             }
             if (! empty($graphUser['businessPhones'][0])) {
-                $employee->business_phone = $graphUser['businessPhones'][0];
+                $employee->business_phone = self::normalizePhone($graphUser['businessPhones'][0]);
             }
         }
+    }
+
+    /**
+     * Normalisiert eine (aus Entra gelieferte) Rufnummer auf führendes '+' + Ziffern und entfernt
+     * Störzeichen (Leerzeichen, /, |, -, Klammern, Text). Enthält das Feld MEHRERE echte Nummern
+     * (>= 2 Segmente mit je >= 7 Ziffern, getrennt durch / | ; , „oder"), wird die ERSTE genommen —
+     * ein bloßer Formatierungs-Trenner innerhalb EINER Nummer wird dagegen nur entfernt (Vorwahl bleibt).
+     * Gibt null zurück, wenn nichts Nummernartiges übrig bleibt (< 4 Ziffern).
+     */
+    public static function normalizePhone(?string $raw): ?string
+    {
+        $raw = trim((string) $raw);
+        if ($raw === '') {
+            return null;
+        }
+
+        // An typischen Trennern zwischen zwei Nummern segmentieren.
+        $segments = preg_split('~\s*[/|;,]\s*|\s+oder\s+|[\r\n]+~i', $raw);
+
+        // Segmente, die FÜR SICH eine plausible Nummer sind (>= 7 Ziffern).
+        $long = [];
+        foreach ($segments as $seg) {
+            if (strlen(preg_replace('/\D+/', '', $seg)) >= 7) {
+                $long[] = $seg;
+            }
+        }
+
+        // >= 2 echte Nummern → der Trenner trennt zwei Nummern → erste nehmen.
+        if (count($long) >= 2) {
+            $pick = $long[0];
+            $plus = str_starts_with(ltrim($pick), '+') ? '+' : '';
+            return $plus . preg_replace('/\D+/', '', $pick);
+        }
+
+        // Sonst: EINE Nummer — der Trenner war Formatierung → nur '+' (führend) + Ziffern behalten.
+        $plus   = str_starts_with($raw, '+') ? '+' : '';
+        $digits = preg_replace('/\D+/', '', $raw);
+
+        return strlen($digits) >= 4 ? $plus . $digits : null;
     }
 
     /**
