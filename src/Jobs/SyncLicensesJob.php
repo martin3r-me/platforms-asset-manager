@@ -170,10 +170,13 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
                 );
                 // Wenn Sync von Graph kommt, source nachträglich auf 'graph' upgrade
                 if ($employee->source === 'derived') {
-                    $employee->update(['source' => 'graph', 'synced_at' => now()]);
-                } else {
-                    $employee->update(['synced_at' => now()]);
+                    $employee->source = 'graph';
                 }
+                $employee->synced_at = now();
+                // Graph-Profil (department/jobTitle/Rufnummern) beim REGULÄREN Sync mitziehen — gemeinsame
+                // Precedence-Logik (ADR 0014), damit die Anreicherung nicht nur am manuellen User-Import hängt.
+                $employeeService->applyGraphProfile($employee, $user);
+                $employee->save();
 
                 foreach (($user['assignedLicenses'] ?? []) as $license) {
                     $skuId = $license['skuId'] ?? null;

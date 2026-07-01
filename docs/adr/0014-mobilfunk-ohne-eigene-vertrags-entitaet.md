@@ -22,8 +22,13 @@ Entscheidung: **Kein eigenes Mobilfunk-/Vertrags-Modell.**
   (`mobile_phone`/`business_phone`) kommen aus Entra (`mobilePhone`/`businessPhones`); `phone_overridden`
   schützt eine manuell korrigierte Nummer vor dem nächsten Sync.
 - **Abteilung/Position** kommen aus Entra und sind **Entra-führend** (überschreibend). Benötigt nur
-  `User.Read.All` (bereits erteilt); `$select` in `IntuneGraphService::getUsersWithLicenses()` und das
-  Mapping in `ImportTenantUsersJob` sind entsprechend erweitert.
+  `User.Read.All` (bereits erteilt); `$select` in `IntuneGraphService::getUsersWithLicenses()` ist erweitert.
+- Die Anreicherung (department/jobTitle/Rufnummern) kapselt der gemeinsame Helfer
+  `EmployeeService::applyGraphProfile()` und wird von BEIDEN Wegen genutzt: dem manuellen User-Import
+  (`ImportTenantUsersJob`) UND dem **regulären Lizenz-Sync** (`SyncLicensesJob`, läuft bei jedem „Sync",
+  iteriert `/users` ohnehin) — so werden die Felder bei jedem Sync automatisch aktualisiert, nicht nur beim
+  seltenen manuellen Import. `SyncLicensesJob` legt dabei keine zusätzlichen Karteileichen an (reichert die
+  ohnehin durchlaufenen Mitarbeiter an).
 - Die Mitarbeiter-Detailseite (`Employees/Show`) zeigt einen **„Mobilfunk"-Block** (Nummer/SIM/Vertragsnr/
   Datenvolumen) und — nur bei aktivem Controlling — den Monatspreis **lesend** aus der Mobilfunk-Kostenposition.
 

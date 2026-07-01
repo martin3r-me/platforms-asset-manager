@@ -59,6 +59,36 @@ class EmployeeService
     }
 
     /**
+     * Reichert einen Mitarbeiter mit Graph-Profildaten an (department/jobTitle/Rufnummern) — die gemeinsame
+     * Precedence-Logik für den User-Import UND den regulären Lizenz-Sync (ADR 0014), damit die Regel nicht
+     * dupliziert wird:
+     *   - department/job_title: Entra ist führend — NICHT-leere Graph-Werte überschreiben, leere lassen den
+     *     Bestand (kein Datenverlust durch lückenhaftes Entra).
+     *   - Rufnummern (mobile_phone/business_phone): nur solange NICHT manuell übersteuert (phone_overridden);
+     *     businessPhones ist ein Array → erste Nummer.
+     *
+     * Mutiert das übergebene Objekt (dirty), SPEICHERT NICHT — der Aufrufer ruft save().
+     */
+    public function applyGraphProfile(AssetEmployee $employee, array $graphUser): void
+    {
+        if (! empty($graphUser['department'])) {
+            $employee->department = $graphUser['department'];
+        }
+        if (! empty($graphUser['jobTitle'])) {
+            $employee->job_title = $graphUser['jobTitle'];
+        }
+
+        if (! $employee->phone_overridden) {
+            if (! empty($graphUser['mobilePhone'])) {
+                $employee->mobile_phone = $graphUser['mobilePhone'];
+            }
+            if (! empty($graphUser['businessPhones'][0])) {
+                $employee->business_phone = $graphUser['businessPhones'][0];
+            }
+        }
+    }
+
+    /**
      * Gezielte Einzel-Anonymisierung EINES Mitarbeiters (DSGVO Art. 17, Entscheidung E2 / ADR 0005).
      *
      * Pseudonymisiert die PII des Mitarbeiters (Anzeigename, E-Mail, UPN) und leert raw_data; maskiert
