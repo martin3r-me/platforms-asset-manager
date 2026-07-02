@@ -57,35 +57,6 @@
                     </div>
                 </x-asset-manager-filter-section>
 
-                <x-asset-manager-filter-section title="Mobilfunk">
-                    <div class="space-y-2">
-                        <div>
-                            <label class="block text-[10px] text-[var(--am-text-muted)] mb-1">Mobilnummer</label>
-                            <x-asset-manager-input size="sm" type="text" wire:model="mobilePhone" />
-                        </div>
-                        <div>
-                            <label class="block text-[10px] text-[var(--am-text-muted)] mb-1">Geschäftlich</label>
-                            <x-asset-manager-input size="sm" type="text" wire:model="businessPhone" />
-                        </div>
-                        <label class="flex items-center gap-2 text-[10px] text-[var(--am-text-secondary)]">
-                            <input type="checkbox" wire:model="phoneFromEntra" class="rounded border-[color:var(--am-border)]" />
-                            Rufnummern automatisch aus Entra
-                        </label>
-                        <div>
-                            <label class="block text-[10px] text-[var(--am-text-muted)] mb-1">SIM-Nummer</label>
-                            <x-asset-manager-input size="sm" type="text" wire:model="simNumber" />
-                        </div>
-                        <div>
-                            <label class="block text-[10px] text-[var(--am-text-muted)] mb-1">Vertragsnummer</label>
-                            <x-asset-manager-input size="sm" type="text" wire:model="contractNumber" />
-                        </div>
-                        <div>
-                            <label class="block text-[10px] text-[var(--am-text-muted)] mb-1">Datenvolumen</label>
-                            <x-asset-manager-input size="sm" type="text" wire:model="dataVolume" />
-                        </div>
-                    </div>
-                </x-asset-manager-filter-section>
-
                 <div class="rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm overflow-hidden">
                     <div class="px-3 py-2">
                         <label class="flex items-center gap-2 text-[11px] text-[var(--am-text-secondary)]">
@@ -296,36 +267,27 @@
             @endif
 
             {{-- Mobilfunk (ADR 0014): Rufnummer/SIM/Vertragsnr/Datenvolumen am Mitarbeiter; Monatspreis aus der
-                 Mobilfunk-Kostenposition (nur bei aktivem Controlling, read-only — Pflege unter Kostenpositionen). --}}
-            @if($employee->mobile_phone || $employee->business_phone || $employee->sim_number || $employee->contract_number || $employee->data_volume)
+                 Mobilfunk-Kostenposition (read-only, Controlling). Bearbeiten via Modal (Button oben rechts). --}}
+            @php $hasMobilfunk = $employee->mobile_phone || $employee->business_phone || $employee->sim_number || $employee->contract_number || $employee->data_volume; @endphp
+            @if($hasMobilfunk || $canManage)
                 <x-asset-manager-panel title="Mobilfunk">
-                    @if($controllingEnabled && $mobileCost > 0)
-                        <x-slot name="actions">
-                            <span class="text-xs text-[var(--am-text-secondary)] tabular-nums">{{ number_format($mobileCost, 2, ',', '.') }} € / Monat</span>
-                        </x-slot>
-                    @endif
-                    <div class="grid grid-cols-2 gap-x-6 gap-y-3 p-5">
-                        <div>
-                            <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-0.5">Mobilnummer</div>
-                            <div class="text-sm text-[var(--am-text)] tabular-nums">{{ $employee->mobile_phone ?: '—' }}</div>
+                    <x-slot name="actions">
+                        <div class="inline-flex items-center gap-3">
+                            @if($controllingEnabled && $mobileCost > 0)
+                                <span class="text-[11px] text-[var(--am-text-secondary)] tabular-nums">{{ number_format($mobileCost, 2, ',', '.') }} € / Monat</span>
+                            @endif
+                            @if($canManage)
+                                <button type="button" wire:click="openMobilfunk" class="text-[11px] text-[var(--am-accent)] hover:underline inline-flex items-center gap-1">@svg('heroicon-o-pencil-square', 'w-3 h-3') Bearbeiten</button>
+                            @endif
                         </div>
-                        <div>
-                            <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-0.5">Geschäftlich</div>
-                            <div class="text-sm text-[var(--am-text)] tabular-nums">{{ $employee->business_phone ?: '—' }}</div>
-                        </div>
-                        <div>
-                            <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-0.5">SIM-Nummer</div>
-                            <div class="text-sm text-[var(--am-text)] tabular-nums">{{ $employee->sim_number ?: '—' }}</div>
-                        </div>
-                        <div>
-                            <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-0.5">Vertragsnummer</div>
-                            <div class="text-sm text-[var(--am-text)] tabular-nums">{{ $employee->contract_number ?: '—' }}</div>
-                        </div>
-                        <div>
-                            <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-0.5">Datenvolumen</div>
-                            <div class="text-sm text-[var(--am-text)]">{{ $employee->data_volume ?: '—' }}</div>
-                        </div>
-                    </div>
+                    </x-slot>
+                    <x-asset-manager-detail-list :cols="2">
+                        <x-asset-manager-detail-row label="Mobilnummer" bordered><span class="tabular-nums">{{ $employee->mobile_phone ?: '—' }}</span></x-asset-manager-detail-row>
+                        <x-asset-manager-detail-row label="Geschäftlich" bordered><span class="tabular-nums">{{ $employee->business_phone ?: '—' }}</span></x-asset-manager-detail-row>
+                        <x-asset-manager-detail-row label="SIM-Nummer" bordered><span class="tabular-nums">{{ $employee->sim_number ?: '—' }}</span></x-asset-manager-detail-row>
+                        <x-asset-manager-detail-row label="Vertragsnummer" bordered><span class="tabular-nums">{{ $employee->contract_number ?: '—' }}</span></x-asset-manager-detail-row>
+                        <x-asset-manager-detail-row label="Datenvolumen" bordered>{{ $employee->data_volume ?: '—' }}</x-asset-manager-detail-row>
+                    </x-asset-manager-detail-list>
                 </x-asset-manager-panel>
             @endif
 
@@ -337,4 +299,9 @@
             @endif
         </div>
     </div>
+
+    {{-- Mobilfunk bearbeiten (Modal, innerhalb x-ui-page) — nur Owner/Admin. --}}
+    @can('asset-manager.manage')
+        @include('asset-manager::livewire.employees.partials.modal-mobilfunk')
+    @endcan
 </x-ui-page>

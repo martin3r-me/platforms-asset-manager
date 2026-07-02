@@ -38,6 +38,8 @@ class Show extends Component
     public string  $dataVolume     = '';
     // Toggle: true = Rufnummern werden aus Entra gepflegt; false = manuell übersteuert (phone_overridden).
     public bool    $phoneFromEntra = true;
+    // Mobilfunk-Bearbeiten-Modal (Trigger am Mobilfunk-Block im Content, nicht mehr in der Profil-Leiste).
+    public bool    $showMobilfunk  = false;
 
     public function mount(AssetEmployee $employee): void
     {
@@ -63,18 +65,12 @@ class Show extends Component
         Gate::authorize('asset-manager.manage');
 
         $this->validate([
-            'displayName'    => 'nullable|string|max:255',
-            'email'          => 'nullable|email|max:255',
-            'department'     => 'nullable|string|max:255',
-            'costCenter'     => 'nullable|string|max:255',
-            'jobTitle'       => 'nullable|string|max:255',
-            'mobilePhone'    => 'nullable|string|max:64',
-            'businessPhone'  => 'nullable|string|max:64',
-            'simNumber'      => 'nullable|string|max:64',
-            'contractNumber' => 'nullable|string|max:64',
-            'dataVolume'     => 'nullable|string|max:64',
-            'phoneFromEntra' => 'boolean',
-            'isActive'       => 'boolean',
+            'displayName' => 'nullable|string|max:255',
+            'email'       => 'nullable|email|max:255',
+            'department'  => 'nullable|string|max:255',
+            'costCenter'  => 'nullable|string|max:255',
+            'jobTitle'    => 'nullable|string|max:255',
+            'isActive'    => 'boolean',
         ]);
 
         // Kostenstellen-Code team-scoped auflösen und cost_center + cost_center_id KONSISTENT setzen.
@@ -86,20 +82,13 @@ class Show extends Component
             : null;
 
         $this->employee->update([
-            'display_name'     => $this->displayName ?: null,
-            'email'            => $this->email ?: null,
-            'department'       => $this->department ?: null,
-            'cost_center'      => $center?->code ?? ($code !== '' ? $code : null),
-            'cost_center_id'   => $center?->id,
-            'job_title'        => $this->jobTitle ?: null,
-            // Mobilfunk: manuelle Übersteuerung schützt die Nummern vor dem nächsten Entra-Sync (ADR 0014).
-            'mobile_phone'     => $this->mobilePhone ?: null,
-            'business_phone'   => $this->businessPhone ?: null,
-            'phone_overridden' => ! $this->phoneFromEntra,
-            'sim_number'       => $this->simNumber ?: null,
-            'contract_number'  => $this->contractNumber ?: null,
-            'data_volume'      => $this->dataVolume ?: null,
-            'is_active'        => $this->isActive,
+            'display_name'   => $this->displayName ?: null,
+            'email'          => $this->email ?: null,
+            'department'     => $this->department ?: null,
+            'cost_center'    => $center?->code ?? ($code !== '' ? $code : null),
+            'cost_center_id' => $center?->id,
+            'job_title'      => $this->jobTitle ?: null,
+            'is_active'      => $this->isActive,
         ]);
 
         $this->saved = true;
@@ -121,6 +110,46 @@ class Show extends Component
         $this->email       = '';
         $this->anonymized  = true;
         $this->saved       = false;
+    }
+
+    /** Öffnet das Mobilfunk-Bearbeiten-Modal und lädt die Felder aus dem aktuellen Stand. */
+    public function openMobilfunk(): void
+    {
+        Gate::authorize('asset-manager.manage');
+
+        $this->mobilePhone    = $this->employee->mobile_phone ?? '';
+        $this->businessPhone  = $this->employee->business_phone ?? '';
+        $this->simNumber      = $this->employee->sim_number ?? '';
+        $this->contractNumber = $this->employee->contract_number ?? '';
+        $this->dataVolume     = $this->employee->data_volume ?? '';
+        $this->phoneFromEntra = ! $this->employee->phone_overridden;
+        $this->showMobilfunk  = true;
+    }
+
+    /** Speichert die Mobilfunk-Stammdaten (ADR 0014). phone_overridden schützt manuelle Nummern vor dem Sync. */
+    public function saveMobilfunk(): void
+    {
+        Gate::authorize('asset-manager.manage');
+
+        $this->validate([
+            'mobilePhone'    => 'nullable|string|max:64',
+            'businessPhone'  => 'nullable|string|max:64',
+            'simNumber'      => 'nullable|string|max:64',
+            'contractNumber' => 'nullable|string|max:64',
+            'dataVolume'     => 'nullable|string|max:64',
+            'phoneFromEntra' => 'boolean',
+        ]);
+
+        $this->employee->update([
+            'mobile_phone'     => $this->mobilePhone ?: null,
+            'business_phone'   => $this->businessPhone ?: null,
+            'phone_overridden' => ! $this->phoneFromEntra,
+            'sim_number'       => $this->simNumber ?: null,
+            'contract_number'  => $this->contractNumber ?: null,
+            'data_volume'      => $this->dataVolume ?: null,
+        ]);
+
+        $this->showMobilfunk = false;
     }
 
     public function render()
@@ -197,6 +226,7 @@ class Show extends Component
             'totalCost'          => $cost['total'],
             'controllingEnabled' => $controllingEnabled,
             'mobileCost'         => $mobileCost,
+            'canManage'          => Gate::allows('asset-manager.manage'),
         ])->layout('platform::layouts.app');
     }
 }
