@@ -1,17 +1,19 @@
 @php
+    // „Gesellschaften“ ist kein eigener Bereich mehr — sie sind die obersten Knoten des
+    // Kostenstellen-Baums (docs/adr/0016).
     $areas = [
-        'companies'    => ['label' => 'Gesellschaften', 'icon' => 'heroicon-o-building-office-2',      'singular' => 'Gesellschaft'],
         'cost-centers' => ['label' => 'Kostenstellen',  'icon' => 'heroicon-o-clipboard-document-list', 'singular' => 'Kostenstelle'],
         'cost-types'   => ['label' => 'Kostenarten',    'icon' => 'heroicon-o-tag',                     'singular' => 'Kostenart'],
         'vendors'      => ['label' => 'Kreditoren',     'icon' => 'heroicon-o-building-storefront',      'singular' => 'Kreditor'],
     ];
-    $current = $areas[$active] ?? $areas['companies'];
+    $current = $areas[$active] ?? $areas['cost-centers'];
 
     // Computed-Properties hier (Komponenten-Scope) auflösen, damit sie auch in den
     // <x-slot>-Inhalten verfügbar sind ($this-> ist im Slot-Scope nicht verlässlich).
-    $counts             = $this->counts;
-    $companiesForSelect = $this->companiesForSelect;
-    $vendorsForSelect   = $this->vendorsForSelect;
+    $counts           = $this->counts;
+    $parentOptions    = $this->parentOptions;
+    $rootOptions      = $this->rootOptions;
+    $vendorsForSelect = $this->vendorsForSelect;
 @endphp
 
 <x-ui-page>
@@ -42,7 +44,7 @@
         <x-ui-page-sidebar title="Bereiche" icon="heroicon-o-rectangle-stack" width="w-72" :defaultOpen="true">
             <div class="p-4 space-y-4 bg-[var(--am-bg)]">
                 @include('asset-manager::livewire.master-data.partials.nav', ['areas' => $areas, 'counts' => $counts])
-                @include('asset-manager::livewire.master-data.partials.filters', ['areas' => $areas, 'companies' => $companiesForSelect])
+                @include('asset-manager::livewire.master-data.partials.filters', ['areas' => $areas, 'roots' => $rootOptions])
             </div>
         </x-ui-page-sidebar>
     </x-slot>
@@ -67,11 +69,8 @@
                     </div>
 
                     @switch($active)
-                        @case('companies')
-                            @include('asset-manager::livewire.master-data.partials.form-companies')
-                            @break
                         @case('cost-centers')
-                            @include('asset-manager::livewire.master-data.partials.form-cost-centers', ['companies' => $companiesForSelect])
+                            @include('asset-manager::livewire.master-data.partials.form-cost-centers', ['parents' => $parentOptions])
                             @break
                         @case('cost-types')
                             @include('asset-manager::livewire.master-data.partials.form-cost-types', ['vendors' => $vendorsForSelect])
@@ -117,9 +116,6 @@
 
             <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm overflow-hidden">
                 @switch($active)
-                    @case('companies')
-                        @include('asset-manager::livewire.master-data.partials.table-companies', ['rows' => $this->companies])
-                        @break
                     @case('cost-centers')
                         @include('asset-manager::livewire.master-data.partials.table-cost-centers', ['rows' => $this->costCenters])
                         @break

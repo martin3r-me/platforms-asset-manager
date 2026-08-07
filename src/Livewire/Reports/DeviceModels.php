@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceModel;
+use Platform\AssetManager\Support\DeviceCostResolver;
 
 /**
  * Read-only Auswertung: Intune-Geräte gruppiert nach Hersteller + Modell.
@@ -40,11 +41,8 @@ class DeviceModels extends Component
     {
         $teamId = Auth::user()->currentTeam->id;
 
-        // Modell-Katalog einmal laden → Preis-Flag + N+1-freie Kostenauflösung (statt deviceModel() je Zeile).
-        $catalog = [];
-        foreach (AssetDeviceModel::where('team_id', $teamId)->get() as $m) {
-            $catalog[AssetDeviceModel::normalizeKey($m->manufacturer, $m->model)] = $m;
-        }
+        // Katalog + tenant-eigene Modell-Kosten einmal laden → Preis-Flag + N+1-freie Auflösung.
+        $resolver = DeviceCostResolver::for($teamId);
 
         $groups = [];
         foreach (AssetDevice::where('team_id', $teamId)->get() as $device) {
@@ -57,7 +55,7 @@ class DeviceModels extends Component
                     'count'        => 0,
                     'assigned'     => 0,
                     'monthly'      => 0.0,
-                    'hasCatalog'   => isset($catalog[$key]),
+                    'hasCatalog'   => $resolver->modelFor($device) !== null,
                 ];
             }
 
@@ -66,15 +64,8 @@ class DeviceModels extends Component
                 $groups[$key]['assigned']++;
             }
 
-            // Override am Gerät, sonst Katalog-Default (gleiche Logik wie resolvedMonthlyCost, aber N+1-frei).
-            $monthly = AssetDevice::computeMonthlyFrom(
-                $device->monthly_cost, $device->purchase_price, $device->depreciation_months, $device->purchase_date
-            );
-            if ($monthly === null && isset($catalog[$key])) {
-                $c = $catalog[$key];
-                $monthly = AssetDevice::computeMonthlyFrom($c->monthly_cost, $c->purchase_price, $c->depreciation_months, null);
-            }
-            $groups[$key]['monthly'] += $monthly ?? 0.0;
+            // Override am Gerät, sonst tenant-eigener Katalog-Default — beides im Resolver (N+1-frei).
+            $groups[$key]['monthly'] += $resolver->monthlyCost($device);
         }
 
         $rows = collect($groups)->values()->sortBy(function ($g) {

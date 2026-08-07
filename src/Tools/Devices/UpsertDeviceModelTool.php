@@ -5,9 +5,12 @@ namespace Platform\AssetManager\Tools\Devices;
 use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceModel;
+use Platform\AssetManager\Models\AssetDeviceModelCost;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetVendor;
+use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
+use Platform\AssetManager\Tools\Concerns\ResolvesTenant;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -21,6 +24,7 @@ use Platform\Core\Contracts\ToolResult;
 class UpsertDeviceModelTool implements ToolContract, ToolMetadataContract
 {
     use ResolvesTeam;
+    use ResolvesTenant;
 
     public function getName(): string
     {
@@ -39,7 +43,7 @@ class UpsertDeviceModelTool implements ToolContract, ToolMetadataContract
     {
         return [
             'type'       => 'object',
-            'properties' => [
+            'properties' => array_merge([
                 'manufacturer'        => ['type' => 'string', 'description' => 'Hersteller (erforderlich).'],
                 'model'               => ['type' => 'string', 'description' => 'Modell (erforderlich).'],
                 'monthly_cost'        => ['type' => 'number', 'description' => 'Monatliche Leasing-Rate (EUR).'],
@@ -47,7 +51,7 @@ class UpsertDeviceModelTool implements ToolContract, ToolMetadataContract
                 'depreciation_months' => ['type' => 'integer', 'description' => 'Abschreibungsdauer in Monaten.'],
                 'cost_type_id'        => ['type' => 'integer', 'description' => 'Kostenart-ID (Team).'],
                 'vendor_id'           => ['type' => 'integer', 'description' => 'Kreditor-ID (Team).'],
-            ],
+            ], $this->tenantSchemaProperty()),
             'required' => ['manufacturer', 'model'],
         ];
     }
@@ -59,6 +63,15 @@ class UpsertDeviceModelTool implements ToolContract, ToolMetadataContract
             if (!$teamId) {
                 return ToolResult::error('MISSING_TEAM', 'Kein aktives Team im Kontext. Nutze core__context__GET / core__team__switch.');
             }
+
+            // Tenant-Grenze (ADR 0016): Default ist die gespeicherte Auswahl des Users. forceTenant()
+            // setzt den Kontext fuer den Global Scope, damit JEDE Query unten tenant-rein ist, ohne
+            // dass jede einzelne Query angefasst werden muss.
+            [$tenantId, $tenantError] = $this->resolveTenant($arguments, $context, $teamId);
+            if ($tenantError) {
+                return $tenantError;
+            }
+            TenantContext::forceTenant($tenantId);
 
             // Schreibrechte (ADR 0004): kanal-übergreifend Owner/Admin — identische Grenze wie im UI.
             if (!Gate::forUser($context->user)->allows('asset-manager.manage')) {
@@ -85,19 +98,34 @@ class UpsertDeviceModelTool implements ToolContract, ToolMetadataContract
 
             $modelRow = $existing ?: new AssetDeviceModel(['team_id' => $teamId, 'manufacturer' => $manufacturer, 'model' => $model]);
 
-            foreach (['monthly_cost', 'purchase_price', 'depreciation_months'] as $f) {
+            // Nutzungsdauer bleibt am Modell (team-weit, Hardware-Eigenschaft).
+            if (array_key_exists('depreciation_months', $arguments)) {
+                $v = $arguments['depreciation_months'];
+                $modelRow->depreciation_months = ($v === '' || $v === null) ? null : $v;
+            }
+            $modelRow->save();
+
+            // Preise, Kostenart und Kreditor sind pro Kunde verhandelt -> tenant-eigene Kostenzeile
+            // (ADR 0016). Nur die uebergebenen Felder anfassen, damit ein Teil-Update nichts nullt.
+            $costRow = AssetDeviceModelCost::withoutTenantScope()->firstOrNew([
+                'tenant_id'       => $tenantId,
+                'device_model_id' => $modelRow->id,
+            ]);
+            $costRow->team_id = $teamId;
+
+            foreach (['monthly_cost', 'purchase_price'] as $f) {
                 if (array_key_exists($f, $arguments)) {
                     $v = $arguments[$f];
-                    $modelRow->{$f} = ($v === '' || $v === null) ? null : $v;
+                    $costRow->{$f} = ($v === '' || $v === null) ? null : $v;
                 }
             }
             if (array_key_exists('cost_type_id', $arguments)) {
-                $modelRow->cost_type_id = $arguments['cost_type_id'] ? (int) $arguments['cost_type_id'] : null;
+                $costRow->cost_type_id = $arguments['cost_type_id'] ? (int) $arguments['cost_type_id'] : null;
             }
             if (array_key_exists('vendor_id', $arguments)) {
-                $modelRow->vendor_id = $arguments['vendor_id'] ? (int) $arguments['vendor_id'] : null;
+                $costRow->vendor_id = $arguments['vendor_id'] ? (int) $arguments['vendor_id'] : null;
             }
-            $modelRow->save();
+            $costRow->save();
 
             $deviceCount = AssetDevice::where('team_id', $teamId)->get(['manufacturer', 'model'])
                 ->filter(fn ($d) => AssetDeviceModel::normalizeKey($d->manufacturer, $d->model) === $key)
@@ -107,8 +135,9 @@ class UpsertDeviceModelTool implements ToolContract, ToolMetadataContract
                 'id'                  => $modelRow->id,
                 'manufacturer'        => $modelRow->manufacturer,
                 'model'               => $modelRow->model,
-                'monthly_cost'        => $modelRow->monthly_cost !== null ? (float) $modelRow->monthly_cost : null,
-                'purchase_price'      => $modelRow->purchase_price !== null ? (float) $modelRow->purchase_price : null,
+                'tenant_id'           => $tenantId,
+                'monthly_cost'        => $costRow->monthly_cost !== null ? (float) $costRow->monthly_cost : null,
+                'purchase_price'      => $costRow->purchase_price !== null ? (float) $costRow->purchase_price : null,
                 'depreciation_months' => $modelRow->depreciation_months,
                 'created'             => !$existing,
                 'affected_devices'    => $deviceCount,

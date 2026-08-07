@@ -113,8 +113,8 @@
                             <tbody class="divide-y divide-[color:var(--am-border)]">
                                 <tr><td class="px-4 py-2 text-[var(--am-text-secondary)]">Kostenpositionen gelöscht</td><td class="px-4 py-2 text-right tabular-nums font-medium text-[var(--am-text)]">{{ $resetResult['cost_lines'] }}</td></tr>
                                 <tr><td class="px-4 py-2 text-[var(--am-text-secondary)]">Import-Assets gelöscht (Laptop/Internet/Drucker)</td><td class="px-4 py-2 text-right tabular-nums font-medium text-[var(--am-text)]">{{ $resetResult['assets'] }}</td></tr>
-                                <tr><td class="px-4 py-2 text-[var(--am-text-secondary)]">Funktionskonten gelöscht</td><td class="px-4 py-2 text-right tabular-nums font-medium text-[var(--am-text)]">{{ $resetResult['employees'] }}</td></tr>
-                                <tr><td class="px-4 py-2 text-[var(--am-text-secondary)]">Mitarbeiter-Kostenstellen zurückgesetzt</td><td class="px-4 py-2 text-right tabular-nums font-medium text-[var(--am-text)]">{{ $resetResult['cleared_cost_centers'] }}</td></tr>
+                                <tr><td class="px-4 py-2 text-[var(--am-text-secondary)]">Funktionskonten gelöscht</td><td class="px-4 py-2 text-right tabular-nums font-medium text-[var(--am-text)]">{{ $resetResult['holders'] }}</td></tr>
+                                <tr><td class="px-4 py-2 text-[var(--am-text-secondary)]">Kostenstellen der Funktionskonten zurückgesetzt</td><td class="px-4 py-2 text-right tabular-nums font-medium text-[var(--am-text)]">{{ $resetResult['cleared_cost_centers'] }}</td></tr>
                             </tbody>
                         </table>
                     </div>

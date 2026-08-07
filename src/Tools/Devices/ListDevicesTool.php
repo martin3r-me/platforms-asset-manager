@@ -3,8 +3,10 @@
 namespace Platform\AssetManager\Tools\Devices;
 
 use Platform\AssetManager\Models\AssetDevice;
-use Platform\AssetManager\Models\AssetDeviceModel;
+use Platform\AssetManager\Support\DeviceCostResolver;
+use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
+use Platform\AssetManager\Tools\Concerns\ResolvesTenant;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -19,6 +21,7 @@ class ListDevicesTool implements ToolContract, ToolMetadataContract
 {
     use HasStandardGetOperations;
     use ResolvesTeam;
+    use ResolvesTenant;
 
     public function getName(): string
     {
@@ -47,6 +50,15 @@ class ListDevicesTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('MISSING_TEAM', 'Kein aktives Team im Kontext. Nutze core__context__GET / core__team__switch.');
             }
 
+            // Tenant-Grenze (ADR 0016): Default ist die gespeicherte Auswahl des Users. forceTenant()
+            // setzt den Kontext fuer den Global Scope, damit JEDE Query unten tenant-rein ist, ohne
+            // dass jede einzelne Query angefasst werden muss.
+            [$tenantId, $tenantError] = $this->resolveTenant($arguments, $context, $teamId);
+            if ($tenantError) {
+                return $tenantError;
+            }
+            TenantContext::forceTenant($tenantId);
+
             $allowed = ['device_name', 'operating_system', 'os_version', 'compliance_state', 'management_state',
                 'manufacturer', 'model', 'serial_number', 'user_principal_name', 'device_type', 'source'];
 
@@ -57,19 +69,14 @@ class ListDevicesTool implements ToolContract, ToolMetadataContract
 
             $result  = $this->applyStandardPaginationResult($query, $arguments);
 
-            // Modell-Katalog EINMAL laden und nach normalisiertem (Hersteller|Modell)-Schlüssel indexieren —
-            // sonst löst deviceModel()/resolvedMonthlyCost() je Gerät den ganzen Katalog neu (N+1).
-            // Muster: InventoryService. Ergebnis identisch zur Per-Zeile-Auflösung.
-            $modelByKey = [];
-            foreach (AssetDeviceModel::where('team_id', $teamId)->get() as $m) {
-                $modelByKey[AssetDeviceModel::normalizeKey($m->manufacturer, $m->model)] = $m;
-            }
+            // Katalog + tenant-eigene Modell-Kosten EINMAL laden — sonst löst die Kostenauflösung je
+            // Gerät den ganzen Katalog neu (N+1). Muster: InventoryService.
+            $resolver = DeviceCostResolver::for($teamId);
 
-            $rows = $result['data']->map(function (AssetDevice $d) use ($modelByKey) {
-                $own   = AssetDevice::computeMonthlyFrom($d->monthly_cost, $d->purchase_price, $d->depreciation_months, $d->purchase_date);
-                $model = $modelByKey[AssetDeviceModel::normalizeKey($d->manufacturer, $d->model)] ?? null;
-                $fromModel = $model ? AssetDevice::computeMonthlyFrom($model->monthly_cost, $model->purchase_price, $model->depreciation_months, null) : null;
-                $source = $own !== null ? 'override' : ($fromModel !== null ? 'model' : 'none');
+            $rows = $result['data']->map(function (AssetDevice $d) use ($resolver) {
+                $own       = AssetDevice::computeMonthlyFrom($d->monthly_cost, $d->purchase_price, $d->depreciation_months, $d->purchase_date);
+                $fromModel = $resolver->modelMonthlyCost($d);
+                $source    = $own !== null ? 'override' : ($fromModel !== null ? 'model' : 'none');
 
                 return [
                     'id'                  => $d->id,

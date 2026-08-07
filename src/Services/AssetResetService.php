@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Platform\AssetManager\Models\AssetAssignment;
-use Platform\AssetManager\Models\AssetCompany;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetCostType;
@@ -34,8 +33,13 @@ use Platform\AssetManager\Models\AssetVendor;
  *
  * Nach dem Reset holt der nächste Intune-Sync die Geräte automatisch zurück.
  *
- * Strikt team-scoped (Multi-Tenant-Leitplanke) — löscht ausschließlich Zeilen des übergebenen Teams.
- * Alles in einer Transaction: entweder komplett oder gar nicht.
+ * Strikt team-scoped (Multi-Tenant-Leitplanke) — löscht ausschließlich Zeilen des übergebenen Teams,
+ * dabei aber ALLE Tenants dieses Teams. Alles in einer Transaction: entweder komplett oder gar nicht.
+ *
+ * ⚠️ Jede Query hier ruft ausdrücklich `withoutTenantScope()`. Ohne das würde der Global Scope aus
+ * docs/adr/0016 den Reset stillschweigend auf den **aktiven** Tenant einschränken — der Button heißt
+ * „Team zurücksetzen", würde dann aber nur einen Kunden leeren und die übrigen unangetastet lassen.
+ * Genau der Fehlermodus, den ein Reset niemals haben darf: er sähe erfolgreich aus.
  *
  * Löschreihenfolge = Kinder vor Eltern. FKs sind durchweg cascadeOnDelete (Kinder gehen mit) oder
  * nullOnDelete (kein RESTRICT-Block), daher constraint-sicher. Für die vier SoftDelete-Modelle
@@ -51,13 +55,13 @@ class AssetResetService
     {
         return DB::transaction(function () use ($teamId) {
             // Item-/Device-IDs des Teams (inkl. soft-gelöschter) für die Zuordnungs-Bereinigung.
-            $itemIds   = AssetItem::withTrashed()->where('team_id', $teamId)->pluck('id')->all();
-            $deviceIds = AssetDevice::withTrashed()->where('team_id', $teamId)->pluck('id')->all();
+            $itemIds   = AssetItem::withoutTenantScope()->withTrashed()->where('team_id', $teamId)->pluck('id')->all();
+            $deviceIds = AssetDevice::withoutTenantScope()->withTrashed()->where('team_id', $teamId)->pluck('id')->all();
 
             // 1) Zuordnungs-Verlauf. asset_assignments hat kein eigenes team_id: Item-Zeilen tragen
             //    asset_item_id (FK-cascade greift zwar bei forceDelete der Items, aber Device-Zeilen
             //    hängen nur am String-Diskriminator ohne FK) → hier explizit über beide Wege scopen.
-            $assignments = AssetAssignment::query()
+            $assignments = AssetAssignment::withoutTenantScope()
                 ->where(function ($q) use ($itemIds, $deviceIds) {
                     $q->whereIn('asset_item_id', $itemIds)
                         ->orWhere(function ($qq) use ($deviceIds) {
@@ -68,32 +72,31 @@ class AssetResetService
                 ->delete();
 
             // 2) Geräte-Historie / Sync-Logs (eigenständiges team_id).
-            $events        = AssetDeviceEvent::where('team_id', $teamId)->delete();
+            $events        = AssetDeviceEvent::withoutTenantScope()->where('team_id', $teamId)->delete();
             $sources       = AssetDeviceSource::where('team_id', $teamId)->delete();
-            $deviceSync    = AssetDeviceSyncLog::where('team_id', $teamId)->delete();
-            $licenseSync   = AssetLicenseSyncLog::where('team_id', $teamId)->delete();
+            $deviceSync    = AssetDeviceSyncLog::withoutTenantScope()->where('team_id', $teamId)->delete();
+            $licenseSync   = AssetLicenseSyncLog::withoutTenantScope()->where('team_id', $teamId)->delete();
 
             // 3) Kostenzeilen (vor cost_types löschen: cost_lines→cost_types ist cascadeOnDelete).
-            $costLines = AssetCostLine::withTrashed()->where('team_id', $teamId)->forceDelete();
+            $costLines = AssetCostLine::withoutTenantScope()->withTrashed()->where('team_id', $teamId)->forceDelete();
 
             // 4) Ausgabe-Protokolle (cascadet asset_handover_lines via FK), dann Kern-Inventar.
-            $handovers = AssetHandover::withTrashed()->where('team_id', $teamId)->forceDelete();
-            $items     = AssetItem::withTrashed()->where('team_id', $teamId)->forceDelete();
-            $devices   = AssetDevice::withTrashed()->where('team_id', $teamId)->forceDelete();
+            $handovers = AssetHandover::withoutTenantScope()->withTrashed()->where('team_id', $teamId)->forceDelete();
+            $items     = AssetItem::withoutTenantScope()->withTrashed()->where('team_id', $teamId)->forceDelete();
+            $devices   = AssetDevice::withoutTenantScope()->withTrashed()->where('team_id', $teamId)->forceDelete();
 
             // 5) Lizenzen.
-            $userLicenses = AssetUserLicense::where('team_id', $teamId)->delete();
-            $licenseSkus  = AssetLicenseSku::where('team_id', $teamId)->delete();
+            $userLicenses = AssetUserLicense::withoutTenantScope()->where('team_id', $teamId)->delete();
+            $licenseSkus  = AssetLicenseSku::withoutTenantScope()->where('team_id', $teamId)->delete();
 
-            // 6) Mitarbeiter.
-            $employees = AssetEmployee::where('team_id', $teamId)->delete();
+            // 6) Asset-Träger (ADR 0017).
+            $holders = AssetEmployee::withoutTenantScope()->where('team_id', $teamId)->delete();
 
             // 7) Team-eigene Stammdaten (untereinander nur nullOnDelete-FKs → Reihenfolge unkritisch).
             $deviceModels = AssetDeviceModel::where('team_id', $teamId)->delete();
-            $costCenters  = AssetCostCenter::where('team_id', $teamId)->delete();
-            $companies    = AssetCompany::where('team_id', $teamId)->delete();
-            $vendors      = AssetVendor::where('team_id', $teamId)->delete();
-            $costTypes    = AssetCostType::where('team_id', $teamId)->delete();
+            $costCenters  = AssetCostCenter::withoutTenantScope()->where('team_id', $teamId)->delete();
+            $vendors      = AssetVendor::withoutTenantScope()->where('team_id', $teamId)->delete();
+            $costTypes    = AssetCostType::withoutTenantScope()->where('team_id', $teamId)->delete();
 
             $stats = [
                 'assignments'   => (int) $assignments,
@@ -107,10 +110,9 @@ class AssetResetService
                 'devices'       => (int) $devices,
                 'user_licenses' => (int) $userLicenses,
                 'license_skus'  => (int) $licenseSkus,
-                'employees'     => (int) $employees,
+                'holders'       => (int) $holders,
                 'device_models' => (int) $deviceModels,
                 'cost_centers'  => (int) $costCenters,
-                'companies'     => (int) $companies,
                 'vendors'       => (int) $vendors,
                 'cost_types'    => (int) $costTypes,
             ];

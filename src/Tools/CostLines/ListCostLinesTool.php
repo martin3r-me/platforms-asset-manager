@@ -3,7 +3,9 @@
 namespace Platform\AssetManager\Tools\CostLines;
 
 use Platform\AssetManager\Models\AssetCostLine;
+use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
+use Platform\AssetManager\Tools\Concerns\ResolvesTenant;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -17,6 +19,7 @@ class ListCostLinesTool implements ToolContract, ToolMetadataContract
 {
     use HasStandardGetOperations;
     use ResolvesTeam;
+    use ResolvesTenant;
 
     public function getName(): string
     {
@@ -43,6 +46,15 @@ class ListCostLinesTool implements ToolContract, ToolMetadataContract
             if (!$teamId) {
                 return ToolResult::error('MISSING_TEAM', 'Kein aktives Team im Kontext. Nutze core__context__GET / core__team__switch.');
             }
+
+            // Tenant-Grenze (ADR 0016): Default ist die gespeicherte Auswahl des Users. forceTenant()
+            // setzt den Kontext fuer den Global Scope, damit JEDE Query unten tenant-rein ist, ohne
+            // dass jede einzelne Query angefasst werden muss.
+            [$tenantId, $tenantError] = $this->resolveTenant($arguments, $context, $teamId);
+            if ($tenantError) {
+                return $tenantError;
+            }
+            TenantContext::forceTenant($tenantId);
 
             // Controlling-Schicht (ADR 0008): bei deaktiviertem Controlling sind Kosten/Stammdaten gesperrt.
             if (!app(\Platform\AssetManager\Services\ControllingContext::class)->enabledFor($teamId)) {

@@ -16,8 +16,10 @@ class AssetCostCenterFactory extends Factory
     {
         return [
             'team_id'    => 1,
-            'company_id' => null,
-            // Code ist (team_id, code)-unique → eindeutige numerische Kennung erzeugen.
+            'tenant_id'  => 1,
+            'parent_id'  => null,
+            'depth'      => 0,
+            // Code ist (tenant_id, code)-unique → eindeutige numerische Kennung erzeugen.
             'code'       => (string) $this->faker->unique()->numberBetween(1000, 9999),
             'name'       => strtoupper($this->faker->city()),
             'is_active'  => true,

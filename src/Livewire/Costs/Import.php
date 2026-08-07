@@ -10,6 +10,7 @@ use Platform\AssetManager\Concerns\AuthorizesTeamRole;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Services\CostExcelImportService;
 use Platform\AssetManager\Services\CostResetService;
+use Platform\AssetManager\Services\TenantContext;
 
 class Import extends Component
 {
@@ -88,7 +89,7 @@ class Import extends Component
 
         try {
             $path = $this->file->getRealPath();
-            $this->result = $service->import($this->teamId(), $path, 'excel-upload', $dryRun);
+            $this->result = $service->import($this->teamId(), $path, 'excel-upload', $dryRun, $this->activeTenantId());
         } catch (\Throwable $e) {
             // Rohe Exception-Message ins Server-Log (kann Pfade/interne Details enthalten), dem Nutzer eine
             // generische bzw. handhabbare Meldung zeigen (N8) — keine rohe Exception in die UI.
@@ -113,7 +114,17 @@ class Import extends Component
 
         $this->error       = null;
         $this->result      = null;
-        $this->resetResult = $reset->clearImport($this->teamId());
+        $this->resetResult = $reset->clearImport($this->teamId(), $this->activeTenantId());
+    }
+
+    /**
+     * Tenant, in den Import und Reset wirken (ADR 0016) — der aktuell gewählte Kundenkontext.
+     * Explizit übergeben statt dem Global Scope überlassen: bei einem Import ist es wichtiger, dass
+     * im Code steht, wo die Zeilen landen, als dass es kurz ist.
+     */
+    protected function activeTenantId(): int
+    {
+        return TenantContext::resolveForWrite($this->teamId(), (int) Auth::id());
     }
 
     public function render()

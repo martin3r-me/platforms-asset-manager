@@ -265,10 +265,11 @@ class Index extends Component
             ->orderBy('display_name')
             ->get(['id', 'sku_id', 'sku_part_number', 'display_name']);
 
+        // Baum-Reihenfolge (docs/adr/0016): oberste Knoten nach sort_order, darunter nach Code.
         $costCenters = AssetCostCenter::where('team_id', $teamId)
-            ->orderBy('company_id')
+            ->orderBy('sort_order')
             ->orderBy('code')
-            ->get(['id', 'code', 'name']);
+            ->get(['id', 'code', 'name', 'parent_id', 'depth']);
 
         // --- Rechtes Detail-Panel: gewählter Mitarbeiter + Zähler + Monatskosten ---
         $selectedEmployee = null;

@@ -13,6 +13,7 @@ use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetUserLicense;
+use Platform\AssetManager\Support\DeviceCostResolver;
 
 class CostAggregationService
 {
@@ -473,35 +474,18 @@ class CostAggregationService
 
         $ccByUpn = AssetEmployee::where('team_id', $teamId)->pluck('cost_center_id', 'user_principal_name');
 
-        // Modelle nach normalisiertem Schlüssel. Kollisionen (mehrere Modelle → selber Key, z. B. "HP" vs
-        // "hp ") erkennen und WARNEN statt still den letzten zu behalten (sonst evtl. falscher Modell-Preis
-        // fürs Gerät). Deterministisch das Modell mit hinterlegtem Preis/Kostenart wählen, sonst kleinste id.
-        $models = AssetDeviceModel::where('team_id', $teamId)->get()
-            ->groupBy(fn ($m) => $this->deviceModelKey($m->manufacturer, $m->model))
-            ->map(function ($group, $key) use ($teamId) {
-                if ($group->count() > 1) {
-                    Log::warning('AssetManager: Geräte-Modell-Schlüsselkollision — mehrere Modelle normalisieren auf denselben Schlüssel', [
-                        'team_id' => $teamId,
-                        'key'     => $key,
-                        'models'  => $group->map(fn ($m) => ['id' => $m->id, 'manufacturer' => $m->manufacturer, 'model' => $m->model])->values()->all(),
-                    ]);
-                }
-                return $group->first(fn ($m) => $m->cost_type_id !== null || $m->monthly_cost !== null || $m->purchase_price !== null)
-                    ?? $group->sortBy('id')->first();
-            });
+        // Katalog + tenant-eigene Modell-Kosten einmal vorladen. Der Resolver kapselt auch die
+        // Behandlung von Schlüsselkollisionen (mehrere Modelle → selber normalisierter Key).
+        $resolver = DeviceCostResolver::for($teamId);
 
         return $this->deviceCostRowsCache[$teamId] = AssetDevice::where('team_id', $teamId)->get()
-            ->map(function ($d) use ($deviceTypeIds, $models, $ccByUpn) {
-                $model  = $models[$this->deviceModelKey($d->manufacturer, $d->model)] ?? null;
-                $typeId = $d->cost_type_id ?? $model?->cost_type_id;
+            ->map(function ($d) use ($deviceTypeIds, $resolver, $ccByUpn) {
+                $typeId = $resolver->costTypeId($d);
                 if (!$typeId || !$deviceTypeIds->contains((int) $typeId)) {
                     return null;
                 }
 
-                $amount = AssetDevice::computeMonthlyFrom($d->monthly_cost, $d->purchase_price, $d->depreciation_months, $d->purchase_date);
-                if ($amount === null && $model) {
-                    $amount = AssetDevice::computeMonthlyFrom($model->monthly_cost, $model->purchase_price, $model->depreciation_months, null);
-                }
+                $amount = $resolver->monthlyCost($d);
                 if (!$amount || $amount <= 0) {
                     return null;
                 }
@@ -667,6 +651,7 @@ class CostAggregationService
                 'code'           => $node->code,
                 'name'           => $node->name,
                 'depth'          => (int) $node->depth,
+                'parent_code'    => $node->parent_id ? ($nodes->firstWhere('id', $node->parent_id)?->code ?? '') : '',
                 'has_children'   => ($childIds[(int) $node->id] ?? collect())->isNotEmpty(),
                 'cells'          => $cells,
                 'rowTotal'       => round($rowTotal, 2),
@@ -693,6 +678,7 @@ class CostAggregationService
                 'code'           => '—',
                 'name'           => 'Ohne Kostenstelle',
                 'depth'          => 0,
+                'parent_code'    => '',
                 'has_children'   => false,
                 'cells'          => $cells,
                 'rowTotal'       => round($rowTotal, 2),
@@ -729,6 +715,7 @@ class CostAggregationService
                 'code'           => '?',
                 'name'           => 'Unbekannte Kostenstelle',
                 'depth'          => 0,
+                'parent_code'    => '',
                 'has_children'   => false,
                 'cells'          => $cells,
                 'rowTotal'       => round($rowTotal, 2),

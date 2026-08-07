@@ -6,7 +6,9 @@ use Platform\AssetManager\Jobs\ImportTenantUsersJob;
 use Platform\AssetManager\Jobs\SyncLicensesJob;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Services\AssetDeviceService;
+use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
+use Platform\AssetManager\Tools\Concerns\ResolvesTenant;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -20,6 +22,7 @@ use Illuminate\Support\Facades\Gate;
 class TriggerSyncTool implements ToolContract, ToolMetadataContract
 {
     use ResolvesTeam;
+    use ResolvesTenant;
 
     private const TARGETS = ['devices', 'licenses', 'users'];
 
@@ -40,10 +43,10 @@ class TriggerSyncTool implements ToolContract, ToolMetadataContract
     {
         return [
             'type'       => 'object',
-            'properties' => [
+            'properties' => array_merge([
                 'target'  => ['type' => 'string', 'enum' => self::TARGETS, 'description' => 'Was synchronisiert wird (erforderlich).'],
                 'dry_run' => ['type' => 'boolean', 'description' => 'Nur prüfen, nicht starten (Default false).'],
-            ],
+            ], $this->tenantSchemaProperty()),
             'required' => ['target'],
         ];
     }
@@ -55,6 +58,15 @@ class TriggerSyncTool implements ToolContract, ToolMetadataContract
             if (!$teamId) {
                 return ToolResult::error('MISSING_TEAM', 'Kein aktives Team im Kontext. Nutze core__context__GET / core__team__switch.');
             }
+
+            // Tenant-Grenze (ADR 0016): Default ist die gespeicherte Auswahl des Users. forceTenant()
+            // setzt den Kontext fuer den Global Scope, damit JEDE Query unten tenant-rein ist, ohne
+            // dass jede einzelne Query angefasst werden muss.
+            [$tenantId, $tenantError] = $this->resolveTenant($arguments, $context, $teamId);
+            if ($tenantError) {
+                return $tenantError;
+            }
+            TenantContext::forceTenant($tenantId);
 
             $target = (string) ($arguments['target'] ?? '');
             if (!in_array($target, self::TARGETS, true)) {

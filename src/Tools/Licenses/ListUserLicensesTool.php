@@ -6,7 +6,9 @@ use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetTenant;
 use Platform\AssetManager\Models\AssetUserLicense;
+use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
+use Platform\AssetManager\Tools\Concerns\ResolvesTenant;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -25,6 +27,7 @@ use Platform\Core\Contracts\ToolResult;
 class ListUserLicensesTool implements ToolContract, ToolMetadataContract
 {
     use ResolvesTeam;
+    use ResolvesTenant;
 
     /**
      * Listen-Obergrenze (verhindert riesige Antworten; `truncated` meldet, wenn gekürzt wurde).
@@ -54,7 +57,7 @@ class ListUserLicensesTool implements ToolContract, ToolMetadataContract
     {
         return [
             'type'       => 'object',
-            'properties' => [
+            'properties' => array_merge([
                 'tenant_id' => [
                     'type'        => 'integer',
                     'description' => 'Optional: nur Lizenz-User dieses Tenants. Gültige IDs siehe "tenants" in der Antwort. Ohne = alle Tenants des Teams.',
@@ -72,7 +75,7 @@ class ListUserLicensesTool implements ToolContract, ToolMetadataContract
                     'enum'        => ['all', 'matched', 'unmatched', 'inactive'],
                     'description' => 'Optional (Default all): matched = aktiver Mitarbeiter zur UPN, unmatched = kein Mitarbeiter-Datensatz zur UPN, inactive = Mitarbeiter vorhanden aber is_active=false.',
                 ],
-            ],
+            ], $this->tenantSchemaProperty()),
             'required' => [],
         ];
     }
@@ -84,6 +87,15 @@ class ListUserLicensesTool implements ToolContract, ToolMetadataContract
             if (!$teamId) {
                 return ToolResult::error('MISSING_TEAM', 'Kein aktives Team im Kontext. Nutze core__context__GET / core__team__switch.');
             }
+
+            // Tenant-Grenze (ADR 0016): Default ist die gespeicherte Auswahl des Users. forceTenant()
+            // setzt den Kontext fuer den Global Scope, damit JEDE Query unten tenant-rein ist, ohne
+            // dass jede einzelne Query angefasst werden muss.
+            [$tenantId, $tenantError] = $this->resolveTenant($arguments, $context, $teamId);
+            if ($tenantError) {
+                return $tenantError;
+            }
+            TenantContext::forceTenant($tenantId);
 
             $tenants = AssetTenant::where('team_id', $teamId)
                 ->orderByDesc('is_default')->orderBy('name')

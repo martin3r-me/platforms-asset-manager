@@ -8,7 +8,9 @@ use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetVendor;
+use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
+use Platform\AssetManager\Tools\Concerns\ResolvesTenant;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -24,6 +26,7 @@ use Platform\Core\Contracts\ToolResult;
 class CreateCostLineTool implements ToolContract, ToolMetadataContract
 {
     use ResolvesTeam;
+    use ResolvesTenant;
 
     private const FREQUENCIES = ['monthly', 'quarterly', 'yearly', 'once'];
 
@@ -45,7 +48,7 @@ class CreateCostLineTool implements ToolContract, ToolMetadataContract
     {
         return [
             'type'       => 'object',
-            'properties' => [
+            'properties' => array_merge([
                 'cost_type_id'   => ['type' => 'integer', 'description' => 'Kostenart-ID (aggregation_source=cost_line). Erforderlich.'],
                 'amount'         => ['type' => 'number', 'description' => 'Betrag in der angegebenen Frequenz/Währung. Erforderlich.'],
                 'frequency'      => ['type' => 'string', 'enum' => self::FREQUENCIES, 'description' => 'Frequenz. Erforderlich.'],
@@ -57,7 +60,7 @@ class CreateCostLineTool implements ToolContract, ToolMetadataContract
                 'assignee_id'    => ['type' => 'integer', 'description' => 'Mitarbeiter-ID (Team).'],
                 'valid_from'     => ['type' => 'string', 'description' => 'Gültig ab YYYY-MM-DD.'],
                 'valid_to'       => ['type' => 'string', 'description' => 'Gültig bis YYYY-MM-DD.'],
-            ],
+            ], $this->tenantSchemaProperty()),
             'required' => ['cost_type_id', 'amount', 'frequency'],
         ];
     }
@@ -69,6 +72,15 @@ class CreateCostLineTool implements ToolContract, ToolMetadataContract
             if (!$teamId) {
                 return ToolResult::error('MISSING_TEAM', 'Kein aktives Team im Kontext. Nutze core__context__GET / core__team__switch.');
             }
+
+            // Tenant-Grenze (ADR 0016): Default ist die gespeicherte Auswahl des Users. forceTenant()
+            // setzt den Kontext fuer den Global Scope, damit JEDE Query unten tenant-rein ist, ohne
+            // dass jede einzelne Query angefasst werden muss.
+            [$tenantId, $tenantError] = $this->resolveTenant($arguments, $context, $teamId);
+            if ($tenantError) {
+                return $tenantError;
+            }
+            TenantContext::forceTenant($tenantId);
 
             // Controlling-Schicht (ADR 0008): bei deaktiviertem Controlling sind Kosten/Stammdaten gesperrt.
             if (!app(\Platform\AssetManager\Services\ControllingContext::class)->enabledFor($teamId)) {

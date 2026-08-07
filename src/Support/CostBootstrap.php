@@ -10,9 +10,14 @@ use Platform\AssetManager\Models\AssetCostType;
  * Zwei klar getrennte Sets:
  *  - NEUTRAL_COST_TYPES: firmen-agnostische Erst-Defaults für JEDES neue Team (kein Firmenname,
  *    kein Vendor, kein Buchungssystem). Wird von seedForTeam() angelegt.
- *  - COMPANIES / COST_CENTER_COMPANY / COST_TYPES / VENDORS: BROICH-spezifisches Set (abgeleitet aus
- *    Kostenaufteilung_IT.xlsx). NUR opt-in über seedBroichDefaults() bzw. den BROICH-Excel-Import —
+ *  - COST_CENTER_GROUPS / COST_CENTER_PARENT / COST_TYPES / VENDORS: BROICH-spezifisches Set (abgeleitet
+ *    aus Kostenaufteilung_IT.xlsx). NUR opt-in über seedBroichDefaults() bzw. den BROICH-Excel-Import —
  *    fließt nie automatisch in fremde Teams (Multi-Tenant).
+ *
+ * Seit docs/adr/0016 legt der Bootstrap einen **Kostenstellen-Baum** an statt eines Flach-Mappings auf
+ * eine separate Gesellschafts-Tabelle: die früheren „Gesellschaften" sind jetzt die Wurzelknoten von
+ * `asset_cost_centers`, die Kostenstellen ihre Kinder. Beliebige Tiefe möglich — das Set unten nutzt
+ * zwei Ebenen, weil die Excel-Vorlage nur zwei kannte.
  */
 class CostBootstrap
 {
@@ -31,8 +36,11 @@ class CostBootstrap
         ['key' => 'telefonie',    'name' => 'Telefonie',      'vendor' => null, 'system' => null, 'frequency' => 'monthly', 'per_employee' => false, 'aggregation_source' => AssetCostType::SOURCE_COST_LINE,    'allow_negative' => false],
     ];
 
-    /** Gesellschaften: slug => Anzeigename (Reihenfolge wie in der Excel-Pivot). */
-    public const COMPANIES = [
+    /**
+     * Gruppen-Knoten des Kostenstellen-Baums: code => Anzeigename (Reihenfolge wie in der Excel-Pivot).
+     * Werden als **Wurzelknoten** in `asset_cost_centers` angelegt (früher: `asset_companies`).
+     */
+    public const COST_CENTER_GROUPS = [
         'gf-gl'       => 'BROICH - GF GL',
         'verwaltung'  => 'BROICH - VERWALTUNG',
         'rhein-ruhr'  => 'BROICH - RHEIN RUHR',
@@ -43,8 +51,11 @@ class CostBootstrap
         'efp'         => 'EFP',
     ];
 
-    /** Kostenstelle (Code als String) => Gesellschaft-Slug. */
-    public const COST_CENTER_COMPANY = [
+    /** @deprecated Verwende {@see COST_CENTER_GROUPS} — „Gesellschaft" ist im Baum aufgegangen. */
+    public const COMPANIES = self::COST_CENTER_GROUPS;
+
+    /** Kostenstelle (Code als String) => Code des Eltern-Knotens. */
+    public const COST_CENTER_PARENT = [
         '1000' => 'gf-gl',
         '1900' => 'gf-gl',
 
@@ -141,13 +152,20 @@ class CostBootstrap
     ];
 
     /**
-     * Gibt den Gesellschaft-Slug für eine Kostenstelle zurück (oder null wenn unbekannt).
+     * Code des Eltern-Knotens für eine Kostenstelle (oder null, wenn unbekannt → bleibt Wurzel).
      */
-    public static function companyForCostCenter(?string $code): ?string
+    public static function parentForCostCenter(?string $code): ?string
     {
         if ($code === null) {
             return null;
         }
-        return self::COST_CENTER_COMPANY[trim($code)] ?? null;
+
+        return self::COST_CENTER_PARENT[trim($code)] ?? null;
+    }
+
+    /** @deprecated Verwende {@see parentForCostCenter()}. */
+    public static function companyForCostCenter(?string $code): ?string
+    {
+        return self::parentForCostCenter($code);
     }
 }

@@ -107,6 +107,29 @@ class TenantContext
         }
     }
 
+    /**
+     * Tenant-Kontext für den **Rest des Requests** setzen — ohne Callback.
+     *
+     * Für die MCP-Tools: ein Tool-Aufruf ist ein Request, und der Tool-Body ist eine lange
+     * Methode, die sich nicht sinnvoll in einen Callback wickeln lässt. Jedes Tool setzt den
+     * Kontext zu Beginn selbst, deshalb kann ein haftender Override höchstens vom nächsten Tool
+     * überschrieben werden — nie unbemerkt weiterwirken.
+     *
+     * Im Request-/Livewire-Pfad NICHT verwenden: dort löst {@see scopeTenantId()} den Tenant aus der
+     * Auswahl des Users auf, und ein Override würde diese Auflösung stumm übersteuern. Für begrenzte
+     * Abschnitte {@see runFor()} nehmen.
+     */
+    public static function forceTenant(?int $tenantId): void
+    {
+        self::$override = $tenantId;
+    }
+
+    /** Override aufheben — zurück zur Auflösung über die User-Auswahl. */
+    public static function clearOverride(): void
+    {
+        self::$override = false;
+    }
+
     /** Memoisierung verwerfen — nach jedem Wechsel der Auswahl nötig. */
     public static function forget(): void
     {

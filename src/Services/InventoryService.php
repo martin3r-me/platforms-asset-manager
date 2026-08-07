@@ -6,8 +6,8 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Collection;
 use Platform\AssetManager\Models\AssetDevice;
-use Platform\AssetManager\Models\AssetDeviceModel;
 use Platform\AssetManager\Models\AssetItem;
+use Platform\AssetManager\Support\DeviceCostResolver;
 use Platform\AssetManager\Support\InventoryRow;
 
 /**
@@ -23,9 +23,10 @@ class InventoryService
     /**
      * Alle Inventar-Zeilen eines Teams, N+1-frei.
      *
-     * Geräte-Kosten werden NICHT über AssetDevice::resolvedMonthlyCost() je Zeile aufgelöst (das ruft
-     * deviceModel() → ein Query pro Gerät), sondern über die EINMAL vorgeladenen Geräte-Modelle plus die
-     * statische AssetDevice::computeMonthlyFrom() — dieselbe Logik, aber 2 Queries statt N.
+     * Geräte-Kosten werden NICHT über AssetDevice::resolvedMonthlyCost() je Zeile aufgelöst (das baut
+     * je Gerät einen eigenen Resolver), sondern über EINEN vorgeladenen {@see DeviceCostResolver} —
+     * dieselbe Logik, aber 2 Queries statt N. Der Resolver kennt die tenant-eigenen Modell-Kosten
+     * (docs/adr/0016).
      */
     public function rows(int $teamId, ?int $tenantId = null): Collection
     {
@@ -35,39 +36,14 @@ class InventoryService
             ->get()
             ->map(fn (AssetItem $item) => InventoryRow::fromItem($item));
 
-        // Geräte-Modelle einmal laden und nach normalisiertem (Hersteller|Modell)-Schlüssel ablegen.
-        $modelByKey = [];
-        foreach (AssetDeviceModel::where('team_id', $teamId)->get() as $model) {
-            $modelByKey[AssetDeviceModel::normalizeKey($model->manufacturer, $model->model)] = $model;
-        }
+        // Katalog + tenant-eigene Modell-Kosten EINMAL vorladen (statt je Gerät).
+        $resolver = DeviceCostResolver::for($teamId, $tenantId);
 
         $devices = AssetDevice::with('costCenter')
             ->where('team_id', $teamId)
             ->forTenant($tenantId)
             ->get()
-            ->map(function (AssetDevice $device) use ($modelByKey) {
-                $monthly = AssetDevice::computeMonthlyFrom(
-                    $device->monthly_cost,
-                    $device->purchase_price,
-                    $device->depreciation_months,
-                    $device->purchase_date,
-                );
-
-                if ($monthly === null) {
-                    $key   = AssetDeviceModel::normalizeKey($device->manufacturer, $device->model);
-                    $model = $modelByKey[$key] ?? null;
-                    if ($model) {
-                        $monthly = AssetDevice::computeMonthlyFrom(
-                            $model->monthly_cost,
-                            $model->purchase_price,
-                            $model->depreciation_months,
-                            null,
-                        );
-                    }
-                }
-
-                return InventoryRow::fromDevice($device, $monthly ?? 0.0);
-            });
+            ->map(fn (AssetDevice $device) => InventoryRow::fromDevice($device, $resolver->monthlyCost($device)));
 
         return $items->concat($devices)->values();
     }

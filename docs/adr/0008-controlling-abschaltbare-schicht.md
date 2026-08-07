@@ -1,6 +1,20 @@
-# Controlling als abschaltbare, team-weite Schicht
+# Controlling als abschaltbare Schicht
 
-Status: akzeptiert (beschlossen 2026-06-22, Umsetzung steht aus)
+Status: akzeptiert (beschlossen 2026-06-22) — **Geltungsbereich geändert durch
+[ADR 0016](0016-tenant-als-zugriffsgrenze.md)** (2026-08-07)
+
+> ⚠️ **Der Schalter ist seit ADR 0016 tenant-eigen, nicht mehr team-weit.** Die Begründung „pro Team,
+> nicht pro Tenant — die Kostendaten sind gar nicht tenant-getrennt" ist entfallen: sie **sind** es
+> jetzt (`tenant_id` NOT NULL auf allen Kostentabellen). Damit wird der per-Tenant-Schalter von der
+> Inkohärenz zur Notwendigkeit — derselbe Betreuer kann für einen Kunden Kosten führen und für den
+> nächsten nur das Inventar. `asset_team_settings` trägt `tenant_id`, `ControllingContext::enabledFor()`
+> nimmt Team **und** Tenant. Der Bestand wurde je Tenant kopiert, für vorhandene Teams ändert sich
+> nichts. Ohne auflösbaren Tenant (Console/Job über alle Tenants) gilt „an", sobald irgendein Tenant
+> des Teams Controlling nutzt — sonst würden tenant-übergreifende Läufe Kostenpfade überspringen,
+> obwohl Kostendaten existieren.
+>
+> **Alles andere bleibt gültig**: Default AUS, Gate-Umfang, „Präsentations-Gate, kein Daten-Gate",
+> `CONTROLLING_DISABLED` in den MCP-Tools, manuelles Seeding, Geräte-Modelle als IT-Kern.
 
 Kontext: Das Kostenmodell ist stark BROICH-spezifisch (ADR 0001) und bewusst **team-weit, aus dem Multi-Tenant-Scope ausgeklammert** (ADR 0003). Der universelle Kern des Moduls ist der **IT-Asset-/Geräte-Lifecycle** (Zielnutzer: IT-Administration). Ein Team ohne Controlling-Bedarf soll die Kosten-/Buchhaltungs-Flächen nicht sehen, ohne dass das Inventar darunter leidet.
 
@@ -15,5 +29,5 @@ Der Schalter ist ein **Präsentations-/Zugriffs-Gate, kein Daten-Gate**:
 
 ## Bewusste Abgrenzungen / Trade-offs
 
-- **Pro Team, nicht pro Tenant** — konsistent mit ADR 0003 (Kosten sind team-weit, ignorieren den aktiven Tenant). Ein per-Tenant-Schalter wäre inkohärent, da die Kostendaten gar nicht tenant-getrennt sind.
+- ~~**Pro Team, nicht pro Tenant** — konsistent mit ADR 0003 (Kosten sind team-weit, ignorieren den aktiven Tenant). Ein per-Tenant-Schalter wäre inkohärent, da die Kostendaten gar nicht tenant-getrennt sind.~~ → **abgelöst durch [ADR 0016](0016-tenant-als-zugriffsgrenze.md)**: die Kostendaten sind tenant-getrennt, also ist der Schalter pro **Team × Tenant**.
 - Die gerenderte Sidebar ist hartcodiert im Blade (`config('asset-manager.sidebar')` ist ungenutzte Alt-Doku) → das Gating erfolgt im Blade **und** an den Routen **und** an den MCP-Tools, nicht über die Config.

@@ -59,7 +59,12 @@
                     </thead>
                     <tbody class="divide-y divide-[color:var(--am-border)]">
                         @forelse($models as $m)
-                            @php $hasPrice = $m->monthly_cost || ($m->purchase_price && $m->depreciation_months); @endphp
+                            @php
+                                // Kosten liegen tenant-scoped in der cost-Relation (ADR 0016);
+                                // die Nutzungsdauer bleibt am Modell.
+                                $cost     = $m->cost;
+                                $hasPrice = $cost?->monthly_cost || ($cost?->purchase_price && $m->depreciation_months);
+                            @endphp
                             <tr class="hover:bg-[var(--am-bg)]" wire:key="dm-{{ $m->id }}">
                                 @if($editId === $m->id)
                                     <td class="px-4 py-2 text-[var(--am-text-secondary)]">{{ $m->manufacturer ?: '—' }}</td>
@@ -92,15 +97,15 @@
                                     <td class="px-4 py-2.5 text-[var(--am-text-secondary)]">{{ $m->manufacturer ?: '—' }}</td>
                                     <td class="px-4 py-2.5 font-medium text-[var(--am-text)]">
                                         {{ $m->model ?: '—' }}
-                                        @if($hasPrice && !$m->cost_type_id)
+                                        @if($hasPrice && !$cost?->cost_type_id)
                                             <x-asset-manager-badge color="amber" size="xs" class="ml-1" title="Preis ohne Kostenart fließt nicht in den Pivot">keine Kostenart</x-asset-manager-badge>
                                         @endif
                                     </td>
                                     <td class="px-4 py-2.5 text-right text-xs text-[var(--am-text-secondary)]">{{ $m->device_count }}</td>
-                                    <td class="px-4 py-2.5 text-right tabular-nums text-[var(--am-text-secondary)]">{{ $m->monthly_cost ? number_format((float) $m->monthly_cost, 2, ',', '.') . ' €' : '—' }}</td>
-                                    <td class="px-4 py-2.5 text-right tabular-nums text-[var(--am-text-secondary)]">{{ ($m->purchase_price && $m->depreciation_months) ? number_format((float) $m->purchase_price, 2, ',', '.') . ' € / ' . $m->depreciation_months . ' M' : '—' }}</td>
-                                    <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">{{ $m->costType?->name ?? '—' }}</td>
-                                    <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">{{ $m->vendor?->name ?? '—' }}</td>
+                                    <td class="px-4 py-2.5 text-right tabular-nums text-[var(--am-text-secondary)]">{{ $cost?->monthly_cost ? number_format((float) $cost->monthly_cost, 2, ',', '.') . ' €' : '—' }}</td>
+                                    <td class="px-4 py-2.5 text-right tabular-nums text-[var(--am-text-secondary)]">{{ ($cost?->purchase_price && $m->depreciation_months) ? number_format((float) $cost->purchase_price, 2, ',', '.') . ' € / ' . $m->depreciation_months . ' M' : '—' }}</td>
+                                    <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">{{ $cost?->costType?->name ?? '—' }}</td>
+                                    <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">{{ $cost?->vendor?->name ?? '—' }}</td>
                                     <td class="px-4 py-2.5 text-right whitespace-nowrap">
                                         @if($canManage)
                                             <button wire:click="edit({{ $m->id }})" class="text-xs text-[var(--am-text-secondary)] hover:text-[var(--am-accent)]">@svg('heroicon-o-pencil-square', 'w-4 h-4 inline')</button>

@@ -3,7 +3,6 @@
 namespace Platform\AssetManager\Livewire\MasterData;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -11,20 +10,25 @@ use Livewire\Attributes\Computed;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
-use Platform\AssetManager\Models\AssetCompany;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetVendor;
 use Platform\AssetManager\Services\CostAggregationService;
 use Platform\AssetManager\Services\CostBootstrapService;
+use Platform\AssetManager\Services\TenantContext;
 
 /**
- * Stammdaten-Sammelseite mit Master-Detail-Layout (wie Geräte/Mitarbeiter):
+ * Stammdaten-Sammelseite mit Master-Detail-Layout (wie Geräte/Asset-Träger):
  * links Bereichs-Navigation + Filter, Mitte read-only Liste des aktiven Bereichs,
- * rechts das Bearbeiten-/Anlegen-Panel. Eine Komponente besitzt alle vier
- * kostenaufteilungs-relevanten Stammdaten (Gesellschaften, Kostenstellen,
- * Kostenarten, Kreditoren) inkl. CRUD — die Slots von <x-ui-page> lassen sich
- * nicht aus verschachtelten Kind-Komponenten bespielen.
+ * rechts das Bearbeiten-/Anlegen-Panel. Eine Komponente besitzt alle drei
+ * kostenaufteilungs-relevanten Stammdaten-Bereiche (Kostenstellen, Kostenarten,
+ * Kreditoren) inkl. CRUD — die Slots von <x-ui-page> lassen sich nicht aus
+ * verschachtelten Kind-Komponenten bespielen.
+ *
+ * Seit docs/adr/0016: der Bereich „Gesellschaften" ist entfallen. Gesellschaften sind die
+ * **Wurzelknoten** des Kostenstellen-Baums; die Kostenstellen-Liste zeigt daher einen Baum mit
+ * Einrückung, Umhängen (`moveUnder`) und Reihenfolge je Ebene. Alle Stammdaten gehören dem aktiven
+ * Tenant — der Global Scope filtert, hier steht kein `tenant_id`-Filter mehr im Code.
  */
 class Index extends Component
 {
@@ -32,14 +36,14 @@ class Index extends Component
 
     /** Aktiver Bereich; per #[Url] deep-linkbar (?bereich=...). */
     #[Url(as: 'bereich')]
-    public string $active = 'companies';
+    public string $active = 'cost-centers';
 
     public string $search = '';
 
     // bereichsspezifische Filter
-    public ?int   $filterCompany = null;  // Kostenstellen: nach Gesellschaft
-    public bool   $onlyActive    = false; // Kostenstellen: nur aktive
-    public string $filterSource  = '';    // Kostenarten: nach Quelle (aggregation_source)
+    public ?int   $filterParent = null;  // Kostenstellen: Teilbaum unter diesem Knoten
+    public bool   $onlyActive   = false; // Kostenstellen: nur aktive
+    public string $filterSource = '';    // Kostenarten: nach Quelle (aggregation_source)
 
     // Auswahl / Bearbeiten (rechtes Panel)
     public ?int  $selectedId = null;
@@ -52,15 +56,17 @@ class Index extends Component
 
     public ?string $flash = null;
 
-    protected const AREAS = ['companies', 'cost-centers', 'cost-types', 'vendors'];
+    protected const AREAS = ['cost-centers', 'cost-types', 'vendors'];
 
     /** Whitelist erlaubter Sortierspalten für Kostenarten (Schutz vor beliebigem orderBy). */
     protected const CT_SORTABLE = ['sort_order', 'name', 'frequency_default', 'aggregation_source', 'cost_lines_count'];
 
     public function mount(): void
     {
+        // 'companies' war bis ADR 0016 ein eigener Bereich — alte Deep-Links (?bereich=companies)
+        // landen jetzt auf dem Kostenstellen-Baum, in dem die Gesellschaften aufgegangen sind.
         if (! in_array($this->active, self::AREAS, true)) {
-            $this->active = 'companies';
+            $this->active = 'cost-centers';
         }
     }
 
@@ -72,7 +78,7 @@ class Index extends Component
             return;
         }
         $this->active = $area;
-        $this->reset(['search', 'filterCompany', 'onlyActive', 'filterSource']);
+        $this->reset(['search', 'filterParent', 'onlyActive', 'filterSource']);
         $this->resetSelection();
         $this->flash = null;
     }
@@ -114,7 +120,6 @@ class Index extends Component
     protected function modelClass(): string
     {
         return match ($this->active) {
-            'companies'    => AssetCompany::class,
             'cost-centers' => AssetCostCenter::class,
             'cost-types'   => AssetCostType::class,
             'vendors'      => AssetVendor::class,
@@ -125,14 +130,15 @@ class Index extends Component
     {
         $class = $this->modelClass();
 
+        // Team-Check bleibt; der Tenant-Filter kommt vom Global Scope (ADR 0016) → ein Datensatz
+        // eines fremden Tenants ist hier nicht auffindbar und läuft in findOrFail (404).
         return $class::where('team_id', $this->teamId())->findOrFail($id);
     }
 
     protected function blankForm(): array
     {
         return match ($this->active) {
-            'companies'    => ['name' => '', 'sort_order' => null],
-            'cost-centers' => ['code' => '', 'name' => '', 'company_id' => null, 'is_active' => true],
+            'cost-centers' => ['code' => '', 'name' => '', 'parent_id' => null, 'is_active' => true],
             'cost-types'   => ['name' => '', 'vendor_default_id' => null, 'system_default' => '', 'frequency_default' => 'monthly', 'aggregation_source' => AssetCostType::SOURCE_COST_LINE, 'is_per_employee' => false],
             'vendors'      => ['name' => '', 'creditor_no' => ''],
         };
@@ -141,8 +147,7 @@ class Index extends Component
     protected function formFromModel(Model $m): array
     {
         return match ($this->active) {
-            'companies'    => ['name' => $m->name, 'sort_order' => $m->sort_order],
-            'cost-centers' => ['code' => $m->code, 'name' => $m->name ?? '', 'company_id' => $m->company_id, 'is_active' => (bool) $m->is_active],
+            'cost-centers' => ['code' => $m->code, 'name' => $m->name ?? '', 'parent_id' => $m->parent_id, 'is_active' => (bool) $m->is_active],
             'cost-types'   => ['name' => $m->name, 'vendor_default_id' => $m->vendor_default_id, 'system_default' => $m->system_default ?? '', 'frequency_default' => $m->frequency_default, 'aggregation_source' => $m->aggregation_source, 'is_per_employee' => (bool) $m->is_per_employee],
             'vendors'      => ['name' => $m->name, 'creditor_no' => $m->creditor_no ?? ''],
         };
@@ -153,17 +158,17 @@ class Index extends Component
     protected function rulesFor(string $area): array
     {
         return match ($area) {
-            'companies' => [
-                'form.name'       => 'required|string|max:255',
-                'form.sort_order' => 'nullable',
-            ],
             'cost-centers' => [
-                'form.code'       => 'required|string|max:50',
-                'form.name'       => 'nullable|string|max:255',
-                // company_id muss zum eigenen Team gehören (kein fremder/danglender FK, der die
-                // Kostenstelle aus dem Pivot fallen lassen würde — s. costCenterByType-Auffangblock).
-                'form.company_id' => ['nullable', 'integer', Rule::exists('asset_companies', 'id')->where('team_id', $this->teamId())],
-                'form.is_active'  => 'boolean',
+                'form.code' => 'required|string|max:50',
+                'form.name' => 'nullable|string|max:255',
+                // parent_id muss eine Kostenstelle DESSELBEN Tenants sein (kein tenant-fremder oder
+                // danglender FK, der den Knoten aus dem Pivot-Baum fallen lassen würde — siehe den
+                // Auffangblock „Unbekannte Kostenstelle" in costCenterByType).
+                'form.parent_id' => [
+                    'nullable', 'integer',
+                    Rule::exists('asset_cost_centers', 'id')->where('tenant_id', $this->activeTenantId()),
+                ],
+                'form.is_active' => 'boolean',
             ],
             'cost-types' => [
                 'form.name'               => 'required|string|max:255',
@@ -187,22 +192,21 @@ class Index extends Component
         Gate::authorize('asset-manager.manage');
 
         // Leeren Select-Wert ('') zu null normalisieren, damit nullable|integer|exists greift
-        // (ein '' würde sonst an der integer-Regel scheitern, obwohl „keine Gesellschaft" gültig ist).
-        if (array_key_exists('company_id', $this->form) && $this->form['company_id'] === '') {
-            $this->form['company_id'] = null;
+        // (ein '' würde sonst an der integer-Regel scheitern, obwohl „kein Eltern-Knoten" gültig ist).
+        if (array_key_exists('parent_id', $this->form) && $this->form['parent_id'] === '') {
+            $this->form['parent_id'] = null;
         }
 
         $this->validate($this->rulesFor($this->active));
 
-        // Single-Source-Guard: pro Team nur EINE hardware_afa- bzw. ms_license-Kostenart. normalizedLines
-        // nutzt firstWhere(aggregation_source) → eine zweite würde stillschweigend nie ausgewertet. Bei
-        // Verstoß abbrechen (Panel bleibt offen). asset_device ist erlaubt (Aggregation nutzt pluck).
+        // Single-Source-Guard: pro Tenant nur EINE hardware_afa- bzw. ms_license-Kostenart.
+        // normalizedLines nutzt firstWhere(aggregation_source) → eine zweite würde stillschweigend
+        // nie ausgewertet. Bei Verstoß abbrechen (Panel bleibt offen). asset_device ist erlaubt.
         if ($this->active === 'cost-types' && ! $this->assertSingleSourceCostType()) {
             return;
         }
 
         match ($this->active) {
-            'companies'    => $this->saveCompany(),
             'cost-centers' => $this->saveCostCenter(),
             'cost-types'   => $this->saveCostType(),
             'vendors'      => $this->saveVendor(),
@@ -211,7 +215,7 @@ class Index extends Component
         $this->resetSelection();
     }
 
-    /** Verhindert eine zweite hardware_afa/ms_license-Kostenart pro Team. false = Verstoß (mit Flash). */
+    /** Verhindert eine zweite hardware_afa/ms_license-Kostenart pro Tenant. false = Verstoß (mit Flash). */
     protected function assertSingleSourceCostType(): bool
     {
         $source = $this->form['aggregation_source'] ?? null;
@@ -225,64 +229,52 @@ class Index extends Component
             ->exists();
 
         if ($exists) {
-            $this->flash = "Es gibt bereits eine Kostenart mit Quelle '{$source}'. Pro Team ist nur EINE {$source}-Kostenart zulässig (eine zweite würde nie ausgewertet) — bitte die bestehende bearbeiten.";
+            $this->flash = "Es gibt bereits eine Kostenart mit Quelle '{$source}'. Pro Tenant ist nur EINE {$source}-Kostenart zulässig (eine zweite würde nie ausgewertet) — bitte die bestehende bearbeiten.";
+
             return false;
         }
 
         return true;
     }
 
-    protected function saveCompany(): void
-    {
-        $teamId  = $this->teamId();
-        $name    = trim((string) $this->form['name']);
-        $sortRaw = $this->form['sort_order'] ?? null;
-        $sort    = ($sortRaw === null || $sortRaw === '') ? null : (int) $sortRaw;
-
-        if ($this->selectedId) {
-            $co = AssetCompany::where('team_id', $teamId)->findOrFail($this->selectedId);
-            $co->update([
-                'name'       => $name,
-                'sort_order' => $sort ?? 100,
-            ]);
-            $this->flash = 'Gesellschaft gespeichert.';
-
-            return;
-        }
-
-        AssetCompany::create([
-            'team_id'    => $teamId,
-            'key'        => $this->uniqueCompanyKey($teamId, $name),
-            'name'       => $name,
-            'sort_order' => $sort ?? (int) ((AssetCompany::where('team_id', $teamId)->max('sort_order') ?? 0) + 10),
-        ]);
-        $this->flash = 'Gesellschaft angelegt.';
-    }
-
     protected function saveCostCenter(): void
     {
-        $teamId = $this->teamId();
+        $teamId   = $this->teamId();
+        $parentId = $this->form['parent_id'] ?: null;
 
         if ($this->selectedId) {
             $cc = AssetCostCenter::where('team_id', $teamId)->findOrFail($this->selectedId);
+
+            // Umhängen prüfen: sich selbst oder einen eigenen Nachfahren als Eltern zu setzen würde
+            // einen Zyklus erzeugen und Rollup wie Baum-Ausgabe in eine Endlosschleife schicken.
+            if ($parentId !== (int) $cc->parent_id && ! $cc->canMoveUnder($parentId)) {
+                $this->flash = 'Diese Einordnung würde einen Zyklus erzeugen (der Ziel-Knoten liegt unterhalb dieser Kostenstelle) — bitte einen anderen Eltern-Knoten wählen.';
+
+                return;
+            }
+
             $cc->update([
-                'name'       => ($this->form['name'] ?? '') ?: null,
-                'company_id' => $this->form['company_id'] ?: null,
-                'is_active'  => (bool) ($this->form['is_active'] ?? true),
+                'name'      => ($this->form['name'] ?? '') ?: null,
+                'parent_id' => $parentId,
+                'is_active' => (bool) ($this->form['is_active'] ?? true),
             ]);
+
+            $this->recomputeSubtreeDepths($cc);
             $this->flash = 'Kostenstelle gespeichert.';
 
             return;
         }
 
-        AssetCostCenter::firstOrCreate(
-            ['team_id' => $teamId, 'code' => trim((string) $this->form['code'])],
+        $center = AssetCostCenter::firstOrCreate(
+            ['team_id' => $teamId, 'tenant_id' => $this->activeTenantId(), 'code' => trim((string) $this->form['code'])],
             [
-                'name'       => ($this->form['name'] ?? '') ?: null,
-                'company_id' => $this->form['company_id'] ?: null,
-                'is_active'  => (bool) ($this->form['is_active'] ?? true),
+                'name'      => ($this->form['name'] ?? '') ?: null,
+                'parent_id' => $parentId,
+                'is_active' => (bool) ($this->form['is_active'] ?? true),
             ]
         );
+
+        $center->recomputeDepth();
         $this->flash = 'Kostenstelle angelegt.';
     }
 
@@ -310,7 +302,8 @@ class Index extends Component
 
         AssetCostType::create(array_merge($attrs, [
             'team_id'    => $teamId,
-            'key'        => $this->uniqueCostTypeKey($teamId, $name),
+            'tenant_id'  => $this->activeTenantId(),
+            'key'        => $this->uniqueCostTypeKey($name),
             'sort_order' => (int) ((AssetCostType::where('team_id', $teamId)->max('sort_order') ?? 0) + 10),
         ]));
         $this->flash = 'Kostenart angelegt.';
@@ -332,11 +325,55 @@ class Index extends Component
             return;
         }
 
-        $v = AssetVendor::firstOrCreate(
-            ['team_id' => $teamId, 'name' => $name],
+        AssetVendor::firstOrCreate(
+            ['team_id' => $teamId, 'tenant_id' => $this->activeTenantId(), 'name' => $name],
             ['creditor_no' => ($this->form['creditor_no'] ?? '') ?: null]
         );
         $this->flash = 'Kreditor angelegt.';
+    }
+
+    // ---- Baum: Umhängen ---------------------------------------------------
+
+    /**
+     * Kostenstelle unter einen anderen Knoten hängen (Drag&Drop im Baum bzw. „nach oben"-Aktion).
+     * `null` macht sie zur Wurzel — das ist der Weg, aus einer Kostenstelle eine Gesellschaft zu machen.
+     */
+    public function moveUnder(int $id, ?int $parentId = null): void
+    {
+        Gate::authorize('asset-manager.manage');
+
+        $node = AssetCostCenter::where('team_id', $this->teamId())->findOrFail($id);
+
+        if (! $node->canMoveUnder($parentId)) {
+            $this->flash = 'Umhängen nicht möglich: das Ziel liegt unterhalb dieser Kostenstelle (Zyklus) oder gehört zu einem anderen Tenant.';
+
+            return;
+        }
+
+        $node->parent_id = $parentId;
+        $node->save();
+
+        $this->recomputeSubtreeDepths($node);
+
+        $this->flash = $parentId === null
+            ? "Kostenstelle {$node->code} ist jetzt ein oberster Knoten."
+            : "Kostenstelle {$node->code} umgehängt.";
+    }
+
+    /**
+     * `depth` des Knotens und aller Nachfahren neu berechnen. Nach dem Umhängen wandert ein ganzer
+     * Teilbaum — würde nur der Knoten selbst aktualisiert, stünden seine Kinder mit falscher Einrückung
+     * und falscher Rollup-Zuordnung da.
+     */
+    protected function recomputeSubtreeDepths(AssetCostCenter $node): void
+    {
+        $node->recomputeDepth();
+
+        $nodes = AssetCostCenter::treeFor((int) $node->tenant_id);
+
+        foreach (AssetCostCenter::descendantIds((int) $node->id, $nodes) as $descendantId) {
+            AssetCostCenter::where('id', $descendantId)->first()?->recomputeDepth();
+        }
     }
 
     // ---- Löschen ----------------------------------------------------------
@@ -346,35 +383,35 @@ class Index extends Component
         Gate::authorize('asset-manager.manage');
 
         match ($this->active) {
-            'companies'    => $this->deleteCompany($id),
             'cost-centers' => $this->deleteCostCenter($id),
             'cost-types'   => $this->deleteCostType($id),
             'vendors'      => $this->deleteVendor($id),
         };
     }
 
-    protected function deleteCompany(int $id): void
-    {
-        $co   = AssetCompany::where('team_id', $this->teamId())->findOrFail($id);
-        $name = $co->name;
-        // company_id an Kostenstellen ist nullOnDelete → Zuordnungen werden entfernt, Kostenstellen bleiben.
-        $co->delete();
-        if ($this->selectedId === $id) {
-            $this->resetSelection();
-        }
-        $this->flash = "Gesellschaft {$name} gelöscht (Kostenstellen-Zuordnungen entfernt).";
-    }
-
     protected function deleteCostCenter(int $id): void
     {
         $cc   = AssetCostCenter::where('team_id', $this->teamId())->findOrFail($id);
         $code = $cc->code;
-        // FKs sind nullOnDelete → Zuordnungen an Mitarbeitern/Kostenpositionen werden entfernt, nicht gelöscht.
+
+        $childCount = AssetCostCenter::where('parent_id', $cc->id)->count();
+
+        // parent_id ist nullOnDelete → Kinder werden zu obersten Knoten statt mitgelöscht zu werden.
+        // Die übrigen FKs (Träger, Kostenpositionen) sind ebenfalls nullOnDelete → Zuordnungen werden
+        // entfernt, die Datensätze bleiben.
         $cc->delete();
+
+        // Die hochgerutschten Kinder tragen noch die alte depth.
+        AssetCostCenter::whereNull('parent_id')->where('depth', '>', 0)->get()
+            ->each(fn (AssetCostCenter $node) => $node->recomputeDepth());
+
         if ($this->selectedId === $id) {
             $this->resetSelection();
         }
-        $this->flash = "Kostenstelle {$code} gelöscht (Zuordnungen wurden entfernt).";
+
+        $this->flash = $childCount > 0
+            ? "Kostenstelle {$code} gelöscht — {$childCount} untergeordnete Kostenstelle(n) sind jetzt oberste Knoten, Zuordnungen wurden entfernt."
+            : "Kostenstelle {$code} gelöscht (Zuordnungen wurden entfernt).";
     }
 
     /** Löschen nur, wenn keine Positionen dranhängen — cost_type_id ist cascadeOnDelete (sonst stiller Datenverlust). */
@@ -445,11 +482,14 @@ class Index extends Component
         Gate::authorize('asset-manager.manage');
 
         $teamId = $this->teamId();
+        $class  = $this->active === 'cost-centers' ? AssetCostCenter::class : AssetCostType::class;
         $pos    = 0;
+
         foreach ($this->flattenOrder($order) as $id) {
-            AssetCostType::where('team_id', $teamId)->where('id', (int) $id)
+            $class::where('team_id', $teamId)->where('id', (int) $id)
                 ->update(['sort_order' => (++$pos) * 10]);
         }
+
         $this->flash = 'Reihenfolge aktualisiert.';
     }
 
@@ -467,60 +507,69 @@ class Index extends Component
         // E1/ADR 0004: Seeden legt Kostenarten an → Schreibpfad → Owner/Admin.
         Gate::authorize('asset-manager.manage');
 
-        $bootstrap->seedForTeam($this->teamId());
+        $bootstrap->seedForTeam($this->teamId(), $this->activeTenantId());
         $this->flash = 'Standard-Kostenarten geladen.';
     }
 
     // ---- Slug-Keys --------------------------------------------------------
 
-    /** Eindeutigen Slug-Key je Team aus dem Namen ableiten (key ist intern, NOT NULL). */
-    protected function uniqueCompanyKey(int $teamId, string $name): string
-    {
-        $base = Str::slug($name) ?: 'gesellschaft';
-        $key  = $base;
-        $i    = 2;
-        while (AssetCompany::where('team_id', $teamId)->where('key', $key)->exists()) {
-            $key = $base . '-' . $i++;
-        }
-
-        return $key;
-    }
-
-    /** Eindeutigen Slug-Key je Team aus dem Namen ableiten (key ist intern, NOT NULL). */
-    protected function uniqueCostTypeKey(int $teamId, string $name): string
+    /** Eindeutigen Slug-Key je Tenant aus dem Namen ableiten (key ist intern, NOT NULL). */
+    protected function uniqueCostTypeKey(string $name): string
     {
         $base = Str::slug($name, '_') ?: 'kostenart';
         $key  = $base;
         $i    = 2;
-        while (AssetCostType::where('team_id', $teamId)->where('key', $key)->exists()) {
+        while (AssetCostType::where('team_id', $this->teamId())->where('key', $key)->exists()) {
             $key = $base . '_' . $i++;
         }
 
         return $key;
     }
 
-    // ---- Daten (Computed) -------------------------------------------------
+    // ---- Tenant -----------------------------------------------------------
 
-    #[Computed]
-    public function companies()
+    /** Tenant, in dem Neuanlagen landen (ADR 0016). */
+    protected function activeTenantId(): int
     {
-        return AssetCompany::where('team_id', $this->teamId())
-            ->withCount('costCenters')
-            ->when($this->search, fn ($q) => $q->where('name', 'like', '%' . $this->search . '%'))
-            ->orderBy('sort_order')->orderBy('name')
-            ->get();
+        return TenantContext::resolveForWrite($this->teamId(), (int) \Illuminate\Support\Facades\Auth::id());
     }
 
+    // ---- Daten (Computed) -------------------------------------------------
+
+    /**
+     * Kostenstellen als **flacher Baum** in Baum-Reihenfolge (Einrückung über `depth`).
+     *
+     * Bei aktiver Suche bzw. Teilbaum-Filter fällt die Ansicht auf eine flache, gefilterte Liste
+     * zurück: eine gefilterte Baum-Ansicht müsste entweder Treffer aus dem Kontext reißen oder
+     * Nicht-Treffer als Pfad mitzeigen — beides verwirrt mehr, als es hilft.
+     */
     #[Computed]
     public function costCenters()
     {
+        $tenantId = TenantContext::scopeTenantId();
+        $filtered = $this->search !== '' || $this->filterParent !== null || $this->onlyActive;
+
+        if (! $filtered && $tenantId !== null) {
+            return AssetCostCenter::treeFor($tenantId)
+                ->each(fn (AssetCostCenter $node) => $node->loadCount('holders'));
+        }
+
+        $subtreeIds = null;
+        if ($this->filterParent !== null && $tenantId !== null) {
+            $nodes      = AssetCostCenter::treeFor($tenantId);
+            $subtreeIds = array_merge(
+                [$this->filterParent],
+                AssetCostCenter::descendantIds($this->filterParent, $nodes),
+            );
+        }
+
         return AssetCostCenter::where('team_id', $this->teamId())
-            ->withCount('employees')
-            ->with('company')
+            ->withCount('holders')
+            ->with('parent')
             ->when($this->search, fn ($q) => $q->where(fn ($w) => $w
                 ->where('code', 'like', '%' . $this->search . '%')
                 ->orWhere('name', 'like', '%' . $this->search . '%')))
-            ->when($this->filterCompany, fn ($q) => $q->where('company_id', $this->filterCompany))
+            ->when($subtreeIds !== null, fn ($q) => $q->whereIn('id', $subtreeIds))
             ->when($this->onlyActive, fn ($q) => $q->where('is_active', true))
             ->orderBy('code')
             ->get();
@@ -555,18 +604,48 @@ class Index extends Component
         $teamId = $this->teamId();
 
         return [
-            'companies'    => AssetCompany::where('team_id', $teamId)->count(),
             'cost-centers' => AssetCostCenter::where('team_id', $teamId)->count(),
             'cost-types'   => AssetCostType::where('team_id', $teamId)->count(),
             'vendors'      => AssetVendor::where('team_id', $teamId)->count(),
         ];
     }
 
+    /**
+     * Auswahl-Optionen für den Eltern-Knoten — der ganze Baum mit Einrückung. Beim Bearbeiten fallen
+     * der Knoten selbst und seine Nachfahren heraus: sie als Eltern zu wählen wäre ein Zyklus, und ein
+     * Dropdown-Eintrag, der nur eine Fehlermeldung erzeugt, ist eine Falle statt einer Option.
+     */
     #[Computed]
-    public function companiesForSelect()
+    public function parentOptions()
     {
-        return AssetCompany::where('team_id', $this->teamId())
-            ->orderBy('sort_order')->orderBy('name')->get();
+        $tenantId = TenantContext::scopeTenantId();
+
+        if ($tenantId === null) {
+            return collect();
+        }
+
+        $nodes = AssetCostCenter::treeFor($tenantId);
+
+        if ($this->selectedId === null) {
+            return $nodes;
+        }
+
+        $excluded = array_merge(
+            [$this->selectedId],
+            AssetCostCenter::descendantIds($this->selectedId, $nodes),
+        );
+
+        return $nodes->reject(fn (AssetCostCenter $node) => in_array((int) $node->id, $excluded, true))->values();
+    }
+
+    /** Oberste Knoten — für den Teilbaum-Filter (früher: Gesellschaft-Filter). */
+    #[Computed]
+    public function rootOptions()
+    {
+        return AssetCostCenter::where('team_id', $this->teamId())
+            ->whereNull('parent_id')
+            ->orderBy('sort_order')->orderBy('code')
+            ->get();
     }
 
     #[Computed]

@@ -86,7 +86,9 @@ Route::middleware(EnsureControllingEnabled::class)->group(function () {
 
     // Alte Einzel-Routen → Weiterleitung auf die kombinierte Seite (öffnet den passenden Bereich via ?bereich=).
     // Namen bleiben erhalten, damit bestehende route()-Aufrufe/Bookmarks weiter funktionieren.
-    Route::get('/companies',    fn () => redirect(route('asset-manager.master-data.index', ['bereich' => 'companies'])))->name('asset-manager.companies.index');
+    // 'companies' ist als Bereich entfallen (ADR 0016) — Gesellschaften sind die obersten Knoten
+    // des Kostenstellen-Baums. Alte Bookmarks landen dort statt auf einer 404.
+    Route::get('/companies',    fn () => redirect(route('asset-manager.master-data.index', ['bereich' => 'cost-centers'])))->name('asset-manager.companies.index');
     Route::get('/cost-centers', fn () => redirect(route('asset-manager.master-data.index', ['bereich' => 'cost-centers'])))->name('asset-manager.cost-centers.index');
     Route::get('/cost-types',   fn () => redirect(route('asset-manager.master-data.index', ['bereich' => 'cost-types'])))->name('asset-manager.cost-types.index');
     Route::get('/vendors',      fn () => redirect(route('asset-manager.master-data.index', ['bereich' => 'vendors'])))->name('asset-manager.vendors.index');

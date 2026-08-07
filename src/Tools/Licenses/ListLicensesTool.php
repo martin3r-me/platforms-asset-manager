@@ -3,7 +3,9 @@
 namespace Platform\AssetManager\Tools\Licenses;
 
 use Platform\AssetManager\Models\AssetLicenseSku;
+use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
+use Platform\AssetManager\Tools\Concerns\ResolvesTenant;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -16,6 +18,7 @@ use Platform\Core\Contracts\ToolResult;
 class ListLicensesTool implements ToolContract, ToolMetadataContract
 {
     use ResolvesTeam;
+    use ResolvesTenant;
 
     public function getName(): string
     {
@@ -33,9 +36,9 @@ class ListLicensesTool implements ToolContract, ToolMetadataContract
     {
         return [
             'type'       => 'object',
-            'properties' => [
+            'properties' => array_merge([
                 'only_underutilized' => ['type' => 'boolean', 'description' => 'Nur SKUs mit available_units > 0 (Default false).'],
-            ],
+            ], $this->tenantSchemaProperty()),
             'required' => [],
         ];
     }
@@ -47,6 +50,15 @@ class ListLicensesTool implements ToolContract, ToolMetadataContract
             if (!$teamId) {
                 return ToolResult::error('MISSING_TEAM', 'Kein aktives Team im Kontext. Nutze core__context__GET / core__team__switch.');
             }
+
+            // Tenant-Grenze (ADR 0016): Default ist die gespeicherte Auswahl des Users. forceTenant()
+            // setzt den Kontext fuer den Global Scope, damit JEDE Query unten tenant-rein ist, ohne
+            // dass jede einzelne Query angefasst werden muss.
+            [$tenantId, $tenantError] = $this->resolveTenant($arguments, $context, $teamId);
+            if ($tenantError) {
+                return $tenantError;
+            }
+            TenantContext::forceTenant($tenantId);
 
             $query = AssetLicenseSku::where('team_id', $teamId);
             if (!empty($arguments['only_underutilized'])) {

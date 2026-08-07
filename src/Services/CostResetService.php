@@ -15,11 +15,16 @@ use Platform\AssetManager\Models\AssetItem;
  *   - Cost-Lines mit source='excel_import'
  *   - Import-Assets (source='manual') in den Import-Kategorien laptop/internet/drucker
  *   - synthetische Funktionskonten (UPN …@funktion.import.local)
- * und setzt die import-gesetzten Kostenstellen aller echten Mitarbeiter zurück (sauberer Schnitt) —
+ * und setzt die import-gesetzten Kostenstellen der Funktionskonten zurück (sauberer Schnitt) —
  * die Kostenstelle ist künftig manuell gepflegte Quelle der Wahrheit.
  *
+ * **Tenant-scoped** (docs/adr/0016): der Import lief für genau einen Tenant, also wird auch nur
+ * dessen Bestand zurückgesetzt. Der Tenant wird ausdrücklich übergeben bzw. aus dem aktiven Kontext
+ * aufgelöst — nicht dem Global Scope überlassen, damit der Aufrufer sieht, was gelöscht wird.
+ * Gegenstück: {@see AssetResetService} setzt ein ganzes Team über alle Tenants zurück.
+ *
  * NICHT angefasst: Intune-Geräte (asset_devices, eigene Tabelle) und Stammdaten
- * (Gesellschaften, Kostenstellen, Kreditoren, Kostenarten).
+ * (Kostenstellen-Baum, Kreditoren, Kostenarten).
  */
 class CostResetService
 {
@@ -27,38 +32,49 @@ class CostResetService
     private const IMPORT_ITEM_CATEGORIES = ['laptop', 'internet', 'drucker'];
 
     /**
-     * @return array{cost_lines:int, assets:int, employees:int, cleared_cost_centers:int}
+     * @return array{cost_lines:int, assets:int, holders:int, cleared_cost_centers:int}
      */
-    public function clearImport(int $teamId): array
+    public function clearImport(int $teamId, ?int $tenantId = null): array
     {
-        return DB::transaction(function () use ($teamId) {
+        $tenantId ??= TenantContext::scopeTenantId() ?? TenantContext::defaultTenantId($teamId);
+
+        return DB::transaction(function () use ($teamId, $tenantId) {
             // 1) Import-Cost-Lines (hart löschen → kein Konflikt mit import_hash-Upserts beim Re-Import)
-            $costLines = AssetCostLine::where('team_id', $teamId)
+            $costLines = AssetCostLine::withoutTenantScope()
+                ->where('team_id', $teamId)
+                ->where('tenant_id', $tenantId)
                 ->where('source', 'excel_import')
                 ->forceDelete();
 
             // 2) Import-Assets (Laptops/Internet/Drucker). asset_assignments cascaden automatisch.
+            // asset_categories ist GLOBAL (kein Tenant) — hier bewusst ohne Tenant-Filter.
             $catIds = AssetCategory::whereIn('key', self::IMPORT_ITEM_CATEGORIES)->pluck('id');
-            $assets = $catIds->isEmpty() ? 0 : AssetItem::where('team_id', $teamId)
+            $assets = $catIds->isEmpty() ? 0 : AssetItem::withoutTenantScope()
+                ->where('team_id', $teamId)
+                ->where('tenant_id', $tenantId)
                 ->where('source', 'manual')
                 ->whereIn('category_id', $catIds)
                 ->forceDelete();
 
-            // 3) Synthetische Funktionskonten (Kostenstellen-Codes, die fälschlich als Mitarbeiter angelegt wurden)
-            $employees = AssetEmployee::where('team_id', $teamId)
+            // 3) Synthetische Funktionskonten (Kostenstellen-Codes, die fälschlich als Träger angelegt wurden)
+            $holders = AssetEmployee::withoutTenantScope()
+                ->where('team_id', $teamId)
+                ->where('tenant_id', $tenantId)
                 ->where('user_principal_name', 'like', '%@funktion.import.local')
                 ->delete();
 
             // 4) Import-gesetzte Kostenstellen NUR bei import-erzeugten Konten zurücksetzen — also
-            //    synthetischen Funktionskonten (account_type='function' bzw. UPN …@funktion.import.local).
-            //    NIEMALS unbedingt alle Mitarbeiter nullen: echte Graph-/manuell gepflegte Mitarbeiter
-            //    sind die Quelle der Wahrheit für ihre Kostenstelle — würden sie hier genullt, kollabiert
-            //    der Geräte-/Lizenz-Pivot in „Ohne Kostenstelle" und manuell gepflegte Zuordnungen gehen
+            //    synthetischen Funktionskonten (holder_type='function' bzw. UPN …@funktion.import.local).
+            //    NIEMALS unbedingt alle Träger nullen: echte Graph-/manuell gepflegte Träger sind die
+            //    Quelle der Wahrheit für ihre Kostenstelle — würden sie hier genullt, kollabiert der
+            //    Geräte-/Lizenz-Pivot in „Ohne Kostenstelle" und manuell gepflegte Zuordnungen gehen
             //    verloren. (Die @funktion.import.local-Konten sind in Schritt 3 bereits gelöscht; dieser
             //    Schritt fängt zusätzlich import-markierte Funktionskonten mit abweichender UPN ab.)
-            $clearedCostCenters = AssetEmployee::where('team_id', $teamId)
+            $clearedCostCenters = AssetEmployee::withoutTenantScope()
+                ->where('team_id', $teamId)
+                ->where('tenant_id', $tenantId)
                 ->where(function ($q) {
-                    $q->where('account_type', 'function')
+                    $q->where('holder_type', 'function')
                       ->orWhere('user_principal_name', 'like', '%@funktion.import.local');
                 })
                 ->where(fn ($q) => $q->whereNotNull('cost_center_id')->orWhereNotNull('cost_center'))
@@ -67,7 +83,7 @@ class CostResetService
             return [
                 'cost_lines'           => (int) $costLines,
                 'assets'               => (int) $assets,
-                'employees'            => (int) $employees,
+                'holders'              => (int) $holders,
                 'cleared_cost_centers' => (int) $clearedCostCenters,
             ];
         });

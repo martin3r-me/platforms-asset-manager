@@ -6,7 +6,9 @@ use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Services\CostBootstrapService;
+use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
+use Platform\AssetManager\Tools\Concerns\ResolvesTenant;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -25,6 +27,7 @@ use Platform\Core\Contracts\ToolResult;
 class BulkAssignCostCenterTool implements ToolContract, ToolMetadataContract
 {
     use ResolvesTeam;
+    use ResolvesTenant;
 
     public function getName(): string
     {
@@ -45,7 +48,7 @@ class BulkAssignCostCenterTool implements ToolContract, ToolMetadataContract
     {
         return [
             'type'       => 'object',
-            'properties' => [
+            'properties' => array_merge([
                 'cost_center_code' => ['type' => 'string', 'description' => 'Modus 1: Kostenstellen-Code für alle genannten Mitarbeiter (z.B. "2599").'],
                 'employee_ids'     => ['type' => 'array', 'description' => 'Modus 1: Mitarbeiter-IDs.', 'items' => ['type' => 'integer']],
                 'upns'             => ['type' => 'array', 'description' => 'Modus 1: User Principal Names.', 'items' => ['type' => 'string']],
@@ -64,7 +67,7 @@ class BulkAssignCostCenterTool implements ToolContract, ToolMetadataContract
                 ],
                 'create_missing' => ['type' => 'boolean', 'description' => 'Fehlende Kostenstellen anlegen (Default false).'],
                 'dry_run'        => ['type' => 'boolean', 'description' => 'Nur Vorschau, nicht schreiben (Default false).'],
-            ],
+            ], $this->tenantSchemaProperty()),
             'required' => [],
         ];
     }
@@ -76,6 +79,15 @@ class BulkAssignCostCenterTool implements ToolContract, ToolMetadataContract
             if (!$teamId) {
                 return ToolResult::error('MISSING_TEAM', 'Kein aktives Team im Kontext. Nutze core__context__GET / core__team__switch.');
             }
+
+            // Tenant-Grenze (ADR 0016): Default ist die gespeicherte Auswahl des Users. forceTenant()
+            // setzt den Kontext fuer den Global Scope, damit JEDE Query unten tenant-rein ist, ohne
+            // dass jede einzelne Query angefasst werden muss.
+            [$tenantId, $tenantError] = $this->resolveTenant($arguments, $context, $teamId);
+            if ($tenantError) {
+                return $tenantError;
+            }
+            TenantContext::forceTenant($tenantId);
 
             // Schreibrechte (ADR 0004): kanal-übergreifend Owner/Admin — identische Grenze wie im UI.
             if (!Gate::forUser($context->user)->allows('asset-manager.manage')) {

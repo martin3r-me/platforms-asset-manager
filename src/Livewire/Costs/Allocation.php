@@ -32,22 +32,31 @@ class Allocation extends Component
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM für Excel
 
-            $header = ['Gesellschaft', 'Kostenstelle', 'Bezeichnung'];
+            // Ebene + Übergeordnet statt der früheren Gesellschafts-Spalte: der Kostenstellen-Baum
+            // ist beliebig tief (docs/adr/0016), eine feste Gesellschafts-Spalte könnte ihn nicht
+            // abbilden. Exportiert werden die EIGENEN Beträge je Knoten — so bleibt die Summe der
+            // Zeilen gleich der Gesamtsumme, statt Rollups doppelt zu zählen.
+            $header = ['Ebene', 'Kostenstelle', 'Bezeichnung', 'Übergeordnet'];
             foreach ($pivot['types'] as $t) {
                 $header[] = $t['name'];
             }
             $header[] = 'Summe';
             fputcsv($out, $header, ';');
 
-            foreach ($pivot['companies'] as $company) {
-                foreach ($company['rows'] as $row) {
-                    $line = [$company['name'], $row['code'], $row['name'] ?? ''];
-                    foreach ($pivot['types'] as $t) {
-                        $line[] = number_format($row['cells'][$t['id']] ?? 0, 2, ',', '');
-                    }
-                    $line[] = number_format($row['rowTotal'], 2, ',', '');
-                    fputcsv($out, $line, ';');
+            $extraRows = array_values(array_filter([$pivot['unassigned'] ?? null, $pivot['orphan'] ?? null]));
+
+            foreach (array_merge($pivot['rows'], $extraRows) as $row) {
+                $line = [
+                    (int) ($row['depth'] ?? 0),
+                    $row['code'],
+                    $row['name'] ?? '',
+                    $row['parent_code'] ?? '',
+                ];
+                foreach ($pivot['types'] as $t) {
+                    $line[] = number_format($row['cells'][$t['id']] ?? 0, 2, ',', '');
                 }
+                $line[] = number_format($row['rowTotal'], 2, ',', '');
+                fputcsv($out, $line, ';');
             }
 
             // Summenzeile

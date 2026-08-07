@@ -3,7 +3,9 @@
 namespace Platform\AssetManager\Tools\Costs;
 
 use Platform\AssetManager\Services\CostAggregationService;
+use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
+use Platform\AssetManager\Tools\Concerns\ResolvesTenant;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -15,6 +17,7 @@ use Platform\Core\Contracts\ToolResult;
 class CostByDimensionTool implements ToolContract, ToolMetadataContract
 {
     use ResolvesTeam;
+    use ResolvesTenant;
 
     private const DIMENSIONS = ['department', 'cost_center', 'company', 'category', 'license_sku', 'vendor', 'cost_type'];
 
@@ -34,13 +37,13 @@ class CostByDimensionTool implements ToolContract, ToolMetadataContract
     {
         return [
             'type'       => 'object',
-            'properties' => [
+            'properties' => array_merge([
                 'dimension' => [
                     'type'        => 'string',
                     'enum'        => self::DIMENSIONS,
                     'description' => 'Gruppierungs-Dimension (erforderlich).',
                 ],
-            ],
+            ], $this->tenantSchemaPropertyWithAll()),
             'required' => ['dimension'],
         ];
     }
@@ -52,6 +55,15 @@ class CostByDimensionTool implements ToolContract, ToolMetadataContract
             if (!$teamId) {
                 return ToolResult::error('MISSING_TEAM', 'Kein aktives Team im Kontext. Nutze core__context__GET / core__team__switch.');
             }
+
+            // Tenant-Grenze (ADR 0016): Default ist die gespeicherte Auswahl des Users. forceTenant()
+            // setzt den Kontext fuer den Global Scope, damit JEDE Query unten tenant-rein ist, ohne
+            // dass jede einzelne Query angefasst werden muss.
+            [$tenantId, $tenantError] = $this->resolveTenant($arguments, $context, $teamId, true);
+            if ($tenantError) {
+                return $tenantError;
+            }
+            TenantContext::forceTenant($tenantId);
 
             // Controlling-Schicht (ADR 0008): bei deaktiviertem Controlling sind Kosten/Stammdaten gesperrt.
             if (!app(\Platform\AssetManager\Services\ControllingContext::class)->enabledFor($teamId)) {

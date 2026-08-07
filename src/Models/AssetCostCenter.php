@@ -93,6 +93,34 @@ class AssetCostCenter extends Model
         return $this->parent_id === null;
     }
 
+    /**
+     * Oberster Knoten über dieser Kostenstelle — was früher „Gesellschaft" hieß. Für Anzeigen und
+     * Tool-Antworten, die den groben Zuordnungskontext brauchen, ohne den Baum zu laden.
+     */
+    public function root(): self
+    {
+        $cursor = $this;
+        $guard  = 0;
+
+        while ($cursor->parent_id !== null && $guard++ < self::MAX_DEPTH) {
+            $parent = static::query()->withoutTenantScope()->find($cursor->parent_id);
+            if (! $parent) {
+                break; // verwaister Verweis → dieser Knoten gilt als Wurzel
+            }
+            $cursor = $parent;
+        }
+
+        return $cursor;
+    }
+
+    /** Anzeigename des obersten Knotens (Name, sonst Code). */
+    public function rootLabel(): string
+    {
+        $root = $this->root();
+
+        return $root->name ?? (string) $root->code;
+    }
+
     /** Anzeige: "2599 — RHEIN RUHR" bzw. nur Code. */
     public function getLabelAttribute(): string
     {

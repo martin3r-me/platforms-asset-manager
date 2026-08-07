@@ -6,7 +6,9 @@ use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Services\CostAggregationService;
+use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
+use Platform\AssetManager\Tools\Concerns\ResolvesTenant;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -20,6 +22,7 @@ use Platform\Core\Contracts\ToolResult;
 class GetEmployeeTool implements ToolContract, ToolMetadataContract
 {
     use ResolvesTeam;
+    use ResolvesTenant;
 
     public function getName(): string
     {
@@ -39,7 +42,7 @@ class GetEmployeeTool implements ToolContract, ToolMetadataContract
     {
         return [
             'type'       => 'object',
-            'properties' => [
+            'properties' => array_merge([
                 'id' => [
                     'type'        => 'integer',
                     'description' => 'Mitarbeiter-ID (alternativ zu user_principal_name).',
@@ -48,7 +51,7 @@ class GetEmployeeTool implements ToolContract, ToolMetadataContract
                     'type'        => 'string',
                     'description' => 'UPN des Mitarbeiters (alternativ zu id), z.B. "max.muster@firma.de".',
                 ],
-            ],
+            ], $this->tenantSchemaProperty()),
             'required' => [],
         ];
     }
@@ -61,7 +64,16 @@ class GetEmployeeTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('MISSING_TEAM', 'Kein aktives Team im Kontext. Nutze core__context__GET / core__team__switch.');
             }
 
-            $query = AssetEmployee::where('team_id', $teamId)->with('costCenter.company');
+            // Tenant-Grenze (ADR 0016): Default ist die gespeicherte Auswahl des Users. forceTenant()
+            // setzt den Kontext fuer den Global Scope, damit JEDE Query unten tenant-rein ist, ohne
+            // dass jede einzelne Query angefasst werden muss.
+            [$tenantId, $tenantError] = $this->resolveTenant($arguments, $context, $teamId);
+            if ($tenantError) {
+                return $tenantError;
+            }
+            TenantContext::forceTenant($tenantId);
+
+            $query = AssetEmployee::where('team_id', $teamId)->with('costCenter');
             if (!empty($arguments['id'])) {
                 $query->where('id', (int) $arguments['id']);
             } elseif (!empty($arguments['user_principal_name'])) {
@@ -151,11 +163,13 @@ class GetEmployeeTool implements ToolContract, ToolMetadataContract
                     'department'          => $emp->department,
                     'job_title'           => $emp->job_title,
                     'is_active'           => (bool) $emp->is_active,
-                    'account_type'        => $emp->account_type,
+                    'holder_type'         => $emp->holder_type,
+                    'account_type'        => $emp->holder_type, // DEPRECATED — Alias, siehe ADR 0017
                     'cost_center'         => $emp->cost_center,
                     'cost_center_id'      => $emp->cost_center_id,
                     'cost_center_label'   => $emp->costCenter?->label,
-                    'company'             => $emp->costCenter?->company?->name,
+                    // „Gesellschaft" ist der oberste Knoten über dieser Kostenstelle (ADR 0016).
+                    'cost_center_root'    => $emp->costCenter?->rootLabel(),
                 ],
                 'devices'        => $devices,
                 'items'          => $items,

@@ -4,7 +4,9 @@ namespace Platform\AssetManager\Tools\Devices;
 
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceModel;
+use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
+use Platform\AssetManager\Tools\Concerns\ResolvesTenant;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -17,6 +19,7 @@ use Platform\Core\Contracts\ToolResult;
 class ListDeviceModelsTool implements ToolContract, ToolMetadataContract
 {
     use ResolvesTeam;
+    use ResolvesTenant;
 
     public function getName(): string
     {
@@ -33,7 +36,11 @@ class ListDeviceModelsTool implements ToolContract, ToolMetadataContract
 
     public function getSchema(): array
     {
-        return ['type' => 'object', 'properties' => new \stdClass(), 'required' => []];
+        return [
+            'type'       => 'object',
+            'properties' => $this->tenantSchemaProperty(),
+            'required'   => [],
+        ];
     }
 
     public function execute(array $arguments, ToolContext $context): ToolResult
@@ -44,6 +51,15 @@ class ListDeviceModelsTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('MISSING_TEAM', 'Kein aktives Team im Kontext. Nutze core__context__GET / core__team__switch.');
             }
 
+            // Tenant-Grenze (ADR 0016): Default ist die gespeicherte Auswahl des Users. forceTenant()
+            // setzt den Kontext fuer den Global Scope, damit JEDE Query unten tenant-rein ist, ohne
+            // dass jede einzelne Query angefasst werden muss.
+            [$tenantId, $tenantError] = $this->resolveTenant($arguments, $context, $teamId);
+            if ($tenantError) {
+                return $tenantError;
+            }
+            TenantContext::forceTenant($tenantId);
+
             // Geräte-Counts je normalisiertem (Hersteller|Modell)-Schlüssel
             $deviceCounts = [];
             foreach (AssetDevice::where('team_id', $teamId)->get(['manufacturer', 'model']) as $d) {
@@ -51,25 +67,35 @@ class ListDeviceModelsTool implements ToolContract, ToolMetadataContract
                 $deviceCounts[$key] = ($deviceCounts[$key] ?? 0) + 1;
             }
 
-            $models = AssetDeviceModel::where('team_id', $teamId)->with(['costType', 'vendor'])
+            // Katalog ist team-weit, die Kosten dazu tenant-eigen (ADR 0016) — die cost-Relation traegt
+            // den Global Scope und liefert die Zeile des aufgeloesten Tenants.
+            $models = AssetDeviceModel::where('team_id', $teamId)
+                ->with(['cost.costType', 'cost.vendor'])
                 ->orderBy('manufacturer')->orderBy('model')->get()
                 ->map(function (AssetDeviceModel $m) use ($deviceCounts) {
-                    $key = AssetDeviceModel::normalizeKey($m->manufacturer, $m->model);
+                    $key  = AssetDeviceModel::normalizeKey($m->manufacturer, $m->model);
+                    $cost = $m->cost;
+
                     return [
                         'id'                  => $m->id,
                         'manufacturer'        => $m->manufacturer,
                         'model'               => $m->model,
-                        'monthly_cost'        => $m->monthly_cost !== null ? (float) $m->monthly_cost : null,
-                        'purchase_price'      => $m->purchase_price !== null ? (float) $m->purchase_price : null,
+                        'monthly_cost'        => $cost?->monthly_cost !== null ? (float) $cost->monthly_cost : null,
+                        'purchase_price'      => $cost?->purchase_price !== null ? (float) $cost->purchase_price : null,
                         'depreciation_months' => $m->depreciation_months,
-                        'cost_type'           => $m->costType?->name,
-                        'cost_type_id'        => $m->cost_type_id,
-                        'vendor'              => $m->vendor?->name,
+                        'cost_type'           => $cost?->costType?->name,
+                        'cost_type_id'        => $cost?->cost_type_id,
+                        'vendor'              => $cost?->vendor?->name,
                         'device_count'        => $deviceCounts[$key] ?? 0,
                     ];
                 })->values()->all();
 
-            return ToolResult::success(['device_models' => $models, 'count' => count($models)]);
+            return ToolResult::success([
+                'device_models' => $models,
+                'count'         => count($models),
+                'note'          => 'Hersteller/Modell sind team-weit; monthly_cost, purchase_price, '
+                    . 'cost_type und vendor gelten fuer den aktiven Tenant.',
+            ]);
         } catch (\Throwable $e) {
             return ToolResult::error('EXECUTION_ERROR', 'Fehler beim Laden der Geräte-Modelle: ' . $e->getMessage());
         }

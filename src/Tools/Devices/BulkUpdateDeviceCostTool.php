@@ -6,8 +6,10 @@ use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetDevice;
-use Platform\AssetManager\Models\AssetDeviceModel;
+use Platform\AssetManager\Support\DeviceCostResolver;
+use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
+use Platform\AssetManager\Tools\Concerns\ResolvesTenant;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -21,6 +23,7 @@ use Platform\Core\Contracts\ToolResult;
 class BulkUpdateDeviceCostTool implements ToolContract, ToolMetadataContract
 {
     use ResolvesTeam;
+    use ResolvesTenant;
 
     public function getName(): string
     {
@@ -40,7 +43,7 @@ class BulkUpdateDeviceCostTool implements ToolContract, ToolMetadataContract
     {
         return [
             'type'       => 'object',
-            'properties' => [
+            'properties' => array_merge([
                 'device_ids'          => ['type' => 'array', 'description' => 'Geräte-IDs (erforderlich).', 'items' => ['type' => 'integer']],
                 'monthly_cost'        => ['type' => 'number', 'description' => 'Monatliche Leasing-Rate (EUR).'],
                 'purchase_price'      => ['type' => 'number', 'description' => 'Kaufpreis (EUR) für AfA.'],
@@ -49,7 +52,7 @@ class BulkUpdateDeviceCostTool implements ToolContract, ToolMetadataContract
                 'cost_type_id'        => ['type' => 'integer', 'description' => 'Kostenart-ID (Team).'],
                 'cost_center_id'      => ['type' => 'integer', 'description' => 'Kostenstellen-ID (Team).'],
                 'dry_run'             => ['type' => 'boolean', 'description' => 'Nur Vorschau (Default false).'],
-            ],
+            ], $this->tenantSchemaProperty()),
             'required' => ['device_ids'],
         ];
     }
@@ -61,6 +64,15 @@ class BulkUpdateDeviceCostTool implements ToolContract, ToolMetadataContract
             if (!$teamId) {
                 return ToolResult::error('MISSING_TEAM', 'Kein aktives Team im Kontext. Nutze core__context__GET / core__team__switch.');
             }
+
+            // Tenant-Grenze (ADR 0016): Default ist die gespeicherte Auswahl des Users. forceTenant()
+            // setzt den Kontext fuer den Global Scope, damit JEDE Query unten tenant-rein ist, ohne
+            // dass jede einzelne Query angefasst werden muss.
+            [$tenantId, $tenantError] = $this->resolveTenant($arguments, $context, $teamId);
+            if ($tenantError) {
+                return $tenantError;
+            }
+            TenantContext::forceTenant($tenantId);
 
             // Schreibrechte (ADR 0004): kanal-übergreifend Owner/Admin — identische Grenze wie im UI.
             if (!Gate::forUser($context->user)->allows('asset-manager.manage')) {
@@ -102,20 +114,17 @@ class BulkUpdateDeviceCostTool implements ToolContract, ToolMetadataContract
             $found   = $devices->pluck('id')->all();
             $missing = array_values(array_diff($ids, $found));
 
-            // Modell-Katalog EINMAL laden statt resolvedMonthlyCost() → deviceModel() je Gerät (N+1).
-            $modelByKey = [];
-            foreach (AssetDeviceModel::where('team_id', $teamId)->get() as $m) {
-                $modelByKey[AssetDeviceModel::normalizeKey($m->manufacturer, $m->model)] = $m;
-            }
+            // Katalog + tenant-eigene Modell-Kosten EINMAL laden statt je Gerät (N+1).
+            $resolver = DeviceCostResolver::for($teamId);
 
             $results = [];
             $updated = 0;
             foreach ($devices as $d) {
-                $before = $this->monthlyFromCatalog($d, $modelByKey);
+                $before = $resolver->monthlyCost($d);
                 foreach ($changes as $k => $v) {
                     $d->{$k} = $v;
                 }
-                $after = $this->monthlyFromCatalog($d, $modelByKey);
+                $after = $resolver->monthlyCost($d);
                 if (!$dryRun) {
                     $d->save();
                 }
@@ -141,26 +150,6 @@ class BulkUpdateDeviceCostTool implements ToolContract, ToolMetadataContract
         } catch (\Throwable $e) {
             return ToolResult::error('EXECUTION_ERROR', 'Fehler beim Bulk-Update der Gerätekosten: ' . $e->getMessage());
         }
-    }
-
-    /**
-     * Aufgelöste Monatskosten (Override → Modell-Default) gegen den EINMAL vorgeladenen Katalog —
-     * identische Logik wie AssetDevice::resolvedMonthlyCost(), aber ohne Per-Gerät-deviceModel()-Query.
-     */
-    private function monthlyFromCatalog(AssetDevice $d, array $modelByKey): float
-    {
-        $own = AssetDevice::computeMonthlyFrom($d->monthly_cost, $d->purchase_price, $d->depreciation_months, $d->purchase_date);
-        if ($own !== null) {
-            return $own;
-        }
-        $model = $modelByKey[AssetDeviceModel::normalizeKey($d->manufacturer, $d->model)] ?? null;
-        if ($model) {
-            $fromModel = AssetDevice::computeMonthlyFrom($model->monthly_cost, $model->purchase_price, $model->depreciation_months, null);
-            if ($fromModel !== null) {
-                return $fromModel;
-            }
-        }
-        return 0.0;
     }
 
     public function getMetadata(): array

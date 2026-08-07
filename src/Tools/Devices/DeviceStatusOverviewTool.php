@@ -4,7 +4,9 @@ namespace Platform\AssetManager\Tools\Devices;
 
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetTenant;
+use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
+use Platform\AssetManager\Tools\Concerns\ResolvesTenant;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -18,6 +20,7 @@ use Platform\Core\Contracts\ToolResult;
 class DeviceStatusOverviewTool implements ToolContract, ToolMetadataContract
 {
     use ResolvesTeam;
+    use ResolvesTenant;
 
     /** Listen-Obergrenze (verhindert riesige Antworten; `truncated` meldet, wenn gekürzt wurde). */
     private const MAX_DEVICES = 200;
@@ -38,7 +41,7 @@ class DeviceStatusOverviewTool implements ToolContract, ToolMetadataContract
     {
         return [
             'type' => 'object',
-            'properties' => [
+            'properties' => array_merge([
                 'tenant_id' => [
                     'type'        => 'integer',
                     'description' => 'Optional: nur Geräte dieses Tenants. Gültige IDs siehe "tenants" in der Antwort.',
@@ -48,7 +51,7 @@ class DeviceStatusOverviewTool implements ToolContract, ToolMetadataContract
                     'enum'        => array_merge(AssetDevice::LIFECYCLE_STATUSES, ['none']),
                     'description' => 'Optional: nur Geräte mit diesem Lifecycle-Status. "none" = kein Status gesetzt.',
                 ],
-            ],
+            ], $this->tenantSchemaProperty()),
             'required' => [],
         ];
     }

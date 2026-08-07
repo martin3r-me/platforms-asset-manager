@@ -5,7 +5,9 @@ namespace Platform\AssetManager\Tools\CostLines;
 use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostLine;
+use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
+use Platform\AssetManager\Tools\Concerns\ResolvesTenant;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -17,6 +19,7 @@ use Platform\Core\Contracts\ToolResult;
 class BulkReassignCostLineCenterTool implements ToolContract, ToolMetadataContract
 {
     use ResolvesTeam;
+    use ResolvesTenant;
 
     public function getName(): string
     {
@@ -34,12 +37,12 @@ class BulkReassignCostLineCenterTool implements ToolContract, ToolMetadataContra
     {
         return [
             'type'       => 'object',
-            'properties' => [
+            'properties' => array_merge([
                 'cost_line_ids'    => ['type' => 'array', 'description' => 'IDs der Kostenpositionen (erforderlich).', 'items' => ['type' => 'integer']],
                 'cost_center_id'   => ['type' => 'integer', 'description' => 'Ziel-Kostenstellen-ID (alternativ zu cost_center_code).'],
                 'cost_center_code' => ['type' => 'string', 'description' => 'Ziel-Kostenstellen-Code (alternativ zu cost_center_id).'],
                 'dry_run'          => ['type' => 'boolean', 'description' => 'Nur Vorschau (Default false).'],
-            ],
+            ], $this->tenantSchemaProperty()),
             'required' => ['cost_line_ids'],
         ];
     }
@@ -51,6 +54,15 @@ class BulkReassignCostLineCenterTool implements ToolContract, ToolMetadataContra
             if (!$teamId) {
                 return ToolResult::error('MISSING_TEAM', 'Kein aktives Team im Kontext. Nutze core__context__GET / core__team__switch.');
             }
+
+            // Tenant-Grenze (ADR 0016): Default ist die gespeicherte Auswahl des Users. forceTenant()
+            // setzt den Kontext fuer den Global Scope, damit JEDE Query unten tenant-rein ist, ohne
+            // dass jede einzelne Query angefasst werden muss.
+            [$tenantId, $tenantError] = $this->resolveTenant($arguments, $context, $teamId);
+            if ($tenantError) {
+                return $tenantError;
+            }
+            TenantContext::forceTenant($tenantId);
 
             // Controlling-Schicht (ADR 0008): bei deaktiviertem Controlling sind Kosten/Stammdaten gesperrt.
             if (!app(\Platform\AssetManager\Services\ControllingContext::class)->enabledFor($teamId)) {

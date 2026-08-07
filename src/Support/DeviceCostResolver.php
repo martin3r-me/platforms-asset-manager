@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Support;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceModel;
 use Platform\AssetManager\Models\AssetDeviceModelCost;
@@ -46,10 +47,6 @@ class DeviceCostResolver
         $tenantId ??= TenantContext::scopeTenantId();
         $resolver = new self($teamId, $tenantId);
 
-        foreach (AssetDeviceModel::where('team_id', $teamId)->get() as $model) {
-            $resolver->modelByKey[AssetDeviceModel::normalizeKey($model->manufacturer, $model->model)] = $model;
-        }
-
         if ($tenantId !== null) {
             $costs = AssetDeviceModelCost::query()
                 ->withoutTenantScope()
@@ -59,6 +56,31 @@ class DeviceCostResolver
             foreach ($costs as $cost) {
                 $resolver->costByModelId[(int) $cost->device_model_id] = $cost;
             }
+        }
+
+        // Modelle nach normalisiertem Schlüssel. Kollisionen (mehrere Modelle → selber Key, z. B. "HP"
+        // vs "hp ") erkennen und WARNEN statt still den letzten zu behalten — sonst bekäme das Gerät
+        // unter Umständen den Preis des falschen Modells. Deterministisch das Modell mit hinterlegten
+        // Tenant-Kosten wählen, sonst die kleinste id.
+        $grouped = AssetDeviceModel::where('team_id', $teamId)->get()
+            ->groupBy(fn (AssetDeviceModel $m) => AssetDeviceModel::normalizeKey($m->manufacturer, $m->model));
+
+        foreach ($grouped as $key => $group) {
+            if ($group->count() > 1) {
+                Log::warning('AssetManager: Geräte-Modell-Schlüsselkollision — mehrere Modelle normalisieren auf denselben Schlüssel', [
+                    'team_id'   => $teamId,
+                    'tenant_id' => $tenantId,
+                    'key'       => $key,
+                    'models'    => $group->map(fn ($m) => ['id' => $m->id, 'manufacturer' => $m->manufacturer, 'model' => $m->model])->values()->all(),
+                ]);
+            }
+
+            $resolver->modelByKey[$key] = $group->first(function (AssetDeviceModel $m) use ($resolver) {
+                $cost = $resolver->costByModelId[(int) $m->id] ?? null;
+
+                return $cost !== null
+                    && ($cost->cost_type_id !== null || $cost->monthly_cost !== null || $cost->purchase_price !== null);
+            }) ?? $group->sortBy('id')->first();
         }
 
         return $resolver;

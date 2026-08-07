@@ -37,7 +37,7 @@ class CostExcelImportService
     /** import_hash jeder in DIESEM Lauf geschriebenen (angelegten/aktualisierten) Cost-Line — Basis des Prune. */
     protected array $writtenHashes = [];
 
-    /** Default-Tenant des Teams (memoisiert) — Tenant-Ziel aller vom Importer angelegten/aktualisierten Assets (kein UI-Kontext). */
+    /** Tenant-Ziel dieses Import-Laufs (explizit oder Default-Tenant des Teams) — siehe import(). */
     protected ?int $importTenantId = null;
 
     /** Herkunft der aktuell verarbeiteten Zeile — wird in raw_data der Cost-Line geschrieben. */
@@ -51,9 +51,15 @@ class CostExcelImportService
     /**
      * @return array Statistik je Sheet
      */
-    public function import(int $teamId, string $path, string $batchId = 'excel-bootstrap', bool $dryRun = false): array
+    public function import(int $teamId, string $path, string $batchId = 'excel-bootstrap', bool $dryRun = false, ?int $tenantId = null): array
     {
         $this->teamId        = $teamId;
+        // Tenant-Ziel des Imports (ADR 0016). Der Importer laeuft ueber die Konsole ohne Auth-Kontext,
+        // der Global Scope kann sich also nicht selbst auf einen Tenant aufloesen — deshalb hier
+        // ausdruecklich setzen. Danach ist JEDE Query in diesem Lauf tenant-rein, und die Kostenzeilen
+        // eines Kunden koennen nicht in den Bestand eines anderen laufen.
+        $this->importTenantId = $tenantId ?? TenantContext::defaultTenantId($teamId);
+        TenantContext::forceTenant($this->importTenantId);
         $this->batchId       = $batchId;
         $this->dryRun        = $dryRun;
         $this->stats          = [];
@@ -68,7 +74,7 @@ class CostExcelImportService
             // das BROICH-Set (feste Kostenart-Keys), sonst würden Positionen mit unbekanntem Key übersprungen.
             // Wichtig fürs Dry-Run: so rollt der rollback auch das seedBroichDefaults mit zurück und schreibt
             // keine BROICH-Defaults dauerhaft in (fremde) Teams (Multi-Tenant-Leitplanke).
-            $this->bootstrap->seedBroichDefaults($teamId);
+            $this->bootstrap->seedBroichDefaults($teamId, $this->importTenantId);
 
             $this->costTypes = AssetCostType::where('team_id', $teamId)->get()->keyBy('key')->all();
             $this->vendors   = AssetVendor::where('team_id', $teamId)->get()->keyBy('name')->all();
@@ -138,7 +144,7 @@ class CostExcelImportService
             if ($name === '') continue;
 
             $employee = $this->findEmployee($name);
-            $center   = $this->bootstrap->resolveCostCenter($this->teamId, $code);
+            $center   = $this->bootstrap->resolveCostCenter($this->teamId, $code, $this->importTenantId);
 
             foreach ($map as $col => $typeKey) {
                 $amount = $this->num($row[$col] ?? null);
@@ -180,7 +186,7 @@ class CostExcelImportService
                 ],
             ]);
             $this->upsertLine('internet', [
-                'cost_center_id' => $this->bootstrap->resolveCostCenter($this->teamId, $code)?->id,
+                'cost_center_id' => $this->bootstrap->resolveCostCenter($this->teamId, $code, $this->importTenantId)?->id,
                 'asset_item_id'  => $item?->id,
                 'amount'         => $amount,
                 'label'          => $anschluss,
@@ -208,7 +214,7 @@ class CostExcelImportService
             if (Str::startsWith(mb_strtolower((string) ($row['A'] ?? '')), ['summe', 'anzahl', 'wartungskosten', 'leasingkosten'])) continue;
 
             $code = $this->cc($row['H'] ?? null);
-            $ccId = $this->bootstrap->resolveCostCenter($this->teamId, $code)?->id;
+            $ccId = $this->bootstrap->resolveCostCenter($this->teamId, $code, $this->importTenantId)?->id;
 
             $name = $standort !== '' ? "{$modell} ({$standort})" : $modell;
             $item = $this->upsertItem($cat->id, $name, [
@@ -255,7 +261,7 @@ class CostExcelImportService
             if ($amount == 0.0) continue;
 
             $this->upsertLine('bpevent', [
-                'cost_center_id'    => $this->bootstrap->resolveCostCenter($this->teamId, $code)?->id,
+                'cost_center_id'    => $this->bootstrap->resolveCostCenter($this->teamId, $code, $this->importTenantId)?->id,
                 'amount'            => $amount,
                 'label'             => "BPEvent {$code}",
                 'frequency'         => 'monthly', // Spalte G ist bereits Monatsbasis (s. o.), trotz quarterly-Default
@@ -285,7 +291,7 @@ class CostExcelImportService
             if (Str::startsWith(mb_strtolower($label), ['summe', 'anzahl', 'kosten pro'])) continue;
 
             $this->upsertLine($typeKey, [
-                'cost_center_id'      => $this->bootstrap->resolveCostCenter($this->teamId, $code)?->id,
+                'cost_center_id'      => $this->bootstrap->resolveCostCenter($this->teamId, $code, $this->importTenantId)?->id,
                 'amount'              => $amount,
                 'label'               => $label !== '' ? $label : strtoupper($typeKey),
                 'frequency'           => 'monthly', // Spalte B ist „Kosten mtl." (s. o.), trotz quarterly-Default bei necta
@@ -314,7 +320,7 @@ class CostExcelImportService
 
             $employee = $this->findEmployee($name);
             $this->upsertLine($typeKey, [
-                'cost_center_id' => $this->bootstrap->resolveCostCenter($this->teamId, $code)?->id,
+                'cost_center_id' => $this->bootstrap->resolveCostCenter($this->teamId, $code, $this->importTenantId)?->id,
                 'assignee_id'    => $employee?->id,
                 'amount'         => $amount,
                 'label'          => ($this->costTypes[$typeKey]->name ?? $typeKey) . " — {$name}",
@@ -399,6 +405,7 @@ class CostExcelImportService
         } else {
             AssetCostLine::create(array_merge($values, [
                 'team_id'     => $this->teamId,
+                'tenant_id'   => $this->importTenantId,
                 'import_hash' => $hash,
             ]));
         }
@@ -431,8 +438,8 @@ class CostExcelImportService
 
     protected function upsertItem(int $categoryId, string $name, array $attrs = []): ?AssetItem
     {
-        // Importer hat keinen UI-/Tenant-Kontext → Assets landen im Default-Tenant des Teams (memoisiert).
-        $tenantId = $this->importTenantId ??= TenantContext::defaultTenantId($this->teamId);
+        // Tenant ist in import() festgelegt (explizit oder Default-Tenant des Teams).
+        $tenantId = $this->importTenantId;
 
         return AssetItem::updateOrCreate(
             ['team_id' => $this->teamId, 'category_id' => $categoryId, 'name' => $name],
@@ -466,7 +473,11 @@ class CostExcelImportService
         if ($name === '') return null;
         if (isset($this->vendors[$name])) return $this->vendors[$name];
 
-        $vendor = AssetVendor::firstOrCreate(['team_id' => $this->teamId, 'name' => $name]);
+        $vendor = AssetVendor::firstOrCreate([
+            'team_id'   => $this->teamId,
+            'tenant_id' => $this->importTenantId,
+            'name'      => $name,
+        ]);
         $this->vendors[$name] = $vendor;
         return $vendor;
     }

@@ -3,7 +3,10 @@
 namespace Platform\AssetManager\Tools\Devices;
 
 use Platform\AssetManager\Models\AssetDevice;
+use Platform\AssetManager\Support\DeviceCostResolver;
+use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
+use Platform\AssetManager\Tools\Concerns\ResolvesTenant;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -16,6 +19,7 @@ use Platform\Core\Contracts\ToolResult;
 class GetDeviceTool implements ToolContract, ToolMetadataContract
 {
     use ResolvesTeam;
+    use ResolvesTenant;
 
     public function getName(): string
     {
@@ -33,7 +37,7 @@ class GetDeviceTool implements ToolContract, ToolMetadataContract
     {
         return [
             'type'       => 'object',
-            'properties' => ['id' => ['type' => 'integer', 'description' => 'Geräte-ID.']],
+            'properties' => array_merge(['id' => ['type' => 'integer', 'description' => 'Geräte-ID.']], $this->tenantSchemaProperty()),
             'required'   => ['id'],
         ];
     }
@@ -45,6 +49,15 @@ class GetDeviceTool implements ToolContract, ToolMetadataContract
             if (!$teamId) {
                 return ToolResult::error('MISSING_TEAM', 'Kein aktives Team im Kontext. Nutze core__context__GET / core__team__switch.');
             }
+
+            // Tenant-Grenze (ADR 0016): Default ist die gespeicherte Auswahl des Users. forceTenant()
+            // setzt den Kontext fuer den Global Scope, damit JEDE Query unten tenant-rein ist, ohne
+            // dass jede einzelne Query angefasst werden muss.
+            [$tenantId, $tenantError] = $this->resolveTenant($arguments, $context, $teamId);
+            if ($tenantError) {
+                return $tenantError;
+            }
+            TenantContext::forceTenant($tenantId);
             if (empty($arguments['id'])) {
                 return ToolResult::error('VALIDATION_ERROR', 'id ist erforderlich.');
             }
@@ -55,9 +68,12 @@ class GetDeviceTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('NOT_FOUND', 'Gerät nicht gefunden. Nutze asset-manager.devices.GET zum Suchen.');
             }
 
-            $own   = AssetDevice::computeMonthlyFrom($d->monthly_cost, $d->purchase_price, $d->depreciation_months, $d->purchase_date);
-            $model = $d->deviceModel();
-            $fromModel = $model ? AssetDevice::computeMonthlyFrom($model->monthly_cost, $model->purchase_price, $model->depreciation_months, null) : null;
+            // Modell-Kosten sind seit ADR 0016 tenant-scoped -> ueber den Resolver aufloesen.
+            $resolver  = DeviceCostResolver::for($teamId, $d->tenant_id !== null ? (int) $d->tenant_id : null);
+            $own       = AssetDevice::computeMonthlyFrom($d->monthly_cost, $d->purchase_price, $d->depreciation_months, $d->purchase_date);
+            $model     = $resolver->modelFor($d);
+            $modelCost = $resolver->costForModel($model);
+            $fromModel = $resolver->modelMonthlyCost($d);
 
             return ToolResult::success([
                 'id'                  => $d->id,
@@ -91,8 +107,9 @@ class GetDeviceTool implements ToolContract, ToolMetadataContract
                         'id'                  => $model->id,
                         'manufacturer'        => $model->manufacturer,
                         'model'               => $model->model,
-                        'monthly_cost'        => $model->monthly_cost !== null ? (float) $model->monthly_cost : null,
-                        'purchase_price'      => $model->purchase_price !== null ? (float) $model->purchase_price : null,
+                        // Preise kommen aus der tenant-eigenen Kostenzeile, die Nutzungsdauer vom Modell.
+                        'monthly_cost'        => $modelCost?->monthly_cost !== null ? (float) $modelCost->monthly_cost : null,
+                        'purchase_price'      => $modelCost?->purchase_price !== null ? (float) $modelCost->purchase_price : null,
                         'depreciation_months' => $model->depreciation_months,
                         'monthly_from_model'  => $fromModel,
                     ] : null,
