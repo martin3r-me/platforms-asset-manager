@@ -57,6 +57,47 @@
                 </div>
             </x-asset-manager-panel>
 
+            {{-- Traeger-Typ-Regeln (ADR 0017) --}}
+            <x-asset-manager-panel title="Klassifizierung der Asset-Träger">
+                <div class="space-y-3">
+                    <p class="text-xs text-[var(--am-text-secondary)]">
+                        Bestimmt, welche Träger beim Entra-Sync als <strong>Funktionskonto</strong>,
+                        <strong>Admin-</strong>, <strong>Service-Account</strong> oder <strong>Extern</strong>
+                        gelten — alle übrigen sind <strong>Personen</strong>. Nicht-Personen werden
+                        <strong>gelabelt, nicht gefiltert</strong>: die Träger-Liste blendet sie standardmäßig
+                        aus, Lizenz- und Kostenauswertungen zählen sie weiterhin mit.
+                    </p>
+                    <p class="text-xs text-[var(--am-text-muted)]">
+                        Regeln gelten für den Tenant <strong class="text-[var(--am-text-secondary)]">{{ $tenantName }}</strong>.
+                        Sie stehen hier und nicht im Code, weil „alles mit <code>adm-</code> ist ein Admin"
+                        eine Konvention dieses Kunden ist und keine allgemeine Regel.
+                        Erste Übereinstimmung gewinnt; eine manuell gesetzte Einordnung bleibt erhalten.
+                    </p>
+
+                    @if($canManage)
+                        <x-asset-manager-textarea rows="8" wire:model="holderRulesJson"
+                            class="font-mono text-xs"
+                            placeholder="{{ $holderTypeExample }}" />
+
+                        @if($holderRulesError)
+                            <p class="text-xs text-red-700 m-0">{{ $holderRulesError }}</p>
+                        @endif
+
+                        <div class="flex items-center gap-2">
+                            <x-asset-manager-button variant="primary" size="sm" type="button" wire:click="saveHolderRules">
+                                @svg('heroicon-o-check', 'w-4 h-4')
+                                Regeln speichern
+                            </x-asset-manager-button>
+                            <span class="text-[10px] text-[var(--am-text-muted)]">
+                                Feld: upn · email · display_name — Vergleich: prefix · suffix · contains · equals
+                            </span>
+                        </div>
+                    @else
+                        <pre class="p-3 text-xs font-mono rounded-lg bg-[var(--am-bg)] border border-[color:var(--am-border)] overflow-x-auto">{{ $holderRulesJson ?: '— keine Regeln — alle Träger gelten als Person —' }}</pre>
+                    @endif
+                </div>
+            </x-asset-manager-panel>
+
             {{-- Gefahrenzone — kompletter Team-Reset --}}
             <x-asset-manager-panel title="Gefahrenzone">
                 <div class="flex items-start justify-between gap-6">

@@ -61,6 +61,22 @@
                     </x-asset-manager-filter-section>
                 @endif
 
+                {{-- Träger-Typ (ADR 0017). Default „Nur Personen": Funktions-, Admin- und
+                     Service-Accounts sind echte Träger mit echten Lizenzen, stören in der
+                     Personen-Liste aber die Übersicht. Sie sind gelabelt, nicht weggeworfen — die
+                     Kosten-/Lizenzauswertungen zählen sie unabhängig von diesem Filter mit. --}}
+                <x-asset-manager-filter-section title="Träger-Typ">
+                    <x-asset-manager-select size="sm" wire:model.live="filterHolderType">
+                        <option value="person">Nur Personen</option>
+                        <option value="">Alle Träger</option>
+                        <option value="non_person">Nur Nicht-Personen</option>
+                        <option value="function">Funktionskonten</option>
+                        <option value="admin">Admin-Accounts</option>
+                        <option value="service">Service-/Technik-Accounts</option>
+                        <option value="external">Externe</option>
+                    </x-asset-manager-select>
+                </x-asset-manager-filter-section>
+
                 <x-asset-manager-filter-section title="Quelle">
                     <x-asset-manager-select size="sm" wire:model.live="filterSource">
                         <option value="">Alle</option>
@@ -228,8 +244,23 @@
                 @endforeach
             </div>
 
+            {{-- Nicht-Personen sind ausgeblendet, nicht weg. Ohne diesen Hinweis waere die Liste eine
+                 stille Teilmenge — und ein Nutzer, der ein Funktionskonto sucht, wuerde es fuer
+                 geloescht halten (ADR 0017). --}}
+            @if($filterHolderType === 'person' && ($nonPersonCount ?? 0) > 0)
+                <div class="flex items-start gap-2 px-3 py-2 rounded-lg bg-[var(--am-bg)] border border-[color:var(--am-border)]">
+                    @svg('heroicon-o-information-circle', 'w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--am-text-muted)]')
+                    <p class="text-xs text-[var(--am-text-secondary)] m-0">
+                        <strong>{{ $nonPersonCount }}</strong> Nicht-Personen (Funktions-, Admin- und
+                        Service-Accounts) sind ausgeblendet. Sie zaehlen in Lizenz- und Kostenauswertungen
+                        weiterhin mit.
+                        <button wire:click="$set('filterHolderType', '')" class="underline hover:text-[var(--am-accent)]">Alle Traeger zeigen</button>
+                    </p>
+                </div>
+            @endif
+
             {{-- Aktive Sidebar-Filter als Badges --}}
-            @if($search || $filterDept || $filterSku || $filterSource || $filterCostCenter || $filterHasLicense || $filterHasDevice || $filterHasAsset)
+            @if($search || $filterDept || $filterSku || $filterSource || $filterCostCenter || $filterHasLicense || $filterHasDevice || $filterHasAsset || $filterHolderType !== 'person')
                 <div class="flex flex-wrap items-center gap-2 text-xs">
                     <span class="text-[var(--am-text-secondary)]">Zusatzfilter:</span>
                     @if($search) <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[var(--am-accent-surface)] text-[var(--am-accent)]">"{{ Str::limit($search, 30) }}" <button wire:click="$set('search', '')">×</button></span> @endif
@@ -242,6 +273,20 @@
                     @if($filterHasAsset)   <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[var(--am-accent-surface)] text-[var(--am-accent)]">Hat Asset <button wire:click="$set('filterHasAsset', false)">×</button></span> @endif
                     @if($filterDept)       <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[var(--am-accent-surface)] text-[var(--am-accent)]">{{ $filterDept }} <button wire:click="$set('filterDept', '')">×</button></span> @endif
                     @if($filterSource)     <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[var(--am-accent-surface)] text-[var(--am-accent)]">{{ $filterSource }} <button wire:click="$set('filterSource', '')">×</button></span> @endif
+                    @if($filterHolderType !== 'person')
+                        @php
+                            $typeLabel = match ($filterHolderType) {
+                                ''            => 'Alle Träger',
+                                'non_person'  => 'Nur Nicht-Personen',
+                                'function'    => 'Funktionskonten',
+                                'admin'       => 'Admin-Accounts',
+                                'service'     => 'Service-/Technik-Accounts',
+                                'external'    => 'Externe',
+                                default       => $filterHolderType,
+                            };
+                        @endphp
+                        <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[var(--am-accent-surface)] text-[var(--am-accent)]">{{ $typeLabel }} <button wire:click="$set('filterHolderType', 'person')">×</button></span>
+                    @endif
                     @if($filterCostCenter)
                         @php $ccLabel = optional($costCenters->firstWhere('id', (int) $filterCostCenter))->code ?? $filterCostCenter; @endphp
                         <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[var(--am-accent-surface)] text-[var(--am-accent)]">KSt: {{ $ccLabel }} <button wire:click="$set('filterCostCenter', '')">×</button></span>
@@ -291,7 +336,14 @@
                                                     {{ $emp->initials() }}
                                                 </div>
                                                 <div class="min-w-0">
-                                                    <div class="font-medium text-[var(--am-text)] hover:text-[var(--am-accent)]">{{ $emp->name }}</div>
+                                                    <div class="flex items-center gap-1.5">
+                                                        <span class="font-medium text-[var(--am-text)] hover:text-[var(--am-accent)]">{{ $emp->name }}</span>
+                                                        {{-- Nicht-Personen sichtbar labeln: eine Zeile ohne Kennzeichnung würde
+                                                             in Auswertungen als Person gelesen (ADR 0017). --}}
+                                                        @unless($emp->holder_type === \Platform\AssetManager\Models\AssetHolder::TYPE_PERSON)
+                                                            <x-asset-manager-badge :color="$emp->holderTypeBadgeColor()" size="xs">{{ $emp->holderTypeLabel() }}</x-asset-manager-badge>
+                                                        @endunless
+                                                    </div>
                                                     <div class="text-xs text-[var(--am-text-secondary)] truncate max-w-[240px]">{{ $emp->user_principal_name }}</div>
                                                 </div>
                                             </a>

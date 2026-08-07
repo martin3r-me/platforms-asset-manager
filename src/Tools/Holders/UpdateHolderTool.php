@@ -33,7 +33,7 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
         return 'PUT /asset-manager/employee - Aktualisiert EINEN Asset-Träger (per id ODER '
             . 'user_principal_name). Optionale Felder: cost_center (Kostenstellen-Code; setzt Code + '
             . 'cost_center_id konsistent; "" leert die Zuordnung), department, is_active (boolean), '
-            . 'job_title, account_type ("function" für Funktionskonten). Unbekannter Kostenstellen-Code '
+            . 'job_title, holder_type (person|function|admin|service|external). Unbekannter Kostenstellen-Code '
             . 'wird nur mit create_missing=true angelegt, sonst Fehler.';
     }
 
@@ -48,7 +48,8 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
                 'department'          => ['type' => 'string', 'description' => 'Abteilung.'],
                 'is_active'           => ['type' => 'boolean', 'description' => 'Aktiv-Status.'],
                 'job_title'           => ['type' => 'string', 'description' => 'Jobtitel.'],
-                'account_type'        => ['type' => 'string', 'description' => 'Kontotyp, z.B. "function".'],
+                'holder_type'         => ['type' => 'string', 'enum' => ['person', 'function', 'admin', 'service', 'external'], 'description' => 'Traeger-Typ (ADR 0017). Nicht-Personen werden gelabelt, nicht gefiltert.'],
+                'account_type'        => ['type' => 'string', 'description' => 'DEPRECATED - Alias von holder_type.'],
                 'create_missing'      => ['type' => 'boolean', 'description' => 'Wenn true: fehlende Kostenstelle anlegen (Default false).'],
             ], $this->tenantSchemaProperty()),
             'required' => [],
@@ -112,7 +113,18 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
                 }
             }
 
-            foreach (['department', 'job_title', 'account_type'] as $field) {
+            // account_type als Alias von holder_type akzeptieren (ADR 0017), damit bestehende
+            // LLM-Aufrufe weiter wirken.
+            if (array_key_exists('account_type', $arguments) && ! array_key_exists('holder_type', $arguments)) {
+                $arguments['holder_type'] = $arguments['account_type'];
+            }
+
+            if (array_key_exists('holder_type', $arguments)
+                && ! in_array($arguments['holder_type'], \Platform\AssetManager\Models\AssetHolder::TYPES, true)) {
+                return ToolResult::error('VALIDATION_ERROR', 'holder_type muss einer von person|function|admin|service|external sein.');
+            }
+
+            foreach (['department', 'job_title', 'holder_type'] as $field) {
                 if (array_key_exists($field, $arguments)) {
                     $emp->{$field} = $arguments[$field] !== '' ? $arguments[$field] : null;
                 }
@@ -133,7 +145,8 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
                 'department'        => $emp->department,
                 'is_active'         => (bool) $emp->is_active,
                 'job_title'         => $emp->job_title,
-                'account_type'      => $emp->account_type,
+                'holder_type'       => $emp->holder_type,
+                'account_type'      => $emp->holder_type, // DEPRECATED - Alias
                 'message'           => "Asset-Träger '{$emp->name}' aktualisiert.",
             ]);
         } catch (\Throwable $e) {

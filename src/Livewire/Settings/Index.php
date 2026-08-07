@@ -7,8 +7,10 @@ use Illuminate\Support\Facades\Gate;
 use Livewire\Component;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Services\AssetResetService;
+use Platform\AssetManager\Models\AssetTeamSetting;
 use Platform\AssetManager\Models\AssetTenant;
 use Platform\AssetManager\Services\ControllingContext;
+use Platform\AssetManager\Services\HolderClassifier;
 use Platform\AssetManager\Services\TenantContext;
 
 /**
@@ -27,9 +29,83 @@ class Index extends Component
     /** Type-to-confirm: der Nutzer muss hier den Teamnamen exakt eintippen. */
     public string $resetPhrase = '';
 
+    /**
+     * Klassifizierungs-Regeln für den Träger-Typ, je Tenant (ADR 0017) — als JSON-Text im Editor.
+     *
+     * Bewusst Rohtext statt Formular-Zeilen: die Regelliste ist kurz, wird selten angefasst, und ein
+     * Zeilen-Editor wäre für den Nutzen deutlich mehr UI. Beim Speichern wird validiert und
+     * normalisiert zurückgeschrieben, damit ein Tippfehler sofort sichtbar wird.
+     */
+    public string $holderRulesJson = '';
+
+    public ?string $holderRulesError = null;
+
     public function mount(): void
     {
         $this->controllingEnabled = app(ControllingContext::class)->enabledFor($this->teamId());
+        $this->loadHolderRules();
+    }
+
+    protected function loadHolderRules(): void
+    {
+        $rules = app(HolderClassifier::class)->rulesFor(TenantContext::scopeTenantId());
+
+        $this->holderRulesJson = $rules === []
+            ? ''
+            : json_encode($rules, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Regeln des aktiven Tenants speichern.
+     *
+     * Ungültige Regeln werden von {@see HolderClassifier::sanitize()} verworfen, nicht abgelehnt —
+     * und der Nutzer sieht anschließend die normalisierte Liste. So ist sofort erkennbar, WAS
+     * übernommen wurde, statt dass eine unwirksame Regel gespeichert dasteht und nichts tut.
+     */
+    public function saveHolderRules(): void
+    {
+        Gate::authorize('asset-manager.manage');
+
+        $this->holderRulesError = null;
+        $raw = trim($this->holderRulesJson);
+
+        if ($raw === '') {
+            $rules = [];
+        } else {
+            $decoded = json_decode($raw, true);
+
+            if (! is_array($decoded)) {
+                $this->holderRulesError = 'Kein gültiges JSON-Array. Beispiel: '
+                    . '[{"type":"admin","field":"upn","match":"prefix","value":"adm-"}]';
+
+                return;
+            }
+
+            $rules = app(HolderClassifier::class)->sanitize($decoded);
+
+            if ($rules === [] && $decoded !== []) {
+                $this->holderRulesError = 'Keine der Regeln ist gültig. Erlaubt: type = function|admin|'
+                    . 'service|external, field = upn|email|display_name, match = prefix|suffix|contains|equals, '
+                    . 'value nicht leer.';
+
+                return;
+            }
+        }
+
+        $tenantId = TenantContext::resolveForWrite($this->teamId(), (int) Auth::id());
+
+        AssetTeamSetting::withoutTenantScope()->updateOrCreate(
+            ['team_id' => $this->teamId(), 'tenant_id' => $tenantId],
+            ['holder_type_rules' => $rules === [] ? null : $rules],
+        );
+
+        HolderClassifier::forget();
+        $this->loadHolderRules();
+
+        $count = count($rules);
+        session()->flash('status', $count === 0
+            ? "Klassifizierungs-Regeln für {$this->activeTenantName()} entfernt — neue Träger gelten als Person."
+            : "{$count} Klassifizierungs-Regel(n) für {$this->activeTenantName()} gespeichert. Wirkt auf den nächsten Sync; bestehende Träger über den Neu-Klassifizieren-Lauf.");
     }
 
     private function teamName(): string
@@ -101,6 +177,10 @@ class Index extends Component
             'teamName'   => $this->teamName(),
             // Damit auf der Seite steht, WELCHER Kundenkontext gerade geschaltet wird.
             'tenantName' => $this->activeTenantName(),
+            'holderTypeExample' => json_encode([
+                ['type' => 'admin', 'field' => 'upn', 'match' => 'prefix', 'value' => 'adm-'],
+                ['type' => 'service', 'field' => 'upn', 'match' => 'contains', 'value' => 'svc'],
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
         ])->layout('platform::layouts.app');
     }
 }

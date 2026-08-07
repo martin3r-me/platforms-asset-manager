@@ -105,6 +105,11 @@ class CostAggregationService
 
     /**
      * Top-N Asset-Träger nach monatlichen Gesamtkosten (Hardware + Lizenzen).
+     *
+     * Bezieht **alle** Träger-Typen ein — auch Funktionskonten, Admin- und Service-Accounts (ADR 0017).
+     * Das ist Absicht und darf nicht „aufgeräumt" werden: ein Admin-Account verbraucht eine echte
+     * Lizenz und kostet echtes Geld. Wer ihn hier herausfiltert, macht die Kostensumme falsch. Die
+     * Unterscheidung gehört in die ANZEIGE (Badge, Default-Filter der Liste), nicht in die Summe.
      * Returns: Collection [['holder' => AssetHolder, 'hardware' => float, 'licenses' => float, 'total' => float]]
      */
     public function topHolders(int $teamId, int $limit = 10): Collection

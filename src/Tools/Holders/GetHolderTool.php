@@ -164,6 +164,10 @@ class GetHolderTool implements ToolContract, ToolMetadataContract
                     'job_title'           => $emp->job_title,
                     'is_active'           => (bool) $emp->is_active,
                     'holder_type'         => $emp->holder_type,
+                    'holder_type_label'   => $emp->holderTypeLabel(),
+                    // Explizit, damit ein Modell nicht aus dem Typ-String raten muss, ob es eine
+                    // Person vor sich hat (ADR 0017).
+                    'is_person'           => ! $emp->isNonPerson(),
                     'account_type'        => $emp->holder_type, // DEPRECATED — Alias, siehe ADR 0017
                     'cost_center'         => $emp->cost_center,
                     'cost_center_id'      => $emp->cost_center_id,

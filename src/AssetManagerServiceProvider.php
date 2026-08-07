@@ -29,6 +29,7 @@ class AssetManagerServiceProvider extends ServiceProvider
                 \Platform\AssetManager\Console\Commands\SyncIntuneDevicesCommand::class,
                 \Platform\AssetManager\Console\Commands\SyncLicensesCommand::class,
                 \Platform\AssetManager\Console\Commands\BackfillHoldersCommand::class,
+                \Platform\AssetManager\Console\Commands\ClassifyHoldersCommand::class,
                 \Platform\AssetManager\Console\Commands\ImportCostExcelCommand::class,
             ]);
         }

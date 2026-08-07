@@ -35,7 +35,7 @@ class ListHoldersTool implements ToolContract, ToolMetadataContract
     {
         return 'GET /asset-manager/holders - Listet Asset-Träger des aktiven Tenants. Filterbare/'
             . 'durchsuchbare Felder: display_name, user_principal_name, email, department, cost_center, '
-            . 'is_active, account_type, source. Nutze filters (z.B. {"field":"department","op":"eq",'
+            . 'is_active, holder_type, source. Nutze filters (z.B. {"field":"department","op":"eq",'
             . '"value":"IT"}), search, sort, limit/offset. Antwort enthält je Asset-Träger Counts '
             . '(devices/licenses/items) und die zugeordnete Kostenstelle. Für ein Voll-Profil eines '
             . 'einzelnen Asset-Trägers → asset-manager.employee.GET.';
@@ -63,7 +63,7 @@ class ListHoldersTool implements ToolContract, ToolMetadataContract
             }
             TenantContext::forceTenant($tenantId);
 
-            $allowed = ['display_name', 'user_principal_name', 'email', 'department', 'cost_center', 'is_active', 'account_type', 'source'];
+            $allowed = ['display_name', 'user_principal_name', 'email', 'department', 'cost_center', 'is_active', 'holder_type', 'source'];
 
             $query = AssetHolder::where('team_id', $teamId)->with('costCenter');
             $this->applyStandardFilters($query, $arguments, $allowed);
@@ -93,7 +93,11 @@ class ListHoldersTool implements ToolContract, ToolMetadataContract
                 'cost_center_id'      => $e->cost_center_id,
                 'cost_center_label'   => $e->costCenter?->label,
                 'is_active'           => (bool) $e->is_active,
-                'account_type'        => $e->account_type,
+                'holder_type'         => $e->holder_type,
+                'holder_type_label'   => $e->holderTypeLabel(),
+                'is_person'           => ! $e->isNonPerson(),
+                // DEPRECATED (ADR 0017): Alias auf holder_type, damit bestehende Aufrufer nicht brechen.
+                'account_type'        => $e->holder_type,
                 'source'              => $e->source,
                 'counts'              => [
                     'devices'  => (int) ($deviceCounts[$e->user_principal_name] ?? 0),

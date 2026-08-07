@@ -76,8 +76,16 @@ class OverviewTool implements ToolContract, ToolMetadataContract
                       ->orWhere(fn ($w) => $w->whereNotNull('lease_until')->where('lease_until', '<=', $expiringThreshold));
                 })->count();
 
+            // Traeger-Zaehler schluesseln Person/Nicht-Person auf (ADR 0017): ohne das liest ein Modell
+            // `holders` als Kopfzahl der Belegschaft — sie enthaelt aber auch Funktionskonten,
+            // Admin-/Service-Accounts und Externe. Alle zaehlen in Lizenz- und Kostenauswertungen MIT;
+            // nur die Personen-Zahl ist eine Kopfzahl.
             $counts = [
-                'holders'        => AssetHolder::where('team_id', $teamId)->count(),
+                'holders'          => AssetHolder::where('team_id', $teamId)->count(),
+                'holders_active'   => AssetHolder::where('team_id', $teamId)->where('is_active', true)->count(),
+                'holders_persons'  => AssetHolder::where('team_id', $teamId)->persons()->count(),
+                'holders_non_persons' => AssetHolder::where('team_id', $teamId)->nonPersons()->count(),
+                // DEPRECATED (ADR 0017): Alias auf holders_active.
                 'employees_active' => AssetHolder::where('team_id', $teamId)->where('is_active', true)->count(),
                 'devices'          => AssetDevice::where('team_id', $teamId)->count(),
                 'expiring_devices' => $expiringDevices,

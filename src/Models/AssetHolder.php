@@ -8,10 +8,53 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Platform\AssetManager\Concerns\TenantScopable;
 
+/**
+ * Asset-Träger: wer ein Gerät oder eine Lizenz **trägt** (siehe docs/adr/0017).
+ *
+ * Bildet die Beziehung Person ↔ Asset ab, **kein Arbeitsverhältnis** — mit drin sind Externe,
+ * Admin-/Verwaltungsaccounts (keine Personen), Funktionskonten und Nicht-Menschen als Lizenzträger.
+ * Identität ist die **UPN**; sie ist der Anker für Sync, Kostenzuordnung und Anonymisierung, weshalb
+ * Lizenz- und Geräteträger bewusst NICHT getrennt sind.
+ */
 class AssetHolder extends Model
 {
     use HasFactory;
     use TenantScopable;
+
+    /**
+     * Träger-Typen. `person` ist der Default; die übrigen bezeichnen Träger, die **keine** Person
+     * sind bzw. nicht zur Organisation gehören:
+     *   function — Funktionskonto (CONTROLLING, HELPDESK …), synthetische UPN, trägt Kosten ohne Person
+     *   admin    — Administrations-/Verwaltungsaccount einer echten Person oder unpersonalisiert
+     *   service  — technischer Account / Nicht-Mensch als Lizenzträger (z. B. ein Bot)
+     *   external — Externe mit Firmengerät oder Lizenz (Dienstleister, Aushilfen)
+     */
+    public const TYPE_PERSON   = 'person';
+    public const TYPE_FUNCTION = 'function';
+    public const TYPE_ADMIN    = 'admin';
+    public const TYPE_SERVICE  = 'service';
+    public const TYPE_EXTERNAL = 'external';
+
+    public const TYPES = [
+        self::TYPE_PERSON,
+        self::TYPE_FUNCTION,
+        self::TYPE_ADMIN,
+        self::TYPE_SERVICE,
+        self::TYPE_EXTERNAL,
+    ];
+
+    /**
+     * Typen, die **keine** natürliche Person der Organisation sind.
+     *
+     * Sie werden **gelabelt, nicht gefiltert**: die Default-Sicht blendet sie aus, Lizenz- und
+     * Kostenauswertungen zählen sie **mit** — ein Admin-Account verbraucht eine echte Lizenz und
+     * kostet echtes Geld. Sie wegzuwerfen würde die Auswertungen falsch machen, nicht sauberer.
+     */
+    public const NON_PERSON_TYPES = [
+        self::TYPE_FUNCTION,
+        self::TYPE_ADMIN,
+        self::TYPE_SERVICE,
+    ];
 
     protected $table = 'asset_holders';
 
@@ -37,6 +80,9 @@ class AssetHolder extends Model
         'contract_number',
         'data_volume',
         'is_active',
+        'holder_type',
+        // DEPRECATED (ADR 0017): durch holder_type ersetzt. Bleibt im fillable, solange die Spalte als
+        // Sicherheitsnetz existiert — ein Rollback des Deploys soll die Typinformation nicht verlieren.
         'account_type',
         'source',
         'graph_id',
@@ -78,10 +124,55 @@ class AssetHolder extends Model
         return $this->hasMany(AssetAssignment::class, 'holder_id')->orderByDesc('assigned_at');
     }
 
-    /** True wenn Funktionskonto (kein echter Asset-Träger). */
+    /** True wenn Funktionskonto (trägt Kosten ohne echte Person). */
     public function isFunctionAccount(): bool
     {
-        return $this->account_type === 'function';
+        return $this->holder_type === self::TYPE_FUNCTION;
+    }
+
+    /** True wenn der Träger keine natürliche Person der Organisation ist (function/admin/service). */
+    public function isNonPerson(): bool
+    {
+        return in_array($this->holder_type, self::NON_PERSON_TYPES, true);
+    }
+
+    /** Anzeigename des Träger-Typs. */
+    public function holderTypeLabel(): string
+    {
+        return match ($this->holder_type) {
+            self::TYPE_FUNCTION => 'Funktionskonto',
+            self::TYPE_ADMIN    => 'Admin-Account',
+            self::TYPE_SERVICE  => 'Service-/Technik-Account',
+            self::TYPE_EXTERNAL => 'Extern',
+            default             => 'Person',
+        };
+    }
+
+    /**
+     * Badge-Farbe des Träger-Typs. Nur Farbfamilien verwenden, die im Tailwind-Build vorkommen —
+     * dynamische Klassen aus unbenutzten Familien fehlen sonst zur Laufzeit (siehe ADR 0011).
+     */
+    public function holderTypeBadgeColor(): string
+    {
+        return match ($this->holder_type) {
+            self::TYPE_FUNCTION => 'violet',
+            self::TYPE_ADMIN    => 'amber',
+            self::TYPE_SERVICE  => 'slate',
+            self::TYPE_EXTERNAL => 'sky',
+            default             => 'emerald',
+        };
+    }
+
+    /** Nur echte Personen (Default-Sicht der Listen). */
+    public function scopePersons($query)
+    {
+        return $query->where('holder_type', self::TYPE_PERSON);
+    }
+
+    /** Nur Nicht-Personen (Funktionskonten, Admin-/Service-Accounts). */
+    public function scopeNonPersons($query)
+    {
+        return $query->whereIn('holder_type', self::NON_PERSON_TYPES);
     }
 
     public function items(): HasMany

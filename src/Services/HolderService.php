@@ -40,6 +40,10 @@ class HolderService
             $holder->display_name = $displayName;
             $holder->email        = $upn;
             $holder->is_active    = true;
+            // Traeger-Typ schon bei der Anlage bestimmen (ADR 0017): sonst waere jeder neue Datensatz
+            // bis zum naechsten applyGraphProfile() eine `person` — und Funktionskonten, die ueber
+            // diesen Pfad entstehen, wuerden zwischenzeitlich als Personen gezaehlt.
+            $holder->holder_type  = app(HolderClassifier::class)->classify($holder, $tenantId);
             $holder->save();
         } else {
             $dirty = false;
@@ -90,6 +94,12 @@ class HolderService
                 $holder->business_phone = self::normalizePhone($graphUser['businessPhones'][0]);
             }
         }
+
+        // Träger-Typ aus den tenant-eigenen Regeln bestimmen (ADR 0017). Läuft NACH den Feldern, weil
+        // die Regeln auf E-Mail und Anzeigename greifen können und sonst auf veraltete Werte sähen.
+        // Ein bereits gesetzter Nicht-Default-Typ (manuelle Korrektur) bleibt unangetastet — das
+        // entscheidet der Classifier.
+        $holder->holder_type = app(HolderClassifier::class)->classify($holder);
     }
 
     /**

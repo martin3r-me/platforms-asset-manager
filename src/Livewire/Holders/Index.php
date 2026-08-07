@@ -24,6 +24,13 @@ class Index extends Component
     public string $filterSku        = '';
     public string $filterSource     = '';
     public string $filterCostCenter = '';
+    /**
+     * Träger-Typ-Filter (ADR 0017). Default `person`: Funktionskonten, Admin- und Service-Accounts
+     * sind echte Träger mit echten Lizenzen, aber keine Personen — in der Personen-Liste stören sie
+     * die Übersicht. Sie werden gelabelt, nicht weggeworfen: '' zeigt alle, 'non_person' nur sie,
+     * und die Kosten-/Lizenzauswertungen zählen sie unabhängig von diesem Filter mit.
+     */
+    public string $filterHolderType = 'person';
     public bool   $filterHasLicense = false;
     public bool   $filterHasDevice  = false;
     public bool   $filterHasAsset   = false;
@@ -39,6 +46,7 @@ class Index extends Component
         'filterSku'        => ['except' => ''],
         'filterSource'     => ['except' => ''],
         'filterCostCenter' => ['except' => ''],
+        'filterHolderType' => ['except' => 'person'],
         'filterHasLicense' => ['except' => false],
         'filterHasDevice'  => ['except' => false],
         'filterHasAsset'   => ['except' => false],
@@ -68,6 +76,7 @@ class Index extends Component
         $this->filterDept       = '';
         $this->filterSku        = '';
         $this->filterSource     = '';
+        $this->filterHolderType = 'person';
         $this->filterCostCenter = '';
         $this->filterHasLicense = false;
         $this->filterHasDevice  = false;
@@ -122,6 +131,30 @@ class Index extends Component
     }
 
     /** Asset-Träger-IDs mit mindestens einem zugewiesenen Asset. */
+    /**
+     * Träger-Typ-Filter auf eine Query anwenden.
+     *
+     * `person` (Default) = nur echte Personen · `non_person` = nur Funktions-/Admin-/Service-Accounts ·
+     * `''` = alle · ein konkreter Typ = genau dieser. Kein Filter auf einen unbekannten Wert: das
+     * würde still eine leere Liste zeigen statt den Fehler zu offenbaren.
+     */
+    protected function applyHolderTypeFilter($query): void
+    {
+        if ($this->filterHolderType === '') {
+            return;
+        }
+
+        if ($this->filterHolderType === 'non_person') {
+            $query->nonPersons();
+
+            return;
+        }
+
+        if (in_array($this->filterHolderType, AssetHolder::TYPES, true)) {
+            $query->where('holder_type', $this->filterHolderType);
+        }
+    }
+
     protected function holderIdsWithAsset(int $teamId)
     {
         return AssetItem::where('team_id', $teamId)
@@ -200,6 +233,9 @@ class Index extends Component
             'inactive'     => (clone $base)->where('is_active', false)->count(),
         ];
 
+        // Nicht-Personen zaehlen — fuer den Hinweis „x Funktions-/Admin-Accounts ausgeblendet".
+        $nonPersonCount = (clone $base)->nonPersons()->count();
+
         // --- Hauptquery ---
         $query = AssetHolder::where('team_id', $teamId);
         $this->applyPreset($query, $teamId);
@@ -214,6 +250,7 @@ class Index extends Component
         }
         if ($this->filterDept)       $query->where('department', $this->filterDept);
         if ($this->filterSource)     $query->where('source', $this->filterSource);
+        $this->applyHolderTypeFilter($query);
         if ($this->filterCostCenter !== '') $query->where('cost_center_id', $this->filterCostCenter);
 
         if ($this->filterHasLicense || $this->filterSku) {
@@ -314,6 +351,9 @@ class Index extends Component
             'selAssetCount'    => $selAssetCount,
             'selLicenseCount'  => $selLicenseCount,
             'selectedCost'     => $selectedCost,
+            // Für den Hinweis „x Nicht-Personen ausgeblendet" — sie sind gelabelt, nicht gelöscht.
+            'nonPersonCount'   => $nonPersonCount,
+            'holderTypes'      => AssetHolder::TYPES,
         ])->layout('platform::layouts.app');
     }
 }
