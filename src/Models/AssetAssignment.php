@@ -4,9 +4,12 @@ namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Platform\AssetManager\Concerns\TenantScopable;
 
 class AssetAssignment extends Model
 {
+    use TenantScopable;
+
     protected $table = 'asset_assignments';
 
     /** Diskriminator-Werte (kein Eloquent-morphTo → unabhängig von der plattformweiten Morph-Map). */
@@ -17,6 +20,7 @@ class AssetAssignment extends Model
     public const SOURCE_INTUNE = 'intune';
 
     protected $fillable = [
+        'tenant_id',
         'asset_item_id',
         'assignable_type',
         'assignable_id',

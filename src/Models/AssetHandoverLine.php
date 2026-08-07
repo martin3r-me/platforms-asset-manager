@@ -5,15 +5,19 @@ namespace Platform\AssetManager\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Platform\AssetManager\Concerns\TenantScopable;
 
 /**
  * Position eines Geräteausgabe-Protokolls = ein ausgegebenes Gerät. Rückgabe/Tausch erfolgt
- * zeilenweise (returned_at). Kein eigenes tenant_id — scoped über den Kopf (whereHas('handover'))
- * bzw. die ohnehin tenant-gebundene asset_device_id.
+ * zeilenweise (returned_at).
+ *
+ * Trägt seit docs/adr/0016 ein eigenes `tenant_id` (vorher nur indirekt über den Kopf gescoped): der
+ * Global Scope wirkt je Tabelle, ein `whereHas('handover')` wäre für ihn unsichtbar.
  */
 class AssetHandoverLine extends Model
 {
     use HasFactory;
+    use TenantScopable;
 
     protected $table = 'asset_handover_lines';
 
@@ -26,6 +30,7 @@ class AssetHandoverLine extends Model
     public const STATUS_RETURNED = 'returned';
 
     protected $fillable = [
+        'tenant_id',
         'handover_id',
         'asset_device_id',
         'accessories',

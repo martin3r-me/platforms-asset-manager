@@ -3,17 +3,38 @@
 namespace Platform\AssetManager\Concerns;
 
 use Illuminate\Database\Eloquent\Builder;
+use Platform\AssetManager\Support\TenantScope;
 
 /**
- * Model-Trait für tenant-gebundenes Inventar (M3). Liefert einen einheitlichen `forTenant`-Scope,
- * der NUR filtert, wenn eine Tenant-ID gesetzt ist — bei null bleibt die Query unverändert
- * (team-weit). So ist derselbe Aufruf in jeder Inventar-Query sicher, auch bevor ein Tenant
- * gewählt wurde.
+ * Model-Trait für tenant-gebundene Daten. Bindet den {@see TenantScope} als **Global Scope** ein:
+ * jede Query dieses Modells ist von sich aus auf den aktiven Tenant eingeschränkt (siehe
+ * docs/adr/0016 — der Tenant ist eine Zugriffsgrenze, kein opt-in-Arbeitsfilter).
  *
- * Spalte qualifiziert (table.tenant_id), damit der Scope auch in Joins eindeutig bleibt.
+ * Zwei Ausstiege, bewusst getrennt benannt:
+ *
+ *  - `withoutTenantScope()` — hebt die Einschränkung auf. Für Pfade ohne Auth-Kontext (Sync-Jobs,
+ *    Console-Commands, Reconcile) und tenant-übergreifende Auswertungen. Immer explizit, damit im
+ *    Code-Review sichtbar ist, wo die Grenze absichtlich fällt.
+ *  - `forTenant(?int $id)` — filtert auf einen *anderen* Tenant als den aktiven. Nur sinnvoll in
+ *    Kombination mit `withoutTenantScope()`; bleibt erhalten, weil Jobs pro Tenant iterieren.
  */
 trait TenantScopable
 {
+    public static function bootTenantScopable(): void
+    {
+        static::addGlobalScope(TenantScope::IDENTIFIER, new TenantScope());
+    }
+
+    /** Global Scope abschalten — der eine, benannte Weg über die Tenant-Grenze. */
+    public function scopeWithoutTenantScope(Builder $query): Builder
+    {
+        return $query->withoutGlobalScope(TenantScope::IDENTIFIER);
+    }
+
+    /**
+     * Auf eine konkrete Tenant-ID filtern (no-op bei null). Für Job-Schleifen über mehrere Tenants:
+     * `->withoutTenantScope()->forTenant($id)`.
+     */
     public function scopeForTenant(Builder $query, ?int $tenantId): Builder
     {
         return $query->when(

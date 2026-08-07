@@ -4,7 +4,6 @@ namespace Platform\AssetManager\Services;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
-use Platform\AssetManager\Models\AssetCompany;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetCostType;
@@ -587,22 +586,40 @@ class CostAggregationService
 
     /**
      * Pivot Kostenstelle × Kostenart (Excel Sheet1 = monthly, Sheet2 = quarterly).
-     * Blade-fertige Struktur inkl. Gesellschaft-Gruppierung, Summenzeile/-spalte und Metazeilen.
      *
-     * @param string $period 'monthly'|'quarterly'
+     * Zeilen sind der **Kostenstellen-Baum** in Baum-Reihenfolge (siehe docs/adr/0016). Jeder Knoten
+     * trägt zwei Zahlenpaare:
+     *   - `cells`/`rowTotal`     — die dem Knoten SELBST zugeordneten Beträge,
+     *   - `rollupCells`/`rollupTotal` — der Knoten plus alle seine Nachfahren.
+     *
+     * Vorher waren es zwei feste Ebenen (Gesellschaft → Kostenstelle) mit einem Block je Gesellschaft.
+     *
+     * WICHTIG — Doppelzählung: `colTotals` und `grandTotal` summieren ausschließlich die **eigenen**
+     * Beträge jedes Knotens, jeden Knoten genau einmal. Würde man die Rollups aufaddieren, zählte jeder
+     * Betrag so oft, wie er Vorfahren hat. Die Gesamtsumme bleibt damit bitgenau die von vor dem Umbau.
+     *
+     * @param  string    $period    'monthly'|'quarterly'
+     * @param  int|null  $tenantId  Expliziter Tenant (Jobs/Auswertungen); Default = aktiver Tenant.
      */
-    public function costCenterByType(int $teamId, string $period = 'monthly'): array
+    public function costCenterByType(int $teamId, string $period = 'monthly', ?int $tenantId = null): array
+    {
+        $tenantId ??= TenantContext::scopeTenantId();
+
+        return TenantContext::runFor($tenantId, fn () => $this->buildCostCenterPivot($teamId, $period, $tenantId));
+    }
+
+    private function buildCostCenterPivot(int $teamId, string $period, ?int $tenantId): array
     {
         $factor = $period === 'quarterly' ? 3 : 1;
 
         $types = AssetCostType::where('team_id', $teamId)
             ->orderBy('sort_order')->orderBy('name')->get();
 
-        $companies = AssetCompany::where('team_id', $teamId)
-            ->orderBy('sort_order')->orderBy('name')->get();
-
-        $centers = AssetCostCenter::where('team_id', $teamId)
-            ->orderBy('company_id')->orderBy('code')->get();
+        // Baum-Reihenfolge inkl. korrigierter depth; ohne Tenant (Console) leer statt team-weit falsch —
+        // ein Pivot über gemischte Tenants hätte keine zuordenbaren Zahlen.
+        $nodes = $tenantId !== null
+            ? AssetCostCenter::treeFor($tenantId)
+            : AssetCostCenter::where('team_id', $teamId)->orderBy('code')->get();
 
         // Beträge in matrix[cost_center_id][cost_type_id]
         $matrix = [];
@@ -612,78 +629,56 @@ class CostAggregationService
             $matrix[$cc][$tt] = ($matrix[$cc][$tt] ?? 0) + $line['amount'];
         }
 
-        // Kostenstellen nach Gesellschaft gruppieren
-        $centersByCompany = $centers->groupBy('company_id');
-
         $colTotals  = [];
         $grandTotal = 0.0;
+        $childIds   = $nodes->groupBy(fn ($n) => $n->parent_id ?? 0);
 
-        $buildRow = function (AssetCostCenter $center) use ($types, $matrix, $factor, &$colTotals, &$grandTotal) {
-            $cells = [];
-            $rowTotal = 0.0;
+        $rows = [];
+        foreach ($nodes as $node) {
+            $descendants = AssetCostCenter::descendantIds((int) $node->id, $nodes);
+
+            $cells       = [];
+            $rollupCells = [];
+            $rowTotal    = 0.0;
+            $rollupTotal = 0.0;
+
             foreach ($types as $t) {
-                $val = round(($matrix[$center->id][$t->id] ?? 0) * $factor, 2);
-                $cells[$t->id] = $val;
-                $rowTotal += $val;
-                $colTotals[$t->id] = round(($colTotals[$t->id] ?? 0) + $val, 2);
+                $own = round(($matrix[$node->id][$t->id] ?? 0) * $factor, 2);
+                $cells[$t->id] = $own;
+                $rowTotal += $own;
+
+                // Rollup = eigener Betrag + Beträge aller Nachfahren.
+                $sum = $own;
+                foreach ($descendants as $descendantId) {
+                    $sum += round(($matrix[$descendantId][$t->id] ?? 0) * $factor, 2);
+                }
+                $rollupCells[$t->id] = round($sum, 2);
+                $rollupTotal += $rollupCells[$t->id];
+
+                // NUR die eigenen Beträge in die Spaltensummen — sonst zählt jeder Betrag so oft,
+                // wie sein Knoten Vorfahren hat.
+                $colTotals[$t->id] = round(($colTotals[$t->id] ?? 0) + $own, 2);
             }
+
             $grandTotal += $rowTotal;
-            return [
-                'cost_center_id' => $center->id,
-                'code'           => $center->code,
-                'name'           => $center->name,
+
+            $rows[] = [
+                'cost_center_id' => (int) $node->id,
+                'code'           => $node->code,
+                'name'           => $node->name,
+                'depth'          => (int) $node->depth,
+                'has_children'   => ($childIds[(int) $node->id] ?? collect())->isNotEmpty(),
                 'cells'          => $cells,
                 'rowTotal'       => round($rowTotal, 2),
-            ];
-        };
-
-        $companyBlocks = [];
-        foreach ($companies as $company) {
-            $rows = ($centersByCompany[$company->id] ?? collect())->map($buildRow)->values()->all();
-            if (empty($rows)) continue;
-            $companyBlocks[] = [
-                'key'      => $company->key,
-                'name'     => $company->name,
-                'rows'     => $rows,
-                'subtotal' => round(array_sum(array_column($rows, 'rowTotal')), 2),
+                'rollupCells'    => $rollupCells,
+                'rollupTotal'    => round($rollupTotal, 2),
             ];
         }
 
-        // Kostenstellen ohne Gesellschaft
-        $orphanRows = ($centersByCompany[null] ?? collect())->map($buildRow)->values()->all();
-        if (!empty($orphanRows)) {
-            $companyBlocks[] = [
-                'key'      => null,
-                'name'     => 'Ohne Gesellschaft',
-                'rows'     => $orphanRows,
-                'subtotal' => round(array_sum(array_column($orphanRows, 'rowTotal')), 2),
-            ];
-        }
-
-        // Kostenstellen, deren company_id auf KEINE Team-Gesellschaft zeigt (fremde/danglende FK): die
-        // company-Schleife oben iteriert nur Team-Gesellschaften, der null-Block nur company_id IS NULL —
-        // ohne diesen Auffang-Block fielen solche Kostenstellen samt Beträgen still aus Pivot UND grandTotal.
-        $teamCompanyIds = $companies->pluck('id')->map(fn ($id) => (int) $id)->all();
-        $unknownRows    = [];
-        foreach ($centersByCompany as $companyId => $group) {
-            if ($companyId === null || $companyId === '') continue;            // null-Orphans s. o.
-            if (in_array((int) $companyId, $teamCompanyIds, true)) continue;    // bereits in einem Block
-            foreach ($group->map($buildRow)->values()->all() as $r) {
-                $unknownRows[] = $r;
-            }
-        }
-        if (!empty($unknownRows)) {
-            $companyBlocks[] = [
-                'key'      => '_unknown',
-                'name'     => 'Ohne Gesellschaft / unbekannt',
-                'rows'     => $unknownRows,
-                'subtotal' => round(array_sum(array_column($unknownRows, 'rowTotal')), 2),
-            ];
-        }
-
-        // Posten ganz ohne Kostenstelle (matrix[0])
+        // Posten ganz ohne Kostenstelle (matrix[0]) — eine Zeile am Ende, nicht im Baum.
+        $unassigned = null;
         if (isset($matrix[0])) {
-            $cells = [];
+            $cells    = [];
             $rowTotal = 0.0;
             foreach ($types as $t) {
                 $val = round(($matrix[0][$t->id] ?? 0) * $factor, 2);
@@ -692,17 +687,53 @@ class CostAggregationService
                 $colTotals[$t->id] = round(($colTotals[$t->id] ?? 0) + $val, 2);
             }
             $grandTotal += $rowTotal;
-            $companyBlocks[] = [
-                'key'      => '_none',
-                'name'     => 'Ohne Kostenstelle',
-                'rows'     => [[
-                    'cost_center_id' => null,
-                    'code'           => '—',
-                    'name'           => null,
-                    'cells'          => $cells,
-                    'rowTotal'       => round($rowTotal, 2),
-                ]],
-                'subtotal' => round($rowTotal, 2),
+
+            $unassigned = [
+                'cost_center_id' => null,
+                'code'           => '—',
+                'name'           => 'Ohne Kostenstelle',
+                'depth'          => 0,
+                'has_children'   => false,
+                'cells'          => $cells,
+                'rowTotal'       => round($rowTotal, 2),
+                'rollupCells'    => $cells,
+                'rollupTotal'    => round($rowTotal, 2),
+            ];
+        }
+
+        // Beträge auf Kostenstellen, die NICHT im Baum stecken (tenant-fremd oder gelöscht): ohne
+        // Auffangzeile fielen sie samt Beträgen still aus Pivot UND grandTotal.
+        $knownIds = $nodes->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $orphan   = null;
+        $orphanIds = array_values(array_filter(
+            array_keys($matrix),
+            fn ($id) => $id !== 0 && ! in_array((int) $id, $knownIds, true),
+        ));
+
+        if ($orphanIds !== []) {
+            $cells    = [];
+            $rowTotal = 0.0;
+            foreach ($types as $t) {
+                $val = 0.0;
+                foreach ($orphanIds as $id) {
+                    $val += round(($matrix[$id][$t->id] ?? 0) * $factor, 2);
+                }
+                $cells[$t->id] = round($val, 2);
+                $rowTotal += $cells[$t->id];
+                $colTotals[$t->id] = round(($colTotals[$t->id] ?? 0) + $cells[$t->id], 2);
+            }
+            $grandTotal += $rowTotal;
+
+            $orphan = [
+                'cost_center_id' => null,
+                'code'           => '?',
+                'name'           => 'Unbekannte Kostenstelle',
+                'depth'          => 0,
+                'has_children'   => false,
+                'cells'          => $cells,
+                'rowTotal'       => round($rowTotal, 2),
+                'rollupCells'    => $cells,
+                'rollupTotal'    => round($rowTotal, 2),
             ];
         }
 
@@ -717,8 +748,11 @@ class CostAggregationService
 
         return [
             'period'     => $period,
-            'types'      => $types->map(fn($t) => ['id' => $t->id, 'key' => $t->key, 'name' => $t->name])->values()->all(),
-            'companies'  => $companyBlocks,
+            'tenant_id'  => $tenantId,
+            'types'      => $types->map(fn ($t) => ['id' => $t->id, 'key' => $t->key, 'name' => $t->name])->values()->all(),
+            'rows'       => $rows,
+            'unassigned' => $unassigned,
+            'orphan'     => $orphan,
             'colTotals'  => $colTotals,
             'grandTotal' => round($grandTotal, 2),
             'meta'       => $meta,
@@ -726,17 +760,58 @@ class CostAggregationService
     }
 
     /**
-     * Monatskosten je Gesellschaft.
+     * Monatskosten je oberster Kostenstellen-Ebene (früher: je Gesellschaft) — inklusive der
+     * Nachfahren, also `rollupTotal` der Wurzelknoten. Zusatzzeilen (ohne/unbekannte Kostenstelle)
+     * hängen mit dran, damit die Summe der Liste dem grandTotal entspricht.
+     */
+    public function byCostCenterRoot(int $teamId, ?int $tenantId = null): Collection
+    {
+        $pivot = $this->costCenterByType($teamId, 'monthly', $tenantId);
+
+        // Die Zeilen stehen in Baum-Reihenfolge: alles zwischen zwei Wurzeln gehört zur ersten.
+        // Daraus ergibt sich die Knotenzahl je Wurzel, ohne den Baum erneut zu traversieren.
+        $roots = collect();
+        $current = null;
+
+        foreach ($pivot['rows'] as $row) {
+            if ($row['depth'] === 0) {
+                $current = [
+                    'label' => $row['name'] ? "{$row['code']} — {$row['name']}" : $row['code'],
+                    'total' => $row['rollupTotal'],
+                    'count' => 1,
+                ];
+                $roots->push($current);
+
+                continue;
+            }
+
+            if ($roots->isNotEmpty()) {
+                $last = $roots->pop();
+                $last['count']++;
+                $roots->push($last);
+            }
+        }
+
+        foreach (['unassigned', 'orphan'] as $extra) {
+            if ($pivot[$extra] !== null) {
+                $roots->push([
+                    'label' => $pivot[$extra]['name'],
+                    'total' => $pivot[$extra]['rowTotal'],
+                    'count' => 1,
+                ]);
+            }
+        }
+
+        return $roots;
+    }
+
+    /**
+     * @deprecated Verwende {@see byCostCenterRoot()} — „Gesellschaft" ist als eigene Entität
+     *             entfallen und in der obersten Kostenstellen-Ebene aufgegangen (docs/adr/0016).
      */
     public function byCompany(int $teamId): Collection
     {
-        $pivot = $this->costCenterByType($teamId);
-
-        return collect($pivot['companies'])->map(fn($c) => [
-            'label' => $c['name'],
-            'total' => $c['subtotal'],
-            'count' => count($c['rows']),
-        ])->values();
+        return $this->byCostCenterRoot($teamId);
     }
 
     /**

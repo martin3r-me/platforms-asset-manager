@@ -4,11 +4,21 @@ namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Platform\AssetManager\Services\TenantContext;
 
 /**
- * Default-Kosten je Geräte-Modell (Hersteller + Modell). Der Intune-Sync legt die real
- * existierenden Modelle automatisch an; Preise werden im UI gepflegt. Geräte erben diese
- * Defaults, ein einzelnes Gerät kann sie überschreiben (Felder direkt an AssetDevice).
+ * Hardware-Katalog: ein Geräte-Modell (Hersteller + Modell). Der Intune-Sync legt die real
+ * existierenden Modelle automatisch an.
+ *
+ * **Team-weit** und bewusst NICHT tenant-scoped (docs/adr/0016): ein MacBook Air M2 ist bei jedem
+ * Kunden dasselbe Gerät, Hersteller und Modell sind keine Kundendaten. Die **Kosten** dazu sind pro
+ * Kunde verhandelt und leben in {@see AssetDeviceModelCost} (Tenant × Modell). Geräte erben den
+ * tenant-eigenen Default; ein einzelnes Gerät kann ihn überschreiben (Felder direkt an AssetDevice).
+ *
+ * `depreciation_months` bleibt hier: die Nutzungsdauer ist eine Eigenschaft der Hardware, nicht des
+ * Vertrags.
  */
 class AssetDeviceModel extends Model
 {
@@ -18,16 +28,7 @@ class AssetDeviceModel extends Model
         'team_id',
         'manufacturer',
         'model',
-        'monthly_cost',
-        'purchase_price',
         'depreciation_months',
-        'cost_type_id',
-        'vendor_id',
-    ];
-
-    protected $casts = [
-        'monthly_cost'   => 'decimal:2',
-        'purchase_price' => 'decimal:2',
     ];
 
     public function team(): BelongsTo
@@ -35,14 +36,36 @@ class AssetDeviceModel extends Model
         return $this->belongsTo(\Platform\Core\Models\Team::class);
     }
 
-    public function costType(): BelongsTo
+    /** Alle tenant-spezifischen Kostenzeilen zu diesem Modell. */
+    public function costs(): HasMany
     {
-        return $this->belongsTo(AssetCostType::class, 'cost_type_id');
+        return $this->hasMany(AssetDeviceModelCost::class, 'device_model_id');
     }
 
-    public function vendor(): BelongsTo
+    /**
+     * Kostenzeile des **aktiven** Tenants. Der Global Scope auf AssetDeviceModelCost filtert
+     * automatisch — ohne auflösbaren Tenant (Job/Console) liefert die Relation die erste Zeile, was
+     * für Anzeigepfade genügt; rechnende Pfade laufen über {@see costFor()}.
+     */
+    public function cost(): HasOne
     {
-        return $this->belongsTo(AssetVendor::class, 'vendor_id');
+        return $this->hasOne(AssetDeviceModelCost::class, 'device_model_id');
+    }
+
+    /** Kostenzeile eines bestimmten Tenants — der explizite Weg für Jobs und Auswertungen. */
+    public function costFor(?int $tenantId): ?AssetDeviceModelCost
+    {
+        $tenantId ??= TenantContext::scopeTenantId();
+
+        if ($tenantId === null) {
+            return null;
+        }
+
+        return AssetDeviceModelCost::query()
+            ->withoutTenantScope()
+            ->where('device_model_id', $this->id)
+            ->where('tenant_id', $tenantId)
+            ->first();
     }
 
     /**

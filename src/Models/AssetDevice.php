@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\AssetManager\Concerns\TenantScopable;
+use Platform\AssetManager\Support\DeviceCostResolver;
 
 class AssetDevice extends Model
 {
@@ -25,6 +26,9 @@ class AssetDevice extends Model
     /** Memoisiertes Modell-Resolve je Instanz (deviceModel() wird pro Render mehrfach gerufen). */
     protected ?AssetDeviceModel $resolvedModel = null;
     protected bool $modelResolved = false;
+
+    /** Memoisierter Kosten-Resolver je Instanz (Katalog + tenant-eigene Modell-Kosten). */
+    protected ?DeviceCostResolver $resolvedCostResolver = null;
 
     protected $fillable = [
         'team_id',
@@ -198,25 +202,32 @@ class AssetDevice extends Model
     }
 
     /**
-     * Monatskosten aus Override (Gerät) oder Modell-Default. Leasing-Rate (monthly_cost) hat Vorrang
-     * vor Kauf+AfA (purchase_price/depreciation_months). 0.0 wenn nichts hinterlegt oder abgeschrieben.
+     * Monatskosten aus Override (Gerät) oder **tenant-eigenem** Modell-Default. Leasing-Rate hat
+     * Vorrang vor Kauf+AfA. 0.0 wenn nichts hinterlegt oder abgeschrieben.
+     *
+     * Delegiert an {@see DeviceCostResolver} — die Modell-Kosten sind seit docs/adr/0016 tenant-scoped
+     * (`asset_device_model_costs`), und die zweistufige Auflösung liegt an genau einer Stelle.
+     * Für Listen und Aggregationen den Resolver DIREKT nutzen: er lädt Katalog und Kosten einmal
+     * vor, dieser Einzelaufruf hier tut es je Gerät.
      */
     public function resolvedMonthlyCost(): float
     {
-        $own = self::computeMonthlyFrom($this->monthly_cost, $this->purchase_price, $this->depreciation_months, $this->purchase_date);
-        if ($own !== null) return $own;
-
-        if ($m = $this->deviceModel()) {
-            $fromModel = self::computeMonthlyFrom($m->monthly_cost, $m->purchase_price, $m->depreciation_months, null);
-            if ($fromModel !== null) return $fromModel;
-        }
-        return 0.0;
+        return $this->costResolver()->monthlyCost($this);
     }
 
-    /** Kostenart: Override am Gerät, sonst vom Modell. */
+    /** Kostenart: Override am Gerät, sonst vom tenant-eigenen Modell-Default. */
     public function resolvedCostTypeId(): ?int
     {
-        return $this->cost_type_id ?? $this->deviceModel()?->cost_type_id;
+        return $this->costResolver()->costTypeId($this);
+    }
+
+    /** Per-Instanz-Resolver (memoisiert) — hält den Einzelaufruf-Pfad bei einem Query-Paar. */
+    protected function costResolver(): DeviceCostResolver
+    {
+        return $this->resolvedCostResolver ??= DeviceCostResolver::for(
+            (int) $this->team_id,
+            $this->tenant_id !== null ? (int) $this->tenant_id : null,
+        );
     }
 
     /**

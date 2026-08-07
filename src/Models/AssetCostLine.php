@@ -8,11 +8,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Log;
+use Platform\AssetManager\Concerns\TenantScopable;
 
 class AssetCostLine extends Model
 {
     use HasFactory;
     use SoftDeletes;
+    use TenantScopable;
 
     protected $table = 'asset_cost_lines';
 
@@ -23,6 +25,7 @@ class AssetCostLine extends Model
 
     protected $fillable = [
         'team_id',
+        'tenant_id',
         'cost_type_id',
         'vendor_id',
         'cost_center_id',

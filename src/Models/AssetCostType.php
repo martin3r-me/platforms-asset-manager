@@ -6,10 +6,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Platform\AssetManager\Concerns\TenantScopable;
 
 class AssetCostType extends Model
 {
     use HasFactory;
+    use TenantScopable;
 
     protected static function newFactory(): \Illuminate\Database\Eloquent\Factories\Factory
     {
@@ -38,6 +40,7 @@ class AssetCostType extends Model
 
     protected $fillable = [
         'team_id',
+        'tenant_id',
         'key',
         'name',
         'sort_order',
@@ -57,6 +60,11 @@ class AssetCostType extends Model
     public function team(): BelongsTo
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);
+    }
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(AssetTenant::class, 'tenant_id');
     }
 
     public function vendorDefault(): BelongsTo
