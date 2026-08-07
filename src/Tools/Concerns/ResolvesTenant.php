@@ -126,4 +126,46 @@ trait ResolvesTenant
             ->map(fn ($name) => (string) $name)
             ->all();
     }
+
+    /**
+     * Auswertung ausführen und im `"all"`-Modus jede Zeile mit ihrem Tenant kennzeichnen.
+     *
+     * Die Aggregations-Services kennen keinen Tenant — sie sehen nur, was der Global Scope
+     * durchlässt. Bei `tenant_id="all"` käme deshalb EINE über alle Kunden verschmolzene Zeilenmenge
+     * heraus: eine Kostenstelle „1000" aus Tenant A und eine gleichnamige aus Tenant B wären
+     * ununterscheidbar addiert. Darum läuft die Auswertung je Tenant einmal, und jede Zeile trägt
+     * `tenant_id`/`tenant_name` (ADR 0016).
+     *
+     * Bei einem konkreten Tenant bleibt die Antwort **unverändert** — keine Zusatzfelder, damit
+     * bestehende Aufrufe nicht mit neuen Schlüsseln umgehen müssen.
+     *
+     * @param  callable(): iterable<array<string, mixed>>  $rowsFor  Auswertung im aktiven Tenant-Kontext.
+     * @return list<array<string, mixed>>
+     */
+    protected function rowsPerTenant(int $teamId, ?int $tenantId, callable $rowsFor): array
+    {
+        if ($tenantId !== null) {
+            TenantContext::forceTenant($tenantId);
+
+            return collect($rowsFor())->values()->all();
+        }
+
+        $rows = [];
+
+        foreach ($this->tenantNames($teamId) as $id => $name) {
+            TenantContext::forceTenant((int) $id);
+
+            foreach ($rowsFor() as $row) {
+                // Tenant VORANSTELLEN: in einer langen Zeile ist die Zuordnung sonst leicht zu
+                // überlesen — und genau sie ist im "all"-Modus die entscheidende Spalte.
+                $rows[] = ['tenant_id' => (int) $id, 'tenant_name' => $name] + (array) $row;
+            }
+        }
+
+        // Kontext auf „alle" zurückstellen, damit nachgelagerte Queries im Tool nicht still im
+        // zuletzt durchlaufenen Tenant hängen.
+        TenantContext::forceTenant(null);
+
+        return $rows;
+    }
 }

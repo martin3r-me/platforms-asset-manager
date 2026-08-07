@@ -29,7 +29,9 @@ class CostAnomaliesTool implements ToolContract, ToolMetadataContract
     {
         return 'GET /asset-manager/costs/anomalies - Auffälligkeiten/Einsparpotenziale des Teams: '
             . 'pool (Hardware im Lager, gebundenes Kapital), unused_licenses (verfügbare Einheiten × '
-            . 'Stückpreis), inactive_employees (Hardware bei inaktiven Asset-Trägern).';
+            . 'Stückpreis), inactive_employees (Hardware bei inaktiven Asset-Trägern). '
+            . 'Bei tenant_id="all" kommt statt der drei Töpfe eine Liste by_tenant, je Eintrag mit '
+            . 'tenant_id/tenant_name und den Töpfen dieses Tenants.';
     }
 
     public function getSchema(): array
@@ -63,9 +65,22 @@ class CostAnomaliesTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('CONTROLLING_DISABLED', 'Die Controlling-/Kosten-Schicht ist für dieses Team deaktiviert (Modul-Einstellungen). Kosten, Kostenpositionen und Stammdaten sind daher nicht verfügbar.');
             }
 
-            $anomalies = app(CostAggregationService::class)->anomalies($teamId);
+            // Anomalien sind kein Zeilenwerk, sondern ein Block je Auswertung. Bei tenant_id="all"
+            // wären die drei Töpfe über alle Kunden verschmolzen — „welcher Kunde hat das Lager
+            // vollstehen?" ließe sich dann nicht mehr beantworten. Deshalb ein Block je Tenant.
+            $perTenant = $this->rowsPerTenant($teamId, $tenantId, fn () => [
+                app(CostAggregationService::class)->anomalies($teamId),
+            ]);
 
-            return ToolResult::success(array_merge($anomalies, ['currency' => 'EUR']));
+            if ($tenantId !== null) {
+                return ToolResult::success(array_merge($perTenant[0], ['currency' => 'EUR']));
+            }
+
+            return ToolResult::success([
+                'tenant_scope' => 'all',
+                'by_tenant'    => $perTenant,
+                'currency'     => 'EUR',
+            ]);
         } catch (\Throwable $e) {
             return ToolResult::error('EXECUTION_ERROR', 'Fehler beim Ermitteln der Anomalien: ' . $e->getMessage());
         }

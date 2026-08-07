@@ -72,64 +72,6 @@
         </x-ui-page-sidebar>
     </x-slot>
 
-    {{-- RECHTS: Nutzer der aufgeklappten Lizenz --}}
-    <x-slot name="activity">
-        <x-ui-page-sidebar title="Lizenz-Nutzer" icon="heroicon-o-users" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
-            <div class="p-4 space-y-3 bg-[var(--am-bg)]">
-                @if($selectedSku)
-                    <div class="flex items-center justify-between pb-2 border-b border-[color:var(--am-border)]">
-                        <span class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">Auswahl</span>
-                        <button wire:click="clearSku" class="text-[10px] text-[var(--am-text-muted)] hover:text-red-600">
-                            @svg('heroicon-o-x-mark', 'w-3 h-3 inline -mt-0.5')
-                            Schließen
-                        </button>
-                    </div>
-
-                    <section class="rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-3">
-                        <div class="flex items-start gap-2">
-                            @svg('heroicon-o-key', 'w-5 h-5 text-[var(--am-accent)] flex-shrink-0')
-                            <div class="min-w-0">
-                                <div class="text-sm font-semibold text-[var(--am-text)] truncate">{{ $selectedSku->display_name ?? $selectedSku->sku_part_number }}</div>
-                                <div class="text-[11px] text-[var(--am-text-secondary)] truncate">{{ $selectedSku->sku_part_number }}</div>
-                            </div>
-                        </div>
-                        @php $pct = $selectedSku->utilizationPercent(); $c = $pct >= 95 ? 'red' : ($pct >= 80 ? 'amber' : 'emerald'); @endphp
-                        <div class="mt-2 flex items-center justify-between text-[11px]">
-                            <span class="text-{{ $c }}-700 font-medium">{{ $pct }}% genutzt</span>
-                            <span class="text-[var(--am-text-secondary)] tabular-nums">{{ $selectedSku->consumed_units }}/{{ $selectedSku->purchased_units }}</span>
-                        </div>
-                    </section>
-
-                    <section class="rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm overflow-hidden">
-                        <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--am-text-muted)] px-3 pt-3 pb-1.5">Nutzer ({{ $selectedSku->consumed_units }})</h3>
-                        @if($assignments->isEmpty())
-                            <div class="px-3 pb-3 text-[11px] text-[var(--am-text-secondary)]">Keine Lizenzzuweisungen gefunden.</div>
-                        @else
-                            <ul class="divide-y divide-[color:var(--am-border)]">
-                                @foreach($assignments as $a)
-                                    <li class="px-3 py-2">
-                                        <div class="text-[11px] font-medium text-[var(--am-text)] truncate">{{ $a->display_name ?? '—' }}</div>
-                                        <div class="text-[10px] text-[var(--am-text-secondary)] truncate">{{ $a->user_principal_name }}</div>
-                                    </li>
-                                @endforeach
-                            </ul>
-                        @endif
-                    </section>
-
-                    <x-asset-manager-button variant="primary" size="md" class="w-full" href="{{ route('asset-manager.licenses.show', $selectedSku) }}" wire:navigate>
-                        @svg('heroicon-o-arrow-top-right-on-square', 'w-3.5 h-3.5')
-                        Vollständige Detailseite
-                    </x-asset-manager-button>
-                @else
-                    <div class="flex flex-col items-center justify-center py-8 text-center">
-                        @svg('heroicon-o-cursor-arrow-rays', 'w-8 h-8 text-[var(--am-text-muted)] mb-3')
-                        <p class="text-[11px] text-[var(--am-text-secondary)]">Klicke bei einer Lizenz auf „Nutzer", um die Zuweisungen hier zu sehen.</p>
-                    </div>
-                @endif
-            </div>
-        </x-ui-page-sidebar>
-    </x-slot>
-
     <div class="flex-1 flex flex-col min-h-0 min-w-0">
         <div class="flex-1 overflow-y-auto p-6">
             <div class="space-y-5">
@@ -259,7 +201,7 @@
                                     $pct   = $sku->utilizationPercent();
                                     $color = $pct >= 95 ? 'red' : ($pct >= 80 ? 'amber' : 'emerald');
                                 @endphp
-                                <tr wire:key="sku-{{ $sku->id }}" class="transition-colors {{ $selectedSkuId === $sku->id ? 'bg-[var(--am-accent-surface)] shadow-[inset_3px_0_0_var(--am-accent)]' : 'hover:bg-[var(--am-bg)]' }}">
+                                <tr wire:key="sku-{{ $sku->id }}" class="transition-colors hover:bg-[var(--am-bg)]">
                                     <td class="px-5 py-3">
                                         <div class="font-medium text-[var(--am-text)]">
                                             {{ $sku->display_name ?? $sku->sku_part_number }}
@@ -316,14 +258,15 @@
                                             {{ $sku->monthlyCost() > 0 ? '€ ' . number_format($sku->annualCost(), 2, ',', '.') : '—' }}
                                         </span>
                                     </td>
+                                    {{-- „Nutzer" zeigte die Zuweisungen früher in einem rechten Vorschau-Panel,
+                                         das die Detailseite verkürzt wiederholte. Seit S8b geht der Weg direkt
+                                         dorthin (S8b/#762). --}}
                                     <td class="px-5 py-3 text-right">
-                                        <button type="button"
-                                                wire:click="selectSku({{ $sku->id }})"
-                                                @click="$store.ui?.mSet('activity', 'open', true)"
-                                                class="inline-flex items-center gap-1 text-xs text-[var(--am-accent)] hover:underline">
+                                        <a href="{{ route('asset-manager.licenses.show', $sku) }}" wire:navigate
+                                           class="inline-flex items-center gap-1 text-xs text-[var(--am-accent)] hover:underline">
                                             Nutzer
                                             @svg('heroicon-o-chevron-right', 'w-3 h-3')
-                                        </button>
+                                        </a>
                                     </td>
                                 </tr>
                             @endforeach

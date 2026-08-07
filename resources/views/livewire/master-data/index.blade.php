@@ -49,49 +49,10 @@
         </x-ui-page-sidebar>
     </x-slot>
 
-    {{-- RECHTS: Bearbeiten / Anlegen --}}
-    <x-slot name="activity">
-        <x-ui-page-sidebar
-            :title="($creating ? 'Neu: ' : '') . $current['singular']"
-            icon="heroicon-o-pencil-square" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
-            <div class="p-4 space-y-3 bg-[var(--am-bg)]">
-                {{-- Bearbeiten/Anlegen nur Owner/Admin (ADR 0004) — Backend: save()/delete() Gate. --}}
-                @can('asset-manager.manage')
-                @if($creating || $selectedId)
-                    <div class="flex items-center justify-between pb-2 border-b border-[color:var(--am-border)]">
-                        <span class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">
-                            {{ $creating ? 'Neu anlegen' : 'Bearbeiten' }}
-                        </span>
-                        <button wire:click="cancelEdit" class="text-[10px] text-[var(--am-text-secondary)] hover:text-red-500">
-                            @svg('heroicon-o-x-mark', 'w-3 h-3 inline -mt-0.5')
-                            Schließen
-                        </button>
-                    </div>
-
-                    @switch($active)
-                        @case('cost-centers')
-                            @include('asset-manager::livewire.master-data.partials.form-cost-centers', ['parents' => $parentOptions])
-                            @break
-                        @case('cost-types')
-                            @include('asset-manager::livewire.master-data.partials.form-cost-types', ['vendors' => $vendorsForSelect])
-                            @break
-                        @case('vendors')
-                            @include('asset-manager::livewire.master-data.partials.form-vendors')
-                            @break
-                    @endswitch
-                @else
-                    <div class="flex flex-col items-center justify-center py-10 text-center">
-                        @svg('heroicon-o-cursor-arrow-rays', 'w-8 h-8 text-[var(--am-text-muted)] mb-3')
-                        <p class="text-[11px] text-[var(--am-text-secondary)]">Eine Zeile anklicken zum Bearbeiten — oder oben „Neu“ für einen neuen Eintrag.</p>
-                    </div>
-                @endif
-                @endcan
-            </div>
-        </x-ui-page-sidebar>
-    </x-slot>
-
-    {{-- Öffnet das rechte Panel, sobald eine Zeile gewählt oder „Neu“ geklickt wird. --}}
-    <div x-data x-on:open-activity.window="$store.ui && $store.ui.mSet('activity', 'open', true)"></div>
+    {{-- Editor als Modal (S8b): Bearbeiten/Anlegen nur Owner/Admin (ADR 0004) — Backend: save()/delete() Gate. --}}
+    @can('asset-manager.manage')
+        @include('asset-manager::livewire.master-data.partials.modal-editor')
+    @endcan
 
     {{-- HAUPT: read-only Liste des aktiven Bereichs --}}
     <div class="flex-1 flex flex-col min-h-0 min-w-0" wire:key="area-{{ $active }}">

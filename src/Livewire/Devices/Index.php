@@ -13,7 +13,6 @@ use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceSyncLog;
 use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetHandoverLine;
-use Platform\AssetManager\Models\AssetUserLicense;
 use Platform\AssetManager\Jobs\SyncIntuneDevicesJob;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -40,10 +39,6 @@ class Index extends Component
     public ?int    $bulkCostCenter = null;
     public string  $bulkLifecycle  = '';
     public ?string $bulkResult     = null;
-
-    /** Master-Detail: 'device' | 'holder' | null  */
-    public ?string $detailType = null;
-    public ?int    $detailId   = null;
 
     public array $columnOrder = ['device', 'user', 'os', 'status', 'lastCheckIn'];
 
@@ -135,29 +130,23 @@ class Index extends Component
         $this->syncResult = 'Sync gestartet — Geräte werden im Hintergrund synchronisiert.';
     }
 
-    public function selectDevice(int $deviceId): void
+    /**
+     * Springt vom Gerät auf das Träger-Profil. Am Gerät steht nur der UPN, nicht die Träger-ID —
+     * darum bleibt die Auflösung serverseitig (statt eines Links, den die Liste nicht bauen kann).
+     * Ohne Treffer passiert nichts: ein Gerät kann einen UPN tragen, zu dem es keinen Träger gibt.
+     */
+    public function openHolderByUpn(string $upn)
     {
-        $this->detailType = 'device';
-        $this->detailId   = $deviceId;
-    }
-
-    public function selectHolderByUpn(string $upn): void
-    {
-        $team     = Auth::user()->currentTeam;
+        $team   = Auth::user()->currentTeam;
         $holder = AssetHolder::where('team_id', $team->id)
             ->where('user_principal_name', $upn)
             ->first();
 
-        if ($holder) {
-            $this->detailType = 'holder';
-            $this->detailId   = $holder->id;
+        if (! $holder) {
+            return null;
         }
-    }
 
-    public function clearSelection(): void
-    {
-        $this->detailType = null;
-        $this->detailId   = null;
+        return $this->redirect(route('asset-manager.holders.show', $holder), navigate: true);
     }
 
     /** owner/admin im aktiven Team? (analog Devices/Show) */
@@ -426,31 +415,6 @@ class Index extends Component
             ->flip()
             ->all();
 
-        // Master-Detail-Daten laden
-        $selectedDevice   = null;
-        $selectedHolder = null;
-        $holderDevices  = collect();
-        $holderLicenses = collect();
-
-        if ($this->detailType === 'device' && $this->detailId) {
-            $selectedDevice = AssetDevice::where('team_id', $team->id)
-                ->where('id', $this->detailId)
-                ->first();
-        } elseif ($this->detailType === 'holder' && $this->detailId) {
-            $selectedHolder = AssetHolder::where('team_id', $team->id)
-                ->where('id', $this->detailId)
-                ->first();
-
-            if ($selectedHolder) {
-                $holderDevices = AssetDevice::where('team_id', $team->id)
-                    ->where('user_principal_name', $selectedHolder->user_principal_name)
-                    ->get();
-                $holderLicenses = AssetUserLicense::where('team_id', $team->id)
-                    ->where('user_principal_name', $selectedHolder->user_principal_name)
-                    ->get();
-            }
-        }
-
         return view('asset-manager::livewire.devices.index', [
             'devices'             => $devices,
             'stats'               => $stats,
@@ -466,10 +430,6 @@ class Index extends Component
             'openHandoverDeviceIds' => $openHandoverDeviceIds,
             'costCenters'         => AssetCostCenter::where('team_id', $team->id)->orderBy('code')->get(),
             'columns'             => $this->columnOrder,
-            'selectedDevice'      => $selectedDevice,
-            'selectedHolder'    => $selectedHolder,
-            'holderDevices'     => $holderDevices,
-            'holderLicenses'    => $holderLicenses,
         ])->layout('platform::layouts.app');
     }
 }

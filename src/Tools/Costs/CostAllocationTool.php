@@ -29,7 +29,9 @@ class CostAllocationTool implements ToolContract, ToolMetadataContract
     {
         return 'GET /asset-manager/costs/allocation - Kostenaufteilungs-Pivot Kostenstelle × Kostenart, '
             . 'nach Gesellschaft gruppiert, mit Zeilen-/Spaltensummen und Gesamtsumme. '
-            . 'Parameter period: "monthly" (Default) oder "quarterly".';
+            . 'Parameter period: "monthly" (Default) oder "quarterly". Bei tenant_id="all" kommt eine '
+            . 'Liste by_tenant mit einem eigenen Pivot je Tenant (tenant_id/tenant_name je Eintrag) — '
+            . 'Pivots verschiedener Tenants werden NICHT zusammengerechnet.';
     }
 
     public function getSchema(): array
@@ -66,9 +68,24 @@ class CostAllocationTool implements ToolContract, ToolMetadataContract
             }
 
             $period = ($arguments['period'] ?? 'monthly') === 'quarterly' ? 'quarterly' : 'monthly';
-            $pivot  = app(CostAggregationService::class)->costCenterByType($teamId, $period);
 
-            return ToolResult::success(array_merge($pivot, ['currency' => 'EUR']));
+            // Ein Pivot hat Zeilen-, Spalten- und Gesamtsummen — die lassen sich über Tenants hinweg
+            // nicht sinnvoll verschmelzen (gleiche Kostenstellen-Codes, verschiedene Kunden, ein
+            // grandTotal, der niemandem gehört). Bei tenant_id="all" daher ein Pivot je Tenant.
+            $perTenant = $this->rowsPerTenant($teamId, $tenantId, fn () => [
+                app(CostAggregationService::class)->costCenterByType($teamId, $period),
+            ]);
+
+            if ($tenantId !== null) {
+                return ToolResult::success(array_merge($perTenant[0], ['currency' => 'EUR']));
+            }
+
+            return ToolResult::success([
+                'tenant_scope' => 'all',
+                'period'       => $period,
+                'by_tenant'    => $perTenant,
+                'currency'     => 'EUR',
+            ]);
         } catch (\Throwable $e) {
             return ToolResult::error('EXECUTION_ERROR', 'Fehler beim Erstellen der Kostenaufteilung: ' . $e->getMessage());
         }

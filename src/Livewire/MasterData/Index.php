@@ -48,6 +48,8 @@ class Index extends Component
     // Auswahl / Bearbeiten (rechtes Panel)
     public ?int  $selectedId = null;
     public bool  $creating   = false;
+    /** Sichtbarkeit des Editor-Modals (S8b) — von selectRow()/startCreate() gesetzt. */
+    public bool  $showEditor = false;
     public array $form       = [];
 
     // Kostenarten-Ansicht: Sortierung
@@ -87,6 +89,7 @@ class Index extends Component
     {
         $this->selectedId = null;
         $this->creating   = false;
+        $this->showEditor = false;
         $this->form       = [];
         $this->resetValidation();
     }
@@ -94,6 +97,18 @@ class Index extends Component
     public function cancelEdit(): void
     {
         $this->resetSelection();
+    }
+
+    /**
+     * Das Editor-Modal ist per entangle an $showEditor gebunden — Backdrop-Klick und ESC setzen die
+     * Property direkt. Ohne diesen Hook bliebe die Auswahl (und damit ein halb gefülltes Formular)
+     * unsichtbar bestehen.
+     */
+    public function updatedShowEditor(bool $value): void
+    {
+        if (! $value) {
+            $this->resetSelection();
+        }
     }
 
     // ---- Auswahl / Formular ----------------------------------------------
@@ -105,7 +120,7 @@ class Index extends Component
         $this->form       = $this->formFromModel($model);
         $this->selectedId = $id;
         $this->creating   = false;
-        $this->dispatch('open-activity');
+        $this->showEditor = true;
     }
 
     public function startCreate(): void
@@ -114,7 +129,7 @@ class Index extends Component
         $this->form       = $this->blankForm();
         $this->selectedId = null;
         $this->creating   = true;
-        $this->dispatch('open-activity');
+        $this->showEditor = true;
     }
 
     protected function modelClass(): string

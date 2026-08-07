@@ -2,14 +2,6 @@
 
 Domänen-Sprache und Kernkonzepte des Asset-Managers. Kurz halten, bei Bedarf erweitern.
 
-> 🚧 **Umbau im Gang** (Stand 2026-08-07): Das Glossar beschreibt bereits das in
-> [ADR 0016](docs/adr/0016-tenant-als-zugriffsgrenze.md) und
-> [ADR 0017](docs/adr/0017-asset-traeger-statt-mitarbeiter.md) entschiedene Zielbild
-> (Tenant als Zugriffsgrenze, tenant-gebundenes Kostenmodell, Kostenstellen-Baum, Asset-Träger).
-> Der Code zieht in den Schritten S1–S7 nach (Dev-Modul, Package `platforms-asset-manager`,
-> Board „Features"). Bis dahin gilt: **Sprache = dieses Dokument, Verhalten = Code.**
-> Diesen Hinweis entfernen, wenn S7 deployt ist.
-
 ## Zweck
 
 Verwaltet IT-Assets (Hardware, Lizenzen, Geräte) **und** deren Kosten je **Kostenstelle** —

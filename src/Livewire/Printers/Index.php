@@ -15,18 +15,6 @@ class Index extends Component
 
     public string $search = '';
     public string $filterNiederlassung = '';
-    public ?int   $selectedId = null;
-
-    public function selectItem(int $id): void
-    {
-        $this->selectedId = $id;
-        $this->dispatch('open-activity');
-    }
-
-    public function clearSelection(): void
-    {
-        $this->selectedId = null;
-    }
 
     public function resetFilters(): void
     {
@@ -70,17 +58,12 @@ class Index extends Component
             ))
             ->values();
 
-        $selectedItem  = $this->selectedId ? AssetItem::where('team_id', $teamId)->find($this->selectedId) : null;
-        $selectedLines = $selectedItem ? ($linesByItem[$selectedItem->id] ?? collect()) : collect();
-
         return view('asset-manager::livewire.printers.index', [
             'items'           => $items,
             'costByItem'      => $costByItem,
             'kstByItem'       => $kstByItem,
             'totalMonthly'    => round($items->sum(fn ($i) => $costByItem[$i->id] ?? 0), 2),
             'niederlassungen' => $niederlassungen,
-            'selectedItem'    => $selectedItem,
-            'selectedLines'   => $selectedLines,
         ])->layout('platform::layouts.app');
     }
 }

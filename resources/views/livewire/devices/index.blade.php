@@ -21,6 +21,14 @@
                         Export CSV
                     </x-asset-manager-button>
                 @endif
+                {{-- Stand hinter einem Klick in der zugeklappten rechten Sidebar und nur bei leerer
+                     Auswahl — als echte Aktion gehört sie in die Actionbar (S8b). --}}
+                @if($canSync && $config && $config->isConfigured() && $config->sync_status !== 'running')
+                    <x-asset-manager-button variant="ghost" size="sm" wire:click="syncNow" wire:loading.attr="disabled" wire:target="syncNow">
+                        <span wire:loading.remove wire:target="syncNow" class="inline-flex items-center gap-1.5">@svg('heroicon-o-arrow-path', 'w-3.5 h-3.5') Jetzt synchronisieren</span>
+                        <span wire:loading wire:target="syncNow" class="inline-flex items-center gap-1.5">@svg('heroicon-o-arrow-path', 'w-3.5 h-3.5 animate-spin') Startet…</span>
+                    </x-asset-manager-button>
+                @endif
                 <x-asset-manager-button variant="ghost" size="sm" href="{{ route('asset-manager.setup') }}" wire:navigate>
                     @svg('heroicon-o-wrench-screwdriver', 'w-3.5 h-3.5')
                     Connector
@@ -118,160 +126,6 @@
         </x-ui-page-sidebar>
     </x-slot>
 
-    {{-- RECHTS: Master-Detail --}}
-    <x-slot name="activity">
-        <x-ui-page-sidebar :title="$selectedDevice ? 'Gerät' : ($selectedHolder ? 'Asset-Träger' : 'Details')" icon="heroicon-o-information-circle" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
-            <div class="p-4 space-y-3 bg-[var(--am-bg)]">
-
-                @if($selectedDevice)
-                    {{-- Detail: einzelnes Gerät --}}
-                    <div class="flex items-center justify-between pb-2 border-b border-[color:var(--am-border)]">
-                        <span class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">Auswahl</span>
-                        <button wire:click="clearSelection" class="text-[10px] text-[var(--am-text-secondary)] hover:text-red-600">
-                            @svg('heroicon-o-x-mark', 'w-3 h-3 inline -mt-0.5')
-                            Schließen
-                        </button>
-                    </div>
-
-                    <section class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-3">
-                        <div class="flex items-start gap-2 mb-2">
-                            @svg('heroicon-o-computer-desktop', 'w-5 h-5 text-[var(--am-accent)] flex-shrink-0')
-                            <div class="min-w-0">
-                                <div class="text-sm font-semibold text-[var(--am-text)] truncate">{{ $selectedDevice->device_name ?? '—' }}</div>
-                                <div class="text-[11px] text-[var(--am-text-secondary)] truncate">{{ trim($selectedDevice->manufacturer . ' ' . $selectedDevice->model) }}</div>
-                            </div>
-                        </div>
-
-                        <x-asset-manager-badge :color="$selectedDevice->complianceBadgeColor()" dot size="xs">
-                            {{ $selectedDevice->complianceLabel() }}
-                        </x-asset-manager-badge>
-                    </section>
-
-                    <x-asset-manager-panel title="Eigenschaften" body-class="px-4 py-1">
-                        <x-asset-manager-detail-list>
-                            @foreach([
-                                ['OS',           $selectedDevice->operating_system],
-                                ['Version',      $selectedDevice->os_version],
-                                ['Nutzer',       $selectedDevice->user_display_name],
-                                ['UPN',          $selectedDevice->user_principal_name],
-                                ['Management',   $selectedDevice->management_state],
-                                ['Seriennr.',    $selectedDevice->serial_number],
-                                ['Enrollt am',   $selectedDevice->enrolled_at?->format('d.m.Y')],
-                                ['Letztes Check-In', $selectedDevice->last_check_in_at?->diffForHumans()],
-                            ] as [$label, $value])
-                                <x-asset-manager-detail-row :label="$label">{{ $value ?: '—' }}</x-asset-manager-detail-row>
-                            @endforeach
-                        </x-asset-manager-detail-list>
-                    </x-asset-manager-panel>
-
-                    <div class="space-y-2">
-                        <x-asset-manager-button variant="primary" size="md" href="{{ route('asset-manager.devices.show', $selectedDevice) }}" wire:navigate class="w-full">
-                            @svg('heroicon-o-arrow-top-right-on-square', 'w-3.5 h-3.5')
-                            Vollständige Detail-Seite
-                        </x-asset-manager-button>
-                        @if($selectedDevice->user_principal_name)
-                            <x-asset-manager-button variant="secondary" size="md" class="w-full" wire:click="selectHolderByUpn('{{ $selectedDevice->user_principal_name }}')">
-                                @svg('heroicon-o-user', 'w-3.5 h-3.5')
-                                Asset-Träger-Profil anzeigen
-                            </x-asset-manager-button>
-                        @endif
-                    </div>
-
-                @elseif($selectedHolder)
-                    {{-- Detail: Asset-Träger mit allen Geräten/Lizenzen --}}
-                    <div class="flex items-center justify-between pb-2 border-b border-[color:var(--am-border)]">
-                        <span class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">Asset-Träger</span>
-                        <button wire:click="clearSelection" class="text-[10px] text-[var(--am-text-secondary)] hover:text-red-600">
-                            @svg('heroicon-o-x-mark', 'w-3 h-3 inline -mt-0.5')
-                            Schließen
-                        </button>
-                    </div>
-
-                    <section class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-3">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-full bg-[var(--am-accent-surface)] text-[var(--am-accent)] flex items-center justify-center text-xs font-semibold flex-shrink-0">
-                                {{ $selectedHolder->initials() }}
-                            </div>
-                            <div class="min-w-0 flex-1">
-                                <div class="text-sm font-semibold text-[var(--am-text)] truncate">{{ $selectedHolder->name }}</div>
-                                <div class="text-[10px] text-[var(--am-text-secondary)] truncate">{{ $selectedHolder->user_principal_name }}</div>
-                            </div>
-                        </div>
-                        @if($selectedHolder->department || $selectedHolder->job_title)
-                            <div class="mt-2 text-[10px] text-[var(--am-text-secondary)]">
-                                {{ $selectedHolder->job_title }}@if($selectedHolder->department && $selectedHolder->job_title) · @endif{{ $selectedHolder->department }}
-                            </div>
-                        @endif
-                    </section>
-
-                    <x-asset-manager-panel title="Geräte ({{ $holderDevices->count() }})" body-class="p-0">
-                        @if($holderDevices->isEmpty())
-                            <div class="px-3 py-3 text-[11px] text-[var(--am-text-secondary)]">Keine Geräte zugewiesen.</div>
-                        @else
-                            <div class="divide-y divide-[color:var(--am-border)]">
-                                @foreach($holderDevices as $d)
-                                    <button wire:click="selectDevice({{ $d->id }})" class="w-full flex items-center gap-2 px-3 py-2 hover:bg-[var(--am-bg)] text-left">
-                                        @svg('heroicon-o-computer-desktop', 'w-3.5 h-3.5 text-[var(--am-text-muted)] flex-shrink-0')
-                                        <div class="min-w-0 flex-1">
-                                            <div class="text-[11px] font-medium text-[var(--am-text)] truncate">{{ $d->device_name ?? '—' }}</div>
-                                            <div class="text-[10px] text-[var(--am-text-secondary)] truncate">{{ $d->operating_system }} {{ $d->os_version }}</div>
-                                        </div>
-                                    </button>
-                                @endforeach
-                            </div>
-                        @endif
-                    </x-asset-manager-panel>
-
-                    <x-asset-manager-panel title="Lizenzen ({{ $holderLicenses->count() }})" body-class="p-0">
-                        @if($holderLicenses->isEmpty())
-                            <div class="px-3 py-3 text-[11px] text-[var(--am-text-secondary)]">Keine Lizenzen zugewiesen.</div>
-                        @else
-                            <ul class="divide-y divide-[color:var(--am-border)]">
-                                @foreach($holderLicenses as $lic)
-                                    <li class="px-3 py-2 text-[11px] text-[var(--am-text)] truncate">
-                                        @svg('heroicon-o-key', 'w-3 h-3 text-[var(--am-text-muted)] inline -mt-0.5 mr-1')
-                                        {{ $lic->sku_part_number ?? $lic->sku_id }}
-                                    </li>
-                                @endforeach
-                            </ul>
-                        @endif
-                    </x-asset-manager-panel>
-
-                    <x-asset-manager-button variant="primary" size="md" href="{{ route('asset-manager.holders.show', $selectedHolder) }}" wire:navigate class="w-full">
-                        @svg('heroicon-o-arrow-top-right-on-square', 'w-3.5 h-3.5')
-                        Vollständiges Profil
-                    </x-asset-manager-button>
-
-                @else
-                    {{-- Keine Auswahl: Hinweis --}}
-                    <div class="flex flex-col items-center justify-center py-8 text-center">
-                        @svg('heroicon-o-cursor-arrow-rays', 'w-8 h-8 text-[var(--am-text-muted)] mb-3')
-                        <p class="text-[11px] text-[var(--am-text-secondary)] mb-1">Wähle ein Gerät oder einen Nutzer aus der Tabelle.</p>
-                        <p class="text-[10px] text-[var(--am-text-muted)]">Sync-Informationen findest du im Connector.</p>
-                    </div>
-
-                    @if($canSync && $config && $config->isConfigured() && $config->sync_status !== 'running')
-                        <x-asset-manager-button variant="primary" size="md" class="w-full" wire:click="syncNow" wire:loading.attr="disabled" wire:target="syncNow">
-                            <span wire:loading.remove wire:target="syncNow" class="inline-flex items-center gap-1.5">@svg('heroicon-o-arrow-path', 'w-3 h-3') Jetzt synchronisieren</span>
-                            <span wire:loading wire:target="syncNow" class="inline-flex items-center gap-1.5">@svg('heroicon-o-arrow-path', 'w-3 h-3 animate-spin') Startet...</span>
-                        </x-asset-manager-button>
-                    @endif
-
-                    @if($syncResult)
-                        <div class="p-2 rounded-lg bg-[var(--am-accent-surface)] border border-[color:var(--am-border)] text-[11px] text-[var(--am-accent)]">
-                            {{ $syncResult }}
-                        </div>
-                    @endif
-
-                    <a href="{{ route('asset-manager.setup') }}" wire:navigate class="block text-center text-[10px] text-[var(--am-text-secondary)] hover:text-[var(--am-accent)] mt-2">
-                        Connector & vollständige Sync-Historie →
-                    </a>
-                @endif
-
-            </div>
-        </x-ui-page-sidebar>
-    </x-slot>
-
     {{-- HAUPT-CONTENT --}}
     <div class="flex-1 flex flex-col min-h-0 min-w-0">
         <div class="flex-1 overflow-y-auto p-6 space-y-5">
@@ -313,6 +167,15 @@
                     @if($filterCompliance)<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[var(--am-accent-surface)] text-[var(--am-accent)]">{{ $filterCompliance }} <button wire:click="$set('filterCompliance', '')">×</button></span>@endif
                     @if($filterOs)<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[var(--am-accent-surface)] text-[var(--am-accent)]">{{ $filterOs }} <button wire:click="$set('filterOs', '')">×</button></span>@endif
                     @if($filterLifecycle)<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[var(--am-accent-surface)] text-[var(--am-accent)]">{{ $lifecycleLabels[$filterLifecycle] ?? $filterLifecycle }} <button wire:click="$set('filterLifecycle', '')">×</button></span>@endif
+                </div>
+            @endif
+
+            {{-- Sync-Rückmeldung (stand früher in der rechten Sidebar, die den Knopf trug) --}}
+            @if($syncResult)
+                <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--am-accent-surface)] border border-[color:var(--am-border)]">
+                    @svg('heroicon-o-arrow-path', 'w-4 h-4 text-[var(--am-accent)] flex-shrink-0')
+                    <p class="text-sm text-[var(--am-accent)] m-0">{{ $syncResult }}</p>
+                    <button wire:click="$set('syncResult', null)" class="ml-auto text-[var(--am-accent)] hover:opacity-70">×</button>
                 </div>
             @endif
 
@@ -422,11 +285,10 @@
                         <tbody class="divide-y divide-[color:var(--am-border)]">
                             @foreach($devices as $device)
                                 @php
-                                    $isSelected = $detailType === 'device' && $detailId === $device->id;
-                                    $isChecked  = $canManage && in_array((string) $device->id, $selected, true);
+                                    $isChecked = $canManage && in_array((string) $device->id, $selected, true);
                                 @endphp
                                 <tr wire:key="row-{{ $device->id }}"
-                                    class="cursor-pointer transition-colors {{ $isSelected ? 'bg-[var(--am-accent-surface)] shadow-[inset_3px_0_0_var(--am-accent)]' : ($isChecked ? 'bg-[var(--am-bg)]' : 'hover:bg-[var(--am-bg)]') }}">
+                                    class="transition-colors {{ $isChecked ? 'bg-[var(--am-bg)]' : 'hover:bg-[var(--am-bg)]' }}">
                                     @if($canManage)
                                         <td class="px-5 py-3">
                                             <input type="checkbox" value="{{ $device->id }}" wire:model.live="selected" class="rounded border-[color:var(--am-border)] text-[var(--am-accent)] focus:ring-[var(--am-accent)]/30" />
@@ -435,8 +297,14 @@
                                     @foreach($columns as $colKey)
                                         @switch($colKey)
                                             @case('device')
-                                                <td wire:click="selectDevice({{ $device->id }})" class="px-5 py-3">
-                                                    <div class="font-medium text-[var(--am-text)]">{{ $device->device_name ?? '—' }}</div>
+                                                {{-- Der Zellklick öffnete früher ein rechtes Vorschau-Panel; seit S8b
+                                                     führt der Gerätename direkt auf die vereinte Detailseite (ADR 0012),
+                                                     die dieselben Felder vollständig zeigt. --}}
+                                                <td class="px-5 py-3">
+                                                    <a href="{{ route('asset-manager.inventory.show', ['type' => 'intune', 'id' => $device->id]) }}" wire:navigate
+                                                       class="font-medium text-[var(--am-text)] hover:text-[var(--am-accent)]">
+                                                        {{ $device->device_name ?? '—' }}
+                                                    </a>
                                                     @if($device->model)
                                                         <div class="text-xs text-[var(--am-text-secondary)]">{{ $device->manufacturer }} {{ $device->model }}</div>
                                                     @endif
@@ -459,7 +327,10 @@
                                             @case('user')
                                                 <td class="px-5 py-3">
                                                     @if($device->user_principal_name)
-                                                        <button wire:click.stop="selectHolderByUpn('{{ $device->user_principal_name }}')" class="text-left hover:text-[var(--am-accent)]">
+                                                        {{-- Der UPN steht am Gerät, die Träger-ID nicht — die Auflösung
+                                                             bleibt serverseitig und springt aufs Profil statt in ein
+                                                             rechtes Vorschau-Panel (S8b). --}}
+                                                        <button wire:click="openHolderByUpn('{{ $device->user_principal_name }}')" class="text-left hover:text-[var(--am-accent)]">
                                                             <div class="text-[var(--am-text-secondary)]">{{ $device->user_display_name ?? '—' }}</div>
                                                             <div class="text-xs text-[var(--am-text-muted)] truncate max-w-[180px]">{{ $device->user_principal_name }}</div>
                                                         </button>
@@ -469,20 +340,20 @@
                                                 </td>
                                             @break
                                             @case('os')
-                                                <td wire:click="selectDevice({{ $device->id }})" class="px-5 py-3">
+                                                <td class="px-5 py-3">
                                                     <div class="text-[var(--am-text-secondary)]">{{ $device->operating_system ?? '—' }}</div>
                                                     @if($device->os_version)<div class="text-xs text-[var(--am-text-muted)]">{{ $device->os_version }}</div>@endif
                                                 </td>
                                             @break
                                             @case('status')
-                                                <td wire:click="selectDevice({{ $device->id }})" class="px-5 py-3">
+                                                <td class="px-5 py-3">
                                                     <x-asset-manager-badge :color="$device->complianceBadgeColor()" dot size="sm">
                                                         {{ $device->complianceLabel() }}
                                                     </x-asset-manager-badge>
                                                 </td>
                                             @break
                                             @case('lastCheckIn')
-                                                <td wire:click="selectDevice({{ $device->id }})" class="px-5 py-3 text-sm text-[var(--am-text-muted)]">
+                                                <td class="px-5 py-3 text-sm text-[var(--am-text-muted)]">
                                                     {{ $device->last_check_in_at ? $device->last_check_in_at->diffForHumans() : '—' }}
                                                 </td>
                                             @break

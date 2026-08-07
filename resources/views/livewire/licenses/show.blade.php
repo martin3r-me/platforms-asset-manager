@@ -64,53 +64,13 @@
                             <x-asset-manager-detail-row label="Letzter Sync"><span class="tabular-nums">{{ $sku->synced_at->diffForHumans() }}</span></x-asset-manager-detail-row>
                         @endif
                     </x-asset-manager-detail-list>
+                    {{-- Die vollständige Sync-Historie stand früher als rechte Sidebar hier; sie gehört
+                         zum Konnektor und wird dort ohnehin gepflegt (S8b). --}}
+                    <a href="{{ route('asset-manager.connectors.index') }}" wire:navigate
+                       class="block mt-1 text-[10px] text-[var(--am-text-secondary)] hover:text-[var(--am-accent)]">
+                        Sync-Historie im Konnektor →
+                    </a>
                 </x-asset-manager-panel>
-            </div>
-        </x-ui-page-sidebar>
-    </x-slot>
-
-    {{-- RECHTS: Aktivitäten --}}
-    <x-slot name="activity">
-        <x-ui-page-sidebar title="Aktivitäten" icon="heroicon-o-bolt" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
-            <div class="p-4 space-y-3 bg-[var(--am-bg)]">
-                <div class="text-[10px] font-semibold uppercase tracking-wider text-[var(--am-text-muted)] px-1">Letzte Synchronisierungen</div>
-                @forelse($activities as $activity)
-                    <div class="p-3 rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm">
-                        <div class="flex items-start justify-between gap-2 mb-1.5">
-                            <div class="text-[12px] font-medium text-[var(--am-text)] leading-snug">
-                                @if($activity->status === 'success')
-                                    Sync erfolgreich
-                                @elseif($activity->status === 'error')
-                                    Sync fehlgeschlagen
-                                @else
-                                    Sync gestartet
-                                @endif
-                            </div>
-                            @php $syncColor = ['success' => 'emerald', 'error' => 'red', 'started' => 'amber'][$activity->status] ?? 'gray'; @endphp
-                            <x-asset-manager-badge :color="$syncColor" size="xs" class="flex-shrink-0">{{ $activity->status }}</x-asset-manager-badge>
-                        </div>
-                        @if($activity->status === 'success')
-                            <div class="text-[10px] text-[var(--am-text-secondary)] mb-1 space-y-0.5">
-                                <div>{{ $activity->skus_synced ?? 0 }} SKUs · {{ $activity->assignments_synced ?? 0 }} Zuweisungen</div>
-                                @if(($activity->assignments_added ?? 0) > 0)   <div>+{{ $activity->assignments_added }} neu</div> @endif
-                                @if(($activity->assignments_removed ?? 0) > 0) <div>−{{ $activity->assignments_removed }} entfernt</div> @endif
-                            </div>
-                        @elseif($activity->status === 'error' && $activity->error_message)
-                            <div class="text-[10px] text-red-700 mb-1 break-words">{{ Str::limit($activity->error_message, 120) }}</div>
-                        @endif
-                        <div class="flex items-center gap-1.5 text-[10px] text-[var(--am-text-muted)]">
-                            @svg('heroicon-o-clock', 'w-3 h-3 opacity-60')
-                            <span>{{ $activity->started_at->diffForHumans() }}</span>
-                            @if($activity->duration_ms)
-                                <span class="ml-auto">{{ number_format($activity->duration_ms / 1000, 1) }}s</span>
-                            @endif
-                        </div>
-                    </div>
-                @empty
-                    <div class="p-3 text-center text-[11px] text-[var(--am-text-muted)]">
-                        Noch keine Aktivitäten.
-                    </div>
-                @endforelse
             </div>
         </x-ui-page-sidebar>
     </x-slot>

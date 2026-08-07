@@ -12,7 +12,6 @@ use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetUserLicense;
-use Platform\AssetManager\Services\CostAggregationService;
 
 class Index extends Component
 {
@@ -37,7 +36,6 @@ class Index extends Component
     public int    $perPage          = 25;
     public string $sortField        = 'display_name';
     public string $sortDirection    = 'asc';
-    public ?int   $selectedId       = null; // im rechten Detail-Panel gewählter Asset-Träger
 
     protected $queryString = [
         'preset'           => ['except' => 'active'],
@@ -82,25 +80,6 @@ class Index extends Component
         $this->filterHasDevice  = false;
         $this->filterHasAsset   = false;
         $this->resetPage();
-    }
-
-    /** Asset-Träger im rechten Detail-Panel selektieren (nur eigenes Team) und Panel aufklappen. */
-    public function selectHolder(int $id): void
-    {
-        $teamId = Auth::user()->currentTeam->id;
-
-        // Fremd-/ungültige IDs ignorieren, sonst zeigt das Panel nichts (render lädt team-scoped).
-        if (! AssetHolder::where('team_id', $teamId)->whereKey($id)->exists()) {
-            return;
-        }
-
-        $this->selectedId = $id;
-        $this->dispatch('open-activity'); // kollabierte rechte Sidebar aufklappen (Listener im Blade)
-    }
-
-    public function clearSelection(): void
-    {
-        $this->selectedId = null;
     }
 
     public function sortBy(string $field): void
@@ -306,54 +285,18 @@ class Index extends Component
             ->orderBy('code')
             ->get(['id', 'code', 'name', 'parent_id', 'depth']);
 
-        // --- Rechtes Detail-Panel: gewählter Asset-Träger + Zähler + Monatskosten ---
-        $selectedHolder = null;
-        $selDeviceCount   = 0;
-        $selAssetCount    = 0;
-        $selLicenseCount  = 0;
-        $selectedCost     = ['hardware' => 0.0, 'device' => 0.0, 'license' => 0.0, 'total' => 0.0];
-
-        if ($this->selectedId) {
-            $selectedHolder = AssetHolder::where('team_id', $teamId)->find($this->selectedId);
-
-            if ($selectedHolder) {
-                $upn = $selectedHolder->user_principal_name;
-
-                // Assets hängen an assignee_id; Geräte/Lizenzen am UPN (ohne UPN → 0).
-                $selAssetCount = AssetItem::where('team_id', $teamId)
-                    ->where('assignee_id', $selectedHolder->id)->count();
-
-                if ($upn) {
-                    $selDeviceCount  = AssetDevice::where('team_id', $teamId)
-                        ->where('user_principal_name', $upn)->count();
-                    $selLicenseCount = AssetUserLicense::where('team_id', $teamId)
-                        ->where('user_principal_name', $upn)->count();
-                }
-
-                // Identische Zahl wie die Profil-Seite (gemeinsame Methode).
-                $selectedCost = app(CostAggregationService::class)->holderCost($teamId, $selectedHolder);
-            } else {
-                $this->selectedId = null; // Auswahl ins Leere (gelöscht / Team-Wechsel) → zurücksetzen
-            }
-        }
-
         return view('asset-manager::livewire.holders.index', [
-            'holders'        => $holders,
-            'itemCounts'       => $itemCounts,
-            'deviceCounts'     => $deviceCounts,
-            'licenseCounts'    => $licenseCounts,
-            'counts'           => $counts,
-            'departments'      => $departments,
-            'skus'             => $skus,
-            'costCenters'      => $costCenters,
-            'selectedHolder' => $selectedHolder,
-            'selDeviceCount'   => $selDeviceCount,
-            'selAssetCount'    => $selAssetCount,
-            'selLicenseCount'  => $selLicenseCount,
-            'selectedCost'     => $selectedCost,
+            'holders'       => $holders,
+            'itemCounts'    => $itemCounts,
+            'deviceCounts'  => $deviceCounts,
+            'licenseCounts' => $licenseCounts,
+            'counts'        => $counts,
+            'departments'   => $departments,
+            'skus'          => $skus,
+            'costCenters'   => $costCenters,
             // Für den Hinweis „x Nicht-Personen ausgeblendet" — sie sind gelabelt, nicht gelöscht.
-            'nonPersonCount'   => $nonPersonCount,
-            'holderTypes'      => AssetHolder::TYPES,
+            'nonPersonCount' => $nonPersonCount,
+            'holderTypes'    => AssetHolder::TYPES,
         ])->layout('platform::layouts.app');
     }
 }

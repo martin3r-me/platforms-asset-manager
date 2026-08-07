@@ -107,7 +107,6 @@ class Index extends Component
 
         $this->fIssuedAt  = now()->toDateString();
         $this->showEditor = true;
-        $this->dispatch('open-activity');
     }
 
     public function edit(int $id): void
@@ -138,7 +137,6 @@ class Index extends Component
         }
 
         $this->showEditor = true;
-        $this->dispatch('open-activity');
     }
 
     // ---- Zeilen im Editor ----------------------------------------------------------------------
@@ -354,6 +352,19 @@ class Index extends Component
         $this->resetEditor();
         $this->showEditor = false;
         $this->resetValidation();
+    }
+
+    /**
+     * Das Modal ist per entangle an $showEditor gebunden — Backdrop-Klick und ESC setzen die
+     * Property direkt. Ohne diesen Hook bliebe ein halb erfasstes Protokoll (inkl. Unterschrift)
+     * im Zustand stehen und tauchte beim nächsten Öffnen wieder auf.
+     */
+    public function updatedShowEditor(bool $value): void
+    {
+        if (! $value) {
+            $this->resetEditor();
+            $this->resetValidation();
+        }
     }
 
     protected function resetEditor(): void

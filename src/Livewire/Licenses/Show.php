@@ -7,7 +7,6 @@ use Livewire\WithPagination;
 use Illuminate\Support\Facades\Auth;
 use Platform\AssetManager\Concerns\GuardsTenantBoundary;
 use Platform\AssetManager\Models\AssetLicenseSku;
-use Platform\AssetManager\Models\AssetLicenseSyncLog;
 use Platform\AssetManager\Models\AssetUserLicense;
 
 class Show extends Component
@@ -46,14 +45,10 @@ class Show extends Component
             ->orderBy('display_name')
             ->paginate(50);
 
-        $activities = AssetLicenseSyncLog::where('team_id', $this->sku->team_id)
-            ->orderByDesc('started_at')
-            ->limit(10)
-            ->get();
-
+        // Die Sync-Historie lebt auf der Konnektoren-Seite — hier wurde sie nur ein zweites Mal
+        // gezeigt (S8b). Der letzte Sync steht weiterhin im SKU-Panel links.
         return view('asset-manager::livewire.licenses.show', [
             'assignments' => $assignments,
-            'activities'  => $activities,
         ])->layout('platform::layouts.app');
     }
 }

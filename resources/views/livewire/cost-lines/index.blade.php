@@ -67,93 +67,10 @@
         </x-ui-page-sidebar>
     </x-slot>
 
-    {{-- RECHTS: Anlegen / Bearbeiten --}}
-    <x-slot name="activity">
-        <x-ui-page-sidebar :title="$editId ? 'Position bearbeiten' : 'Neue Position'" icon="heroicon-o-pencil-square"
-                           width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
-            <div class="p-4 space-y-3 bg-[var(--am-bg)]">
-                {{-- Editor (Anlegen/Bearbeiten/Speichern/Löschen) nur Owner/Admin (ADR 0004). --}}
-                @can('asset-manager.manage')
-                @if($showEditor)
-                    <div class="flex items-center justify-between pb-2 border-b border-[color:var(--am-border)]">
-                        <span class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">{{ $editId ? 'Bearbeiten' : 'Neu anlegen' }}</span>
-                        <button wire:click="cancelEdit" class="text-[10px] text-[var(--am-text-secondary)] hover:text-red-600">
-                            @svg('heroicon-o-x-mark', 'w-3 h-3 inline -mt-0.5')
-                            Schließen
-                        </button>
-                    </div>
-
-                    <section class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-3 space-y-3">
-                        <div>
-                            <label class="block text-xs text-[var(--am-text-secondary)] mb-1">Kostenart *</label>
-                            <x-asset-manager-select size="md" wire:model="fCostType">
-                                <option value="">– wählen –</option>
-                                @foreach($costTypes as $t)<option value="{{ $t->id }}">{{ $t->name }}</option>@endforeach
-                            </x-asset-manager-select>
-                            @error('fCostType')<span class="text-[10px] text-red-700">{{ $message }}</span>@enderror
-                        </div>
-                        <div>
-                            <label class="block text-xs text-[var(--am-text-secondary)] mb-1">Bezeichnung *</label>
-                            <x-asset-manager-input size="md" type="text" wire:model="fLabel" />
-                            @error('fLabel')<span class="text-[10px] text-red-700">{{ $message }}</span>@enderror
-                        </div>
-                        <div>
-                            <label class="block text-xs text-[var(--am-text-secondary)] mb-1">Kostenstelle (Code)</label>
-                            <x-asset-manager-input size="md" list="cc-list" wire:model="fCostCenter" />
-                            <datalist id="cc-list">@foreach($costCenters as $c)<option value="{{ $c->code }}">@endforeach</datalist>
-                        </div>
-                        <div>
-                            <label class="block text-xs text-[var(--am-text-secondary)] mb-1">Kreditor</label>
-                            <x-asset-manager-select size="md" wire:model="fVendor">
-                                <option value="">– Standard –</option>
-                                @foreach($vendors as $v)<option value="{{ $v->id }}">{{ $v->name }}</option>@endforeach
-                            </x-asset-manager-select>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div>
-                                <label class="block text-xs text-[var(--am-text-secondary)] mb-1">Betrag (€) *</label>
-                                <x-asset-manager-input size="md" type="number" step="0.01" wire:model="fAmount" />
-                                @error('fAmount')<span class="text-[10px] text-red-700">{{ $message }}</span>@enderror
-                            </div>
-                            <div>
-                                <label class="block text-xs text-[var(--am-text-secondary)] mb-1">Frequenz</label>
-                                <x-asset-manager-select size="md" wire:model="fFrequency">
-                                    <option value="monthly">Monatlich</option>
-                                    <option value="quarterly">Quartal</option>
-                                    <option value="yearly">Jährlich</option>
-                                    <option value="once">Einmalig</option>
-                                </x-asset-manager-select>
-                            </div>
-                        </div>
-                        <label class="flex items-center gap-2 text-sm text-[var(--am-text-secondary)]">
-                            <input type="checkbox" wire:model="fActive" class="rounded"> Aktiv
-                        </label>
-
-                        <div class="flex items-center gap-2 pt-3 mt-1 border-t border-[color:var(--am-border)]">
-                            <x-asset-manager-button variant="primary" size="sm" class="flex-1" wire:click="save">
-                                {{ $editId ? 'Speichern' : 'Anlegen' }}
-                            </x-asset-manager-button>
-                            <x-asset-manager-button variant="ghost" size="sm" wire:click="cancelEdit">Abbrechen</x-asset-manager-button>
-                            @if($editId)
-                                <x-asset-manager-button variant="danger" size="sm" wire:click="delete({{ $editId }})" wire:confirm="Position löschen?" title="Löschen">
-                                    @svg('heroicon-o-trash', 'w-3.5 h-3.5')
-                                </x-asset-manager-button>
-                            @endif
-                        </div>
-                    </section>
-                @else
-                    <div class="flex flex-col items-center justify-center py-10 text-center">
-                        @svg('heroicon-o-cursor-arrow-rays', 'w-8 h-8 text-[var(--am-text-muted)] mb-3')
-                        <p class="text-[11px] text-[var(--am-text-secondary)]">Eine Zeile anklicken zum Bearbeiten — oder oben „Neue Position“.</p>
-                    </div>
-                @endif
-                @endcan
-            </div>
-        </x-ui-page-sidebar>
-    </x-slot>
-
-    {{-- Öffnet das rechte Panel bei „Neu“ oder Zeilenklick. --}}
-    <div x-data x-on:open-activity.window="$store.ui && $store.ui.mSet('activity', 'open', true)"></div>
+    {{-- Editor als Modal (S8b): Anlegen/Bearbeiten stand vorher in einer zugeklappten rechten Sidebar. --}}
+    @can('asset-manager.manage')
+        @include('asset-manager::livewire.cost-lines.partials.modal-editor')
+    @endcan
 
     {{-- HAUPT --}}
     <div class="flex-1 flex flex-col min-h-0 min-w-0">
@@ -203,7 +120,7 @@
                         <tbody class="divide-y divide-[color:var(--am-border)]">
                             @foreach($lines as $line)
                                 <tr wire:key="cl-{{ $line->id }}" wire:click="edit({{ $line->id }})"
-                                    class="cursor-pointer hover:bg-[var(--am-bg)] {{ $editId === $line->id ? 'bg-[var(--am-accent-surface)] shadow-[inset_3px_0_0_var(--am-accent)]' : '' }} {{ $line->active ? '' : 'opacity-50' }}">
+                                    class="cursor-pointer hover:bg-[var(--am-bg)] {{ $line->active ? '' : 'opacity-50' }}">
                                     <td class="px-4 py-2.5 font-medium text-[var(--am-text)]">{{ $line->label }}</td>
                                     <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">{{ $line->costType?->name }}</td>
                                     <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">{{ $line->costCenter?->code ?? '—' }}</td>

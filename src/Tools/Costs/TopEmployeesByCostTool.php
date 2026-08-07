@@ -27,7 +27,8 @@ class TopEmployeesByCostTool implements ToolContract, ToolMetadataContract
     public function getDescription(): string
     {
         return 'GET /asset-manager/costs/top-employees - Asset-Träger mit den höchsten monatlichen '
-            . 'Gesamtkosten (hardware/licenses/costlines/total). Parameter limit (Default 10, max 200).';
+            . 'Gesamtkosten (hardware/licenses/costlines/total). Parameter limit (Default 10, max 200). '
+            . 'Bei tenant_id="all" gilt limit pro Tenant und jede Zeile trägt tenant_id/tenant_name.';
     }
 
     public function getSchema(): array
@@ -65,7 +66,10 @@ class TopEmployeesByCostTool implements ToolContract, ToolMetadataContract
 
             $limit = min(max((int) ($arguments['limit'] ?? 10), 1), 200);
 
-            $rows = app(CostAggregationService::class)->topHolders($teamId, $limit)
+            // Bei tenant_id="all" gilt limit PRO TENANT — eine gemeinsame Top-Liste würde kleine
+            // Tenants komplett verdrängen, und die Zeilen wären ohne Tenant nicht zuordenbar.
+            $rows = $this->rowsPerTenant($teamId, $tenantId, fn () => app(CostAggregationService::class)
+                ->topHolders($teamId, $limit)
                 ->map(fn ($r) => [
                     'holder'            => $r['holder']->name,
                     'user_principal_name' => $r['holder']->user_principal_name,
@@ -75,9 +79,14 @@ class TopEmployeesByCostTool implements ToolContract, ToolMetadataContract
                     'licenses'            => $r['licenses'],
                     'costlines'           => $r['costlines'],
                     'total'               => $r['total'],
-                ])->values()->all();
+                ]));
 
-            return ToolResult::success(['holders' => $rows, 'count' => count($rows), 'currency' => 'EUR']);
+            return ToolResult::success([
+                'holders'      => $rows,
+                'count'        => count($rows),
+                'tenant_scope' => $tenantId === null ? 'all' : $tenantId,
+                'currency'     => 'EUR',
+            ]);
         } catch (\Throwable $e) {
             return ToolResult::error('EXECUTION_ERROR', 'Fehler beim Berechnen der Top-Asset-Träger: ' . $e->getMessage());
         }

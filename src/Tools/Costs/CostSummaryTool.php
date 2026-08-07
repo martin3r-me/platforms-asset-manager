@@ -32,7 +32,9 @@ class CostSummaryTool implements ToolContract, ToolMetadataContract
             . 'Konstruktion identisch mit dem grandTotal der Kostenstellen×Kostenart-Pivot '
             . '(asset-manager.costs.by). Zusätzlich capacity = Bestand, der dem Pivot NICHT zugeteilt '
             . 'wird (hardware_unassigned: AfA von Lager-/Pool-Items ohne Asset-Träger; licenses_catalog: '
-            . 'SKU-Katalogkosten) — bewusst NICHT Teil von total.';
+            . 'SKU-Katalogkosten) — bewusst NICHT Teil von total. Bei tenant_id="all" kommt statt '
+            . 'monthly_costs eine Liste by_tenant (je Eintrag tenant_id/tenant_name + dieselben '
+            . 'Kennzahlen) plus total als Summe über alle Tenants.';
     }
 
     public function getSchema(): array
@@ -66,9 +68,26 @@ class CostSummaryTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('CONTROLLING_DISABLED', 'Die Controlling-/Kosten-Schicht ist für dieses Team deaktiviert (Modul-Einstellungen). Kosten, Kostenpositionen und Stammdaten sind daher nicht verfügbar.');
             }
 
-            $totals = app(CostAggregationService::class)->totalMonthly($teamId);
+            // Bei tenant_id="all" ist eine einzige Summe über alle Kunden zwar rechnerisch richtig,
+            // aber betriebswirtschaftlich nutzlos — die Frage lautet immer „wieviel je Kunde". Darum
+            // je Tenant rechnen und die Gesamtsumme zusätzlich ausweisen.
+            $perTenant = $this->rowsPerTenant($teamId, $tenantId, fn () => [
+                app(CostAggregationService::class)->totalMonthly($teamId),
+            ]);
 
-            return ToolResult::success(['monthly_costs' => $totals, 'currency' => 'EUR']);
+            if ($tenantId !== null) {
+                return ToolResult::success(['monthly_costs' => $perTenant[0], 'currency' => 'EUR']);
+            }
+
+            return ToolResult::success([
+                'tenant_scope' => 'all',
+                'by_tenant'    => $perTenant,
+                'total'        => round(array_sum(array_map(
+                    fn (array $r) => (float) ($r['total'] ?? 0),
+                    $perTenant,
+                )), 2),
+                'currency'     => 'EUR',
+            ]);
         } catch (\Throwable $e) {
             return ToolResult::error('EXECUTION_ERROR', 'Fehler beim Berechnen der Gesamtkosten: ' . $e->getMessage());
         }

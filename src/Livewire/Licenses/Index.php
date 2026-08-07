@@ -9,7 +9,6 @@ use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Jobs\SyncLicensesJob;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetLicenseSku;
-use Platform\AssetManager\Models\AssetUserLicense;
 use Platform\AssetManager\Models\AssetLicenseSyncLog;
 use Platform\AssetManager\Models\AssetConnectorConfig;
 
@@ -24,9 +23,6 @@ class Index extends Component
 
     // Inline-Preis-Bearbeitung
     public array $editingPrices = [];
-
-    // Master-Detail: rechts aufgeklappte Lizenz (Nutzer)
-    public ?int $selectedSkuId = null;
 
     // Filter (linke Sidebar)
     public string $filterUsage = '';   // '' | 'unused' | 'full'
@@ -74,22 +70,6 @@ class Index extends Component
             ->update(['unit_price' => $price !== null && $price !== '' ? (float) str_replace(',', '.', $price) : null]);
 
         unset($this->editingPrices[$skuId]);
-    }
-
-    public function selectSku(int $skuId): void
-    {
-        $team = Auth::user()->currentTeam;
-
-        $this->selectedSkuId = AssetLicenseSku::where('team_id', $team->id)
-            ->whereKey($skuId)
-            ->exists()
-            ? $skuId
-            : null;
-    }
-
-    public function clearSku(): void
-    {
-        $this->selectedSkuId = null;
     }
 
     public function render()
@@ -142,25 +122,8 @@ class Index extends Component
         $config   = AssetConnectorConfig::where('team_id', $team->id)->first();
         $canSync  = Gate::allows('manageConnector', AssetDevice::class);
 
-        // Aufgeklappte Lizenz + ihre Nutzer-Zuweisungen (für die linke Sidebar)
-        $selectedSku = null;
-        $assignments = collect();
-
-        if ($this->selectedSkuId) {
-            $selectedSku = AssetLicenseSku::where('team_id', $team->id)
-                ->find($this->selectedSkuId);
-
-            if ($selectedSku) {
-                $assignments = AssetUserLicense::where('team_id', $team->id)
-                    ->where('sku_id', $selectedSku->sku_id)
-                    ->orderBy('display_name')
-                    ->limit(200)
-                    ->get();
-            } else {
-                $this->selectedSkuId = null;
-            }
-        }
-
+        // Die Nutzer-Zuweisungen einer SKU standen früher in einem rechten Vorschau-Panel; sie sind
+        // auf der Lizenz-Detailseite vollständig (und paginiert) zu sehen — „Nutzer" führt dorthin (S8b).
         return view('asset-manager::livewire.licenses.index', [
             'skus'             => $skus,
             'totalMonthlyCost' => $totalMonthlyCost,
@@ -169,8 +132,6 @@ class Index extends Component
             'lastLog'          => $lastLog,
             'canSync'          => $canSync,
             'config'           => $config,
-            'selectedSku'      => $selectedSku,
-            'assignments'      => $assignments,
         ])->layout('platform::layouts.app');
     }
 }

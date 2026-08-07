@@ -30,7 +30,9 @@ class CostByDimensionTool implements ToolContract, ToolMetadataContract
     {
         return 'GET /asset-manager/costs/by - Monatskosten gruppiert nach dimension: '
             . 'department, cost_center, company, category, license_sku, vendor oder cost_type. '
-            . 'Liefert je Gruppe Label und Summe (je nach Dimension zusätzlich Counts/Auslastung).';
+            . 'Liefert je Gruppe Label und Summe (je nach Dimension zusätzlich Counts/Auslastung). '
+            . 'Bei tenant_id="all" trägt jede Zeile zusätzlich tenant_id und tenant_name — gleichnamige '
+            . 'Gruppen verschiedener Tenants bleiben so getrennt.';
     }
 
     public function getSchema(): array
@@ -86,11 +88,14 @@ class CostByDimensionTool implements ToolContract, ToolMetadataContract
                 'cost_type'   => 'byCostType',
             ][$dimension];
 
-            $rows = $agg->{$method}($teamId);
+            // Bei tenant_id="all" je Tenant auswerten und die Zeilen kennzeichnen — sonst addierte
+            // sich z. B. die Kostenstelle „1000" zweier Kunden zu einer nicht zuordenbaren Zahl.
+            $rows = $this->rowsPerTenant($teamId, $tenantId, fn () => $agg->{$method}($teamId));
 
             return ToolResult::success([
                 'dimension' => $dimension,
-                'rows'      => $rows->values()->all(),
+                'tenant_scope' => $tenantId === null ? 'all' : $tenantId,
+                'rows'      => $rows,
                 'currency'  => 'EUR',
             ]);
         } catch (\Throwable $e) {

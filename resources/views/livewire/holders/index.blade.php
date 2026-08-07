@@ -107,111 +107,6 @@
         </x-ui-page-sidebar>
     </x-slot>
 
-    {{-- RECHTS: Zusammenfassungs-Panel zum gewählten Asset-Träger --}}
-    <x-slot name="activity">
-        <x-ui-page-sidebar title="Asset-Träger" icon="heroicon-o-user" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
-            <div class="p-4 space-y-3 bg-[var(--am-bg)]">
-                @if($selectedHolder)
-                    <div class="flex items-center justify-between pb-2 border-b border-[color:var(--am-border)]">
-                        <span class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">Asset-Träger</span>
-                        <button wire:click="clearSelection" class="text-[10px] text-[var(--am-text-muted)] hover:text-red-500">
-                            @svg('heroicon-o-x-mark', 'w-3 h-3 inline -mt-0.5')
-                            Schließen
-                        </button>
-                    </div>
-
-                    {{-- Identität --}}
-                    <section class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-3">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-full bg-[var(--am-accent-surface)] text-[var(--am-accent)] flex items-center justify-center text-xs font-semibold flex-shrink-0">
-                                {{ $selectedHolder->initials() }}
-                            </div>
-                            <div class="min-w-0 flex-1">
-                                <div class="text-sm font-semibold text-[var(--am-text)] truncate">{{ $selectedHolder->name }}</div>
-                                <div class="text-[10px] text-[var(--am-text-muted)] truncate">{{ $selectedHolder->user_principal_name ?: '—' }}</div>
-                            </div>
-                        </div>
-                        @if($selectedHolder->department || $selectedHolder->job_title)
-                            <div class="mt-2 text-[10px] text-[var(--am-text-muted)]">
-                                {{ $selectedHolder->job_title }}@if($selectedHolder->department && $selectedHolder->job_title) · @endif{{ $selectedHolder->department }}
-                            </div>
-                        @endif
-                    </section>
-
-                    {{-- Meta --}}
-                    <section class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm overflow-hidden">
-                        <dl class="divide-y divide-[color:var(--am-border)] text-[11px]">
-                            <div class="flex items-baseline justify-between gap-2 py-1.5 px-3">
-                                <dt class="text-[var(--am-text-muted)] flex-shrink-0">Abteilung</dt>
-                                <dd class="text-[var(--am-text-secondary)] m-0 truncate max-w-[60%] text-right">{{ $selectedHolder->department ?: '—' }}</dd>
-                            </div>
-                            <div class="flex items-baseline justify-between gap-2 py-1.5 px-3">
-                                <dt class="text-[var(--am-text-muted)] flex-shrink-0">Kostenstelle</dt>
-                                <dd class="text-[var(--am-text-secondary)] m-0 truncate max-w-[60%] text-right">{{ $selectedHolder->cost_center ?: '—' }}</dd>
-                            </div>
-                            <div class="flex items-baseline justify-between gap-2 py-1.5 px-3">
-                                <dt class="text-[var(--am-text-muted)] flex-shrink-0">Quelle</dt>
-                                <dd class="m-0 text-right">
-                                    @if($selectedHolder->source === 'graph')
-                                        <x-asset-manager-badge color="violet" size="xs">Graph</x-asset-manager-badge>
-                                    @elseif($selectedHolder->source === 'manual')
-                                        <x-asset-manager-badge color="amber" size="xs">Manuell</x-asset-manager-badge>
-                                    @else
-                                        <x-asset-manager-badge color="gray" size="xs">Abgeleitet</x-asset-manager-badge>
-                                    @endif
-                                </dd>
-                            </div>
-                            <div class="flex items-baseline justify-between gap-2 py-1.5 px-3">
-                                <dt class="text-[var(--am-text-muted)] flex-shrink-0">Status</dt>
-                                <dd class="m-0 text-right">
-                                    @if($selectedHolder->is_active)
-                                        <x-asset-manager-badge color="emerald" size="xs">Aktiv</x-asset-manager-badge>
-                                    @else
-                                        <x-asset-manager-badge color="red" size="xs">Inaktiv</x-asset-manager-badge>
-                                    @endif
-                                </dd>
-                            </div>
-                        </dl>
-                    </section>
-
-                    {{-- Zähler + Monatskosten --}}
-                    <div class="grid grid-cols-2 gap-2">
-                        <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-2.5 text-center">
-                            <div class="text-lg font-semibold tabular-nums text-[var(--am-text)]">{{ $selDeviceCount }}</div>
-                            <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">Geräte</div>
-                        </div>
-                        <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-2.5 text-center">
-                            <div class="text-lg font-semibold tabular-nums text-[var(--am-text)]">{{ $selAssetCount }}</div>
-                            <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">Assets</div>
-                        </div>
-                        <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-2.5 text-center">
-                            <div class="text-lg font-semibold tabular-nums text-[var(--am-text)]">{{ $selLicenseCount }}</div>
-                            <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">Lizenzen</div>
-                        </div>
-                        <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-2.5 text-center">
-                            <div class="text-lg font-semibold tabular-nums text-[var(--am-accent)]">{{ number_format($selectedCost['total'], 2, ',', '.') }} €</div>
-                            <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">pro Monat</div>
-                        </div>
-                    </div>
-
-                    <x-asset-manager-button variant="primary" size="md" href="{{ route('asset-manager.holders.show', $selectedHolder) }}" wire:navigate class="w-full">
-                        @svg('heroicon-o-arrow-top-right-on-square', 'w-3.5 h-3.5')
-                        Vollständiges Profil
-                    </x-asset-manager-button>
-                @else
-                    <div class="flex flex-col items-center justify-center py-8 text-center">
-                        @svg('heroicon-o-cursor-arrow-rays', 'w-8 h-8 text-[var(--am-text-muted)] mb-3')
-                        <p class="text-[11px] text-[var(--am-text-muted)] mb-1">Wähle einen Asset-Träger aus der Tabelle.</p>
-                        <p class="text-[10px] text-[var(--am-text-secondary)]">Zeigt Zusammenfassung & Monatskosten.</p>
-                    </div>
-                @endif
-            </div>
-        </x-ui-page-sidebar>
-    </x-slot>
-
-    {{-- Öffnet die kollabierte rechte Sidebar, wenn selectHolder() 'open-activity' dispatcht --}}
-    <div x-data x-on:open-activity.window="$store.ui && $store.ui.mSet('activity', 'open', true)"></div>
-
     <div class="flex-1 flex flex-col min-h-0 min-w-0">
         <div class="flex-1 overflow-y-auto p-6 space-y-5">
 
@@ -323,13 +218,10 @@
                             </thead>
                             <tbody class="divide-y divide-[color:var(--am-border)]">
                                 @foreach($holders as $emp)
-                                    {{-- Klick auf die Zeile öffnet das Panel; Klicks aus dem Namens-Link (wire:navigate)
-                                         werden ignoriert, damit der Name weiterhin direkt zum Profil navigiert. Kein
-                                         stopPropagation am Link — das würde wire:navigate (document-delegiert) abwürgen. --}}
-                                    <tr wire:key="emp-{{ $emp->id }}"
-                                        x-data
-                                        @click="if (! $event.target.closest('a')) $wire.selectHolder({{ $emp->id }})"
-                                        class="cursor-pointer transition-colors {{ $selectedId === $emp->id ? 'bg-[var(--am-accent-surface)] shadow-[inset_3px_0_0_var(--am-accent)]' : 'hover:bg-[var(--am-bg)]' }}">
+                                    {{-- Der Zeilenklick öffnete früher ein rechtes Vorschau-Panel, dessen Inhalt
+                                         (Abteilung, Kostenstelle, Quelle, Zähler) in dieser Tabelle bereits steht
+                                         und dessen Rest das Profil zeigt. Seit S8b führt nur noch der Name dorthin. --}}
+                                    <tr wire:key="emp-{{ $emp->id }}" class="transition-colors hover:bg-[var(--am-bg)]">
                                         <td class="px-5 py-3">
                                             <a href="{{ route('asset-manager.holders.show', $emp) }}" wire:navigate class="flex items-center gap-2">
                                                 <div class="w-7 h-7 rounded-full bg-[var(--am-accent-surface)] text-[var(--am-accent)] flex items-center justify-center text-[10px] font-semibold flex-shrink-0">

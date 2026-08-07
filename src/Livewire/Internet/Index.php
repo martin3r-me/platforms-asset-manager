@@ -15,18 +15,6 @@ class Index extends Component
 
     public string $search = '';
     public string $filterProvider = '';
-    public ?int   $selectedId = null;
-
-    public function selectItem(int $id): void
-    {
-        $this->selectedId = $id;
-        $this->dispatch('open-activity');
-    }
-
-    public function clearSelection(): void
-    {
-        $this->selectedId = null;
-    }
 
     public function resetFilters(): void
     {
@@ -50,6 +38,9 @@ class Index extends Component
             ->groupBy('asset_item_id');
 
         $costByItem = $linesByItem->map(fn ($g) => (float) $g->sum('monthly_amount'));
+        // Die Kostenstelle hängt an der Cost-Line, nicht am Asset — als Spalte in der Liste ausgewiesen,
+        // seit das rechte Vorschau-Panel entfallen ist (S8b).
+        $kstByItem  = $linesByItem->map(fn ($g) => $g->map(fn ($l) => $l->costCenter?->code)->filter()->unique()->implode(', '));
 
         // Distinct Anbieter für das Filter-Dropdown.
         $providers = $all->map(fn ($i) => $i->raw_data['anbieter'] ?? null)
@@ -69,16 +60,12 @@ class Index extends Component
             ))
             ->values();
 
-        $selectedItem  = $this->selectedId ? AssetItem::where('team_id', $teamId)->find($this->selectedId) : null;
-        $selectedLines = $selectedItem ? ($linesByItem[$selectedItem->id] ?? collect()) : collect();
-
         return view('asset-manager::livewire.internet.index', [
-            'items'         => $items,
-            'costByItem'    => $costByItem,
-            'totalMonthly'  => round($items->sum(fn ($i) => $costByItem[$i->id] ?? 0), 2),
-            'providers'     => $providers,
-            'selectedItem'  => $selectedItem,
-            'selectedLines' => $selectedLines,
+            'items'        => $items,
+            'costByItem'   => $costByItem,
+            'kstByItem'    => $kstByItem,
+            'totalMonthly' => round($items->sum(fn ($i) => $costByItem[$i->id] ?? 0), 2),
+            'providers'    => $providers,
         ])->layout('platform::layouts.app');
     }
 }

@@ -102,7 +102,6 @@ class Index extends Component
     {
         $this->resetEditor();
         $this->showEditor = true;
-        $this->dispatch('open-activity');
     }
 
     public function edit(int $id): void
@@ -117,7 +116,7 @@ class Index extends Component
         $this->fFrequency  = $line->frequency;
         $this->fActive     = (bool) $line->active;
         $this->showEditor  = true;
-        $this->dispatch('open-activity');
+        $this->resetValidation();
     }
 
     public function save(CostBootstrapService $bootstrap): void
@@ -194,7 +193,7 @@ class Index extends Component
 
         $line = AssetCostLine::where('team_id', $this->teamId())->findOrFail($id);
         $line->delete();
-        // Wird gerade diese Zeile im rechten Panel bearbeitet → Editor schließen.
+        // Wird gerade diese Zeile im Editor-Modal bearbeitet → Modal schließen.
         if ($this->editId === $id) {
             $this->resetEditor();
             $this->showEditor = false;
@@ -210,12 +209,25 @@ class Index extends Component
         $line->update(['active' => !$line->active]);
     }
 
-    /** Editor (rechtes Panel) schließen und Auswahl/Highlight lösen. */
+    /** Editor-Modal schließen und Formularzustand verwerfen. */
     public function cancelEdit(): void
     {
         $this->resetEditor();
         $this->showEditor = false;
         $this->resetValidation();
+    }
+
+    /**
+     * Das Modal ist per entangle an $showEditor gebunden — Backdrop-Klick und ESC setzen die
+     * Property direkt. Ohne diesen Hook bliebe der halb ausgefüllte Editor im Zustand stehen und
+     * tauchte beim nächsten Öffnen wieder auf.
+     */
+    public function updatedShowEditor(bool $value): void
+    {
+        if (! $value) {
+            $this->resetEditor();
+            $this->resetValidation();
+        }
     }
 
     protected function resetEditor(): void
