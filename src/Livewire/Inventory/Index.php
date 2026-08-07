@@ -11,7 +11,7 @@ use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Models\AssetCategory;
 use Platform\AssetManager\Models\AssetCostCenter;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Services\AssetWriteService;
 use Platform\AssetManager\Services\InventoryService;
@@ -143,8 +143,8 @@ class Index extends Component
             'cManufacturer'       => 'nullable|string|max:255',
             'cModel'              => 'nullable|string|max:255',
             'cSerialNumber'       => 'nullable|string|max:255',
-            // Mitarbeiter MUSS zum eigenen Team gehören (sonst danglende cross-team FK).
-            'cAssigneeId'         => ['nullable', 'integer', Rule::exists('asset_employees', 'id')->where('team_id', $teamId)],
+            // Asset-Träger MUSS zum eigenen Team gehören (sonst danglende cross-team FK).
+            'cAssigneeId'         => ['nullable', 'integer', Rule::exists('asset_holders', 'id')->where('team_id', $teamId)],
             'cStatus'             => 'required|in:in_stock,assigned,retired,lost',
             'cPurchaseDate'       => 'nullable|date',
             'cPurchasePrice'      => 'nullable|numeric|min:0',
@@ -202,7 +202,7 @@ class Index extends Component
             'counts'        => $inventory->counts($teamId, TenantContext::scopeTenantId()),
             'totalFiltered' => $sorted->count(),
             'categories'    => AssetCategory::orderBy('sort_order')->get(),
-            'employees'     => AssetEmployee::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get(),
+            'holders'     => AssetHolder::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get(),
             'costCenters'   => AssetCostCenter::where('team_id', $teamId)->where('is_active', true)->orderBy('name')->get(),
         ])->layout('platform::layouts.app');
     }

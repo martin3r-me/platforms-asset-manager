@@ -35,7 +35,7 @@ class TriggerSyncTool implements ToolContract, ToolMetadataContract
     {
         return 'POST /asset-manager/sync - Stößt einen Sync gegen Microsoft Graph an (asynchron). '
             . 'target: "devices" (Intune-Geräte), "licenses" (M365-Lizenzen) oder "users" (Tenant-User → '
-            . 'Mitarbeiter). dry_run=true prüft nur Berechtigung und Connector-Bereitschaft. Der Job läuft '
+            . 'Asset-Träger). dry_run=true prüft nur Berechtigung und Connector-Bereitschaft. Der Job läuft '
             . 'im Hintergrund — Fortschritt via asset-manager.sync.GET abfragen. Erfordert Owner/Admin.';
     }
 

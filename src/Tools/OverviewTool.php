@@ -4,7 +4,7 @@ namespace Platform\AssetManager\Tools;
 
 use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetDevice;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Services\CostAggregationService;
@@ -33,10 +33,10 @@ class OverviewTool implements ToolContract, ToolMetadataContract
     public function getDescription(): string
     {
         return 'GET /asset-manager/overview - Kompaktes Dashboard für das aktive Team: monatliche '
-            . 'Gesamtkosten (Hardware/Lizenzen/Kostenpositionen/gesamt), Mengengerüst (Mitarbeiter, '
+            . 'Gesamtkosten (Hardware/Lizenzen/Kostenpositionen/gesamt), Mengengerüst (Asset-Träger, '
             . 'Intune-Geräte, Geräte mit ablaufender Garantie/Leasing, Lizenz-SKUs, Inventar-Items, '
-            . 'Kostenpositionen), die teuersten Mitarbeiter '
-            . 'sowie Anomalien (Pool-Hardware, ungenutzte Lizenzen, Hardware bei inaktiven Mitarbeitern). '
+            . 'Kostenpositionen), die teuersten Asset-Träger '
+            . 'sowie Anomalien (Pool-Hardware, ungenutzte Lizenzen, Hardware bei inaktiven Asset-Trägern). '
             . 'Idealer Startpunkt, um den Zustand des Asset-Managers zu erfassen.';
     }
 
@@ -77,8 +77,8 @@ class OverviewTool implements ToolContract, ToolMetadataContract
                 })->count();
 
             $counts = [
-                'employees'        => AssetEmployee::where('team_id', $teamId)->count(),
-                'employees_active' => AssetEmployee::where('team_id', $teamId)->where('is_active', true)->count(),
+                'holders'        => AssetHolder::where('team_id', $teamId)->count(),
+                'employees_active' => AssetHolder::where('team_id', $teamId)->where('is_active', true)->count(),
                 'devices'          => AssetDevice::where('team_id', $teamId)->count(),
                 'expiring_devices' => $expiringDevices,
                 'license_skus'     => AssetLicenseSku::where('team_id', $teamId)->count(),
@@ -87,13 +87,13 @@ class OverviewTool implements ToolContract, ToolMetadataContract
             ];
 
             // Controlling-Schicht aus (ADR 0008): Kosten-Engine NICHT aufrufen — nur das Mengengerüst
-            // liefern, Kosten/Top-Mitarbeiter/Anomalien ausblenden. controlling_enabled signalisiert der LLM,
+            // liefern, Kosten/Top-Asset-Träger/Anomalien ausblenden. controlling_enabled signalisiert der LLM,
             // dass die Kosten-Sicht bewusst fehlt (nicht etwa leer ist).
             if (!app(\Platform\AssetManager\Services\ControllingContext::class)->enabledFor($teamId)) {
                 return ToolResult::success([
                     'controlling_enabled' => false,
                     'counts'              => $counts,
-                    'note'                => 'Controlling/Kosten für dieses Team deaktiviert — Kosten, Top-Mitarbeiter und Anomalien sind ausgeblendet (Modul-Einstellungen).',
+                    'note'                => 'Controlling/Kosten für dieses Team deaktiviert — Kosten, Top-Asset-Träger und Anomalien sind ausgeblendet (Modul-Einstellungen).',
                 ]);
             }
 
@@ -102,9 +102,9 @@ class OverviewTool implements ToolContract, ToolMetadataContract
 
             $totals    = $agg->totalMonthly($teamId);
             $anomalies = $agg->anomalies($teamId);
-            $top       = $agg->topEmployees($teamId, 5)->map(fn ($r) => [
-                'employee'  => $r['employee']->name,
-                'upn'       => $r['employee']->user_principal_name,
+            $top       = $agg->topHolders($teamId, 5)->map(fn ($r) => [
+                'holder'  => $r['holder']->name,
+                'upn'       => $r['holder']->user_principal_name,
                 'total'     => $r['total'],
                 'hardware'  => $r['hardware'],
                 'licenses'  => $r['licenses'],

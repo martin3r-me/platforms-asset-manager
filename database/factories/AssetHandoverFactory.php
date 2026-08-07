@@ -17,7 +17,7 @@ class AssetHandoverFactory extends Factory
         return [
             'team_id'            => 1,
             'tenant_id'          => 1,
-            'employee_id'        => null,
+            'holder_id'        => null,
             'created_by_user_id' => null,
             'issued_at'          => now()->toDateString(),
             'signer_name'        => null,

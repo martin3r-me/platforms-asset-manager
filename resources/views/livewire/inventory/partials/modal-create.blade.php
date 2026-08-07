@@ -56,7 +56,7 @@
             <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Direkt zuordnen an</label>
             <x-asset-manager-select size="sm" wire:model="cAssigneeId">
                 <option value="">– Niemand (Lager) –</option>
-                @foreach($employees as $emp)
+                @foreach($holders as $emp)
                     <option value="{{ $emp->id }}">{{ $emp->name }}</option>
                 @endforeach
             </x-asset-manager-select>

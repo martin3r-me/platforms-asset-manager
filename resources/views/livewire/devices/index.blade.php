@@ -120,7 +120,7 @@
 
     {{-- RECHTS: Master-Detail --}}
     <x-slot name="activity">
-        <x-ui-page-sidebar :title="$selectedDevice ? 'Gerät' : ($selectedEmployee ? 'Mitarbeiter' : 'Details')" icon="heroicon-o-information-circle" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
+        <x-ui-page-sidebar :title="$selectedDevice ? 'Gerät' : ($selectedHolder ? 'Asset-Träger' : 'Details')" icon="heroicon-o-information-circle" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
             <div class="p-4 space-y-3 bg-[var(--am-bg)]">
 
                 @if($selectedDevice)
@@ -170,17 +170,17 @@
                             Vollständige Detail-Seite
                         </x-asset-manager-button>
                         @if($selectedDevice->user_principal_name)
-                            <x-asset-manager-button variant="secondary" size="md" class="w-full" wire:click="selectEmployeeByUpn('{{ $selectedDevice->user_principal_name }}')">
+                            <x-asset-manager-button variant="secondary" size="md" class="w-full" wire:click="selectHolderByUpn('{{ $selectedDevice->user_principal_name }}')">
                                 @svg('heroicon-o-user', 'w-3.5 h-3.5')
-                                Mitarbeiter-Profil anzeigen
+                                Asset-Träger-Profil anzeigen
                             </x-asset-manager-button>
                         @endif
                     </div>
 
-                @elseif($selectedEmployee)
-                    {{-- Detail: Mitarbeiter mit allen Geräten/Lizenzen --}}
+                @elseif($selectedHolder)
+                    {{-- Detail: Asset-Träger mit allen Geräten/Lizenzen --}}
                     <div class="flex items-center justify-between pb-2 border-b border-[color:var(--am-border)]">
-                        <span class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">Mitarbeiter</span>
+                        <span class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">Asset-Träger</span>
                         <button wire:click="clearSelection" class="text-[10px] text-[var(--am-text-secondary)] hover:text-red-600">
                             @svg('heroicon-o-x-mark', 'w-3 h-3 inline -mt-0.5')
                             Schließen
@@ -190,26 +190,26 @@
                     <section class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-3">
                         <div class="flex items-center gap-3">
                             <div class="w-10 h-10 rounded-full bg-[var(--am-accent-surface)] text-[var(--am-accent)] flex items-center justify-center text-xs font-semibold flex-shrink-0">
-                                {{ $selectedEmployee->initials() }}
+                                {{ $selectedHolder->initials() }}
                             </div>
                             <div class="min-w-0 flex-1">
-                                <div class="text-sm font-semibold text-[var(--am-text)] truncate">{{ $selectedEmployee->name }}</div>
-                                <div class="text-[10px] text-[var(--am-text-secondary)] truncate">{{ $selectedEmployee->user_principal_name }}</div>
+                                <div class="text-sm font-semibold text-[var(--am-text)] truncate">{{ $selectedHolder->name }}</div>
+                                <div class="text-[10px] text-[var(--am-text-secondary)] truncate">{{ $selectedHolder->user_principal_name }}</div>
                             </div>
                         </div>
-                        @if($selectedEmployee->department || $selectedEmployee->job_title)
+                        @if($selectedHolder->department || $selectedHolder->job_title)
                             <div class="mt-2 text-[10px] text-[var(--am-text-secondary)]">
-                                {{ $selectedEmployee->job_title }}@if($selectedEmployee->department && $selectedEmployee->job_title) · @endif{{ $selectedEmployee->department }}
+                                {{ $selectedHolder->job_title }}@if($selectedHolder->department && $selectedHolder->job_title) · @endif{{ $selectedHolder->department }}
                             </div>
                         @endif
                     </section>
 
-                    <x-asset-manager-panel title="Geräte ({{ $employeeDevices->count() }})" body-class="p-0">
-                        @if($employeeDevices->isEmpty())
+                    <x-asset-manager-panel title="Geräte ({{ $holderDevices->count() }})" body-class="p-0">
+                        @if($holderDevices->isEmpty())
                             <div class="px-3 py-3 text-[11px] text-[var(--am-text-secondary)]">Keine Geräte zugewiesen.</div>
                         @else
                             <div class="divide-y divide-[color:var(--am-border)]">
-                                @foreach($employeeDevices as $d)
+                                @foreach($holderDevices as $d)
                                     <button wire:click="selectDevice({{ $d->id }})" class="w-full flex items-center gap-2 px-3 py-2 hover:bg-[var(--am-bg)] text-left">
                                         @svg('heroicon-o-computer-desktop', 'w-3.5 h-3.5 text-[var(--am-text-muted)] flex-shrink-0')
                                         <div class="min-w-0 flex-1">
@@ -222,12 +222,12 @@
                         @endif
                     </x-asset-manager-panel>
 
-                    <x-asset-manager-panel title="Lizenzen ({{ $employeeLicenses->count() }})" body-class="p-0">
-                        @if($employeeLicenses->isEmpty())
+                    <x-asset-manager-panel title="Lizenzen ({{ $holderLicenses->count() }})" body-class="p-0">
+                        @if($holderLicenses->isEmpty())
                             <div class="px-3 py-3 text-[11px] text-[var(--am-text-secondary)]">Keine Lizenzen zugewiesen.</div>
                         @else
                             <ul class="divide-y divide-[color:var(--am-border)]">
-                                @foreach($employeeLicenses as $lic)
+                                @foreach($holderLicenses as $lic)
                                     <li class="px-3 py-2 text-[11px] text-[var(--am-text)] truncate">
                                         @svg('heroicon-o-key', 'w-3 h-3 text-[var(--am-text-muted)] inline -mt-0.5 mr-1')
                                         {{ $lic->sku_part_number ?? $lic->sku_id }}
@@ -237,7 +237,7 @@
                         @endif
                     </x-asset-manager-panel>
 
-                    <x-asset-manager-button variant="primary" size="md" href="{{ route('asset-manager.employees.show', $selectedEmployee) }}" wire:navigate class="w-full">
+                    <x-asset-manager-button variant="primary" size="md" href="{{ route('asset-manager.holders.show', $selectedHolder) }}" wire:navigate class="w-full">
                         @svg('heroicon-o-arrow-top-right-on-square', 'w-3.5 h-3.5')
                         Vollständiges Profil
                     </x-asset-manager-button>
@@ -459,7 +459,7 @@
                                             @case('user')
                                                 <td class="px-5 py-3">
                                                     @if($device->user_principal_name)
-                                                        <button wire:click.stop="selectEmployeeByUpn('{{ $device->user_principal_name }}')" class="text-left hover:text-[var(--am-accent)]">
+                                                        <button wire:click.stop="selectHolderByUpn('{{ $device->user_principal_name }}')" class="text-left hover:text-[var(--am-accent)]">
                                                             <div class="text-[var(--am-text-secondary)]">{{ $device->user_display_name ?? '—' }}</div>
                                                             <div class="text-xs text-[var(--am-text-muted)] truncate max-w-[180px]">{{ $device->user_principal_name }}</div>
                                                         </button>

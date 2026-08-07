@@ -6,8 +6,8 @@
     <x-slot name="actionbar">
         <x-ui-page-actionbar :breadcrumbs="[
             ['label' => 'Asset Manager', 'href' => route('asset-manager.dashboard'), 'icon' => 'cube'],
-            ['label' => 'Mitarbeiter', 'href' => route('asset-manager.employees.index'), 'icon' => 'users'],
-            ['label' => $employee->name],
+            ['label' => 'Asset-Träger', 'href' => route('asset-manager.holders.index'), 'icon' => 'users'],
+            ['label' => $holder->name],
         ]" />
     </x-slot>
 
@@ -30,7 +30,7 @@
                             <x-asset-manager-input size="sm" type="email" wire:model="email" />
                         </div>
                         <div class="text-[10px] text-[var(--am-text-muted)]">
-                            <strong>UPN:</strong> <span class="font-mono">{{ $employee->user_principal_name }}</span>
+                            <strong>UPN:</strong> <span class="font-mono">{{ $holder->user_principal_name }}</span>
                         </div>
                     </div>
                 </x-asset-manager-filter-section>
@@ -49,7 +49,7 @@
                             <label class="block text-[10px] text-[var(--am-text-muted)] mb-1">Kostenstelle</label>
                             <x-asset-manager-input size="sm" type="text" wire:model="costCenter" />
                         </div>
-                        @if($employee->source === 'graph')
+                        @if($holder->source === 'graph')
                             <p class="text-[9px] text-[var(--am-text-muted)] leading-tight pt-0.5">
                                 Position &amp; Abteilung stammen aus Entra und werden beim nächsten Sync überschrieben.
                             </p>
@@ -131,18 +131,18 @@
             <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-5">
                 <div class="flex items-start gap-4">
                     <div class="w-14 h-14 rounded-full bg-[var(--am-accent-surface)] flex items-center justify-center text-[var(--am-accent)] font-semibold text-lg flex-shrink-0">
-                        {{ $employee->initials() }}
+                        {{ $holder->initials() }}
                     </div>
                     <div class="flex-1 min-w-0">
-                        <h1 class="text-lg font-semibold text-[var(--am-text)]">{{ $employee->name }}</h1>
-                        <p class="text-sm text-[var(--am-text-secondary)]">{{ $employee->user_principal_name }}</p>
-                        @if($employee->department || $employee->job_title)
+                        <h1 class="text-lg font-semibold text-[var(--am-text)]">{{ $holder->name }}</h1>
+                        <p class="text-sm text-[var(--am-text-secondary)]">{{ $holder->user_principal_name }}</p>
+                        @if($holder->department || $holder->job_title)
                             <p class="text-xs text-[var(--am-text-secondary)] mt-1">
-                                {{ $employee->job_title }}@if($employee->department && $employee->job_title) · @endif{{ $employee->department }}
+                                {{ $holder->job_title }}@if($holder->department && $holder->job_title) · @endif{{ $holder->department }}
                             </p>
                         @endif
                     </div>
-                    @if(!$employee->is_active)
+                    @if(!$holder->is_active)
                         <x-asset-manager-badge color="gray" size="sm" class="flex-shrink-0">Inaktiv</x-asset-manager-badge>
                     @endif
                 </div>
@@ -266,9 +266,9 @@
                 </x-asset-manager-panel>
             @endif
 
-            {{-- Mobilfunk (ADR 0014): Rufnummer/SIM/Vertragsnr/Datenvolumen am Mitarbeiter; Monatspreis aus der
+            {{-- Mobilfunk (ADR 0014): Rufnummer/SIM/Vertragsnr/Datenvolumen am Asset-Träger; Monatspreis aus der
                  Mobilfunk-Kostenposition (read-only, Controlling). Bearbeiten via Modal (Button oben rechts). --}}
-            @php $hasMobilfunk = $employee->mobile_phone || $employee->business_phone || $employee->sim_number || $employee->contract_number || $employee->data_volume; @endphp
+            @php $hasMobilfunk = $holder->mobile_phone || $holder->business_phone || $holder->sim_number || $holder->contract_number || $holder->data_volume; @endphp
             @if($hasMobilfunk || $canManage)
                 <x-asset-manager-panel title="Mobilfunk">
                     <x-slot name="actions">
@@ -282,11 +282,11 @@
                         </div>
                     </x-slot>
                     <x-asset-manager-detail-list :cols="2">
-                        <x-asset-manager-detail-row label="Mobilnummer" bordered><span class="tabular-nums">{{ $employee->mobile_phone ?: '—' }}</span></x-asset-manager-detail-row>
-                        <x-asset-manager-detail-row label="Geschäftlich" bordered><span class="tabular-nums">{{ $employee->business_phone ?: '—' }}</span></x-asset-manager-detail-row>
-                        <x-asset-manager-detail-row label="SIM-Nummer" bordered><span class="tabular-nums">{{ $employee->sim_number ?: '—' }}</span></x-asset-manager-detail-row>
-                        <x-asset-manager-detail-row label="Vertragsnummer" bordered><span class="tabular-nums">{{ $employee->contract_number ?: '—' }}</span></x-asset-manager-detail-row>
-                        <x-asset-manager-detail-row label="Datenvolumen" bordered>{{ $employee->data_volume ?: '—' }}</x-asset-manager-detail-row>
+                        <x-asset-manager-detail-row label="Mobilnummer" bordered><span class="tabular-nums">{{ $holder->mobile_phone ?: '—' }}</span></x-asset-manager-detail-row>
+                        <x-asset-manager-detail-row label="Geschäftlich" bordered><span class="tabular-nums">{{ $holder->business_phone ?: '—' }}</span></x-asset-manager-detail-row>
+                        <x-asset-manager-detail-row label="SIM-Nummer" bordered><span class="tabular-nums">{{ $holder->sim_number ?: '—' }}</span></x-asset-manager-detail-row>
+                        <x-asset-manager-detail-row label="Vertragsnummer" bordered><span class="tabular-nums">{{ $holder->contract_number ?: '—' }}</span></x-asset-manager-detail-row>
+                        <x-asset-manager-detail-row label="Datenvolumen" bordered>{{ $holder->data_volume ?: '—' }}</x-asset-manager-detail-row>
                     </x-asset-manager-detail-list>
                 </x-asset-manager-panel>
             @endif
@@ -294,7 +294,7 @@
             @if($devices->isEmpty() && $items->isEmpty() && $licenses->isEmpty())
                 <div class="flex flex-col items-center justify-center py-12 text-center">
                     @svg('heroicon-o-inbox', 'w-10 h-10 text-[var(--am-text-muted)] mb-3')
-                    <p class="text-sm text-[var(--am-text-secondary)]">Diesem Mitarbeiter sind noch keine Assets oder Lizenzen zugewiesen.</p>
+                    <p class="text-sm text-[var(--am-text-secondary)]">Diesem Asset-Träger sind noch keine Assets oder Lizenzen zugewiesen.</p>
                 </div>
             @endif
         </div>
@@ -302,6 +302,6 @@
 
     {{-- Mobilfunk bearbeiten (Modal, innerhalb x-ui-page) — nur Owner/Admin. --}}
     @can('asset-manager.manage')
-        @include('asset-manager::livewire.employees.partials.modal-mobilfunk')
+        @include('asset-manager::livewire.holders.partials.modal-mobilfunk')
     @endcan
 </x-ui-page>

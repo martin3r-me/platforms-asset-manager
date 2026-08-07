@@ -79,7 +79,7 @@ class AssetCostCenter extends Model
 
     public function holders(): HasMany
     {
-        return $this->hasMany(AssetEmployee::class, 'cost_center_id');
+        return $this->hasMany(AssetHolder::class, 'cost_center_id');
     }
 
     /** @deprecated Verwende {@see holders()} — „Mitarbeiter" ist modulweit ausgemustert (ADR 0017). */

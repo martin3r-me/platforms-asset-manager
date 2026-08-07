@@ -56,8 +56,8 @@
                     icon="heroicon-o-cube-transparent" accent="violet" />
 
                 <x-asset-manager-stat-card
-                    href="{{ route('asset-manager.employees.index') }}" wire:navigate
-                    label="Mitarbeiter" :value="$assetCounts['employees']" sub="Aktive"
+                    href="{{ route('asset-manager.holders.index') }}" wire:navigate
+                    label="Asset-Träger" :value="$assetCounts['holders']" sub="Aktive"
                     icon="heroicon-o-users" accent="indigo" />
 
                 @if($controllingEnabled ?? false)

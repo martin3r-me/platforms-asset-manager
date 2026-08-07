@@ -43,7 +43,7 @@
         @error('form.aggregation_source')<span class="text-[10px] text-red-600">{{ $message }}</span>@enderror
     </div>
     <label class="flex items-center gap-2 text-sm text-[var(--am-text-secondary)]">
-        <input type="checkbox" wire:model="form.is_per_employee" class="rounded"> pro Mitarbeiter
+        <input type="checkbox" wire:model="form.is_per_employee" class="rounded"> pro Asset-Träger
     </label>
 
     @include('asset-manager::livewire.master-data.partials.form-actions', [

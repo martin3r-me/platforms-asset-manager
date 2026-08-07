@@ -5,7 +5,7 @@ namespace Platform\AssetManager\Services;
 use Illuminate\Support\Facades\Schema;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostType;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetVendor;
 use Platform\AssetManager\Support\CostBootstrap;
 
@@ -125,13 +125,13 @@ class CostBootstrapService
      *
      * MIGRATIONS-STABIL — von 2026_06_13_000007 aufgerufen (siehe Klassen-Docblock).
      *
-     * @return array{centers_created:int, employees_linked:int, unmapped:array<string>}
+     * @return array{centers_created:int, holders_linked:int, unmapped:array<string>}
      */
     public function backfillCostCenters(int $teamId, ?int $tenantId = null): array
     {
         $tenantId = $this->tenantFor($teamId, $tenantId);
 
-        $codes = AssetEmployee::withoutTenantScope()
+        $codes = AssetHolder::withoutTenantScope()
             ->where('team_id', $teamId)
             ->when($tenantId !== null, fn ($q) => $q->where('tenant_id', $tenantId))
             ->whereNotNull('cost_center')
@@ -140,7 +140,7 @@ class CostBootstrapService
             ->pluck('cost_center');
 
         $centersCreated  = 0;
-        $employeesLinked = 0;
+        $holdersLinked = 0;
         $unmapped        = [];
 
         foreach ($codes as $rawCode) {
@@ -174,7 +174,7 @@ class CostBootstrapService
                 $center->save();
             }
 
-            $employeesLinked += AssetEmployee::withoutTenantScope()
+            $holdersLinked += AssetHolder::withoutTenantScope()
                 ->where('team_id', $teamId)
                 ->when($tenantId !== null, fn ($q) => $q->where('tenant_id', $tenantId))
                 ->where('cost_center', $rawCode)
@@ -184,7 +184,7 @@ class CostBootstrapService
 
         return [
             'centers_created'  => $centersCreated,
-            'employees_linked' => $employeesLinked,
+            'holders_linked' => $holdersLinked,
             'unmapped'         => array_values(array_unique($unmapped)),
         ];
     }

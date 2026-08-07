@@ -16,7 +16,7 @@ use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceEvent;
 use Platform\AssetManager\Models\AssetDeviceSyncLog;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetHandoverLine;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetVendor;
@@ -201,20 +201,20 @@ class Show extends Component
         $item = $this->guardManualWrite();
 
         $this->validate([
-            'aAssigneeId' => ['nullable', 'integer', Rule::exists('asset_employees', 'id')->where('team_id', $item->team_id)],
+            'aAssigneeId' => ['nullable', 'integer', Rule::exists('asset_holders', 'id')->where('team_id', $item->team_id)],
             'aValidFrom'  => 'nullable|date',
             'aValidUntil' => 'nullable|date|after_or_equal:aValidFrom',
         ]);
 
-        $employee = $this->aAssigneeId
-            ? AssetEmployee::where('team_id', $item->team_id)->find($this->aAssigneeId)
+        $holder = $this->aAssigneeId
+            ? AssetHolder::where('team_id', $item->team_id)->find($this->aAssigneeId)
             : null;
 
-        $writer->assignItem($item, $employee, $this->aValidFrom, $this->aValidUntil);
+        $writer->assignItem($item, $holder, $this->aValidFrom, $this->aValidUntil);
 
         $this->item->refresh();
         $this->showAssign = false;
-        $this->flash = $employee ? 'Zuordnung gespeichert.' : 'Ins Lager zurückgebucht.';
+        $this->flash = $holder ? 'Zuordnung gespeichert.' : 'Ins Lager zurückgebucht.';
     }
 
     // ---------------- Abschreibung ----------------
@@ -416,10 +416,10 @@ class Show extends Component
 
         if ($this->item) {
             $subject     = AssetSubject::fromItem($this->item);
-            $assignments = $this->item->assignments()->with('employee')->limit(20)->get();
+            $assignments = $this->item->assignments()->with('holder')->limit(20)->get();
         } else {
             $subject     = AssetSubject::fromDevice($this->device);
-            $assignments = $this->device->assignments()->with('employee')->limit(20)->get();
+            $assignments = $this->device->assignments()->with('holder')->limit(20)->get();
 
             // Geräteausgabe-Zeilen dieses Geräts (E6) — gleiche Query wie vormals Devices/Show.
             $handoverLines = AssetHandoverLine::with('handover.employee')
@@ -446,9 +446,9 @@ class Show extends Component
             'events'          => $events,
             'syncLogs'        => $syncLogs,
             'canManage'       => $this->canManage(),
-            // Manuell: Kategorie/Mitarbeiter-Selects. Gerät: Kostenart/-stelle/Kreditor-Selects.
+            // Manuell: Kategorie/Asset-Träger-Selects. Gerät: Kostenart/-stelle/Kreditor-Selects.
             'categories'    => $this->item ? AssetCategory::orderBy('sort_order')->get() : collect(),
-            'employees'     => $this->item ? AssetEmployee::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get() : collect(),
+            'holders'     => $this->item ? AssetHolder::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get() : collect(),
             'costTypes'     => $this->device ? AssetCostType::where('team_id', $teamId)->orderBy('sort_order')->orderBy('name')->get() : collect(),
             'costCenters'   => $this->device ? AssetCostCenter::where('team_id', $teamId)->orderBy('code')->get() : collect(),
             'vendors'       => $this->device ? AssetVendor::where('team_id', $teamId)->orderBy('name')->get() : collect(),

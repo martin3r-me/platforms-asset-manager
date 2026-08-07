@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetCostType;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetVendor;
 use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
@@ -54,7 +54,7 @@ class UpdateCostLineTool implements ToolContract, ToolMetadataContract
                 'label'          => ['type' => 'string', 'description' => 'Bezeichnung.'],
                 'vendor_id'      => ['type' => 'integer', 'description' => 'Kreditor-ID (Team).'],
                 'cost_center_id' => ['type' => 'integer', 'description' => 'Kostenstellen-ID (Team).'],
-                'assignee_id'    => ['type' => 'integer', 'description' => 'Mitarbeiter-ID (Team).'],
+                'assignee_id'    => ['type' => 'integer', 'description' => 'Asset-Träger-ID (Team).'],
                 'valid_from'     => ['type' => 'string', 'description' => 'Gültig ab YYYY-MM-DD.'],
                 'valid_to'       => ['type' => 'string', 'description' => 'Gültig bis YYYY-MM-DD.'],
                 'active'         => ['type' => 'boolean', 'description' => 'Aktiv-Status.'],
@@ -115,7 +115,7 @@ class UpdateCostLineTool implements ToolContract, ToolMetadataContract
                 }
                 $line->frequency = $arguments['frequency'];
             }
-            foreach (['vendor_id' => AssetVendor::class, 'cost_center_id' => AssetCostCenter::class, 'assignee_id' => AssetEmployee::class] as $field => $class) {
+            foreach (['vendor_id' => AssetVendor::class, 'cost_center_id' => AssetCostCenter::class, 'assignee_id' => AssetHolder::class] as $field => $class) {
                 if (array_key_exists($field, $arguments)) {
                     $val = $arguments[$field];
                     if ($val) {

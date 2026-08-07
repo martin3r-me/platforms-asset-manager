@@ -1,6 +1,6 @@
 <?php
 
-namespace Platform\AssetManager\Livewire\Employees;
+namespace Platform\AssetManager\Livewire\Holders;
 
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetDevice;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetUserLicense;
@@ -30,7 +30,7 @@ class Index extends Component
     public int    $perPage          = 25;
     public string $sortField        = 'display_name';
     public string $sortDirection    = 'asc';
-    public ?int   $selectedId       = null; // im rechten Detail-Panel gewählter Mitarbeiter
+    public ?int   $selectedId       = null; // im rechten Detail-Panel gewählter Asset-Träger
 
     protected $queryString = [
         'preset'           => ['except' => 'active'],
@@ -75,13 +75,13 @@ class Index extends Component
         $this->resetPage();
     }
 
-    /** Mitarbeiter im rechten Detail-Panel selektieren (nur eigenes Team) und Panel aufklappen. */
-    public function selectEmployee(int $id): void
+    /** Asset-Träger im rechten Detail-Panel selektieren (nur eigenes Team) und Panel aufklappen. */
+    public function selectHolder(int $id): void
     {
         $teamId = Auth::user()->currentTeam->id;
 
         // Fremd-/ungültige IDs ignorieren, sonst zeigt das Panel nichts (render lädt team-scoped).
-        if (! AssetEmployee::where('team_id', $teamId)->whereKey($id)->exists()) {
+        if (! AssetHolder::where('team_id', $teamId)->whereKey($id)->exists()) {
             return;
         }
 
@@ -121,8 +121,8 @@ class Index extends Component
             ->pluck('user_principal_name');
     }
 
-    /** Employee-IDs mit mindestens einem zugewiesenen Asset. */
-    protected function employeeIdsWithAsset(int $teamId)
+    /** Asset-Träger-IDs mit mindestens einem zugewiesenen Asset. */
+    protected function holderIdsWithAsset(int $teamId)
     {
         return AssetItem::where('team_id', $teamId)
             ->whereNotNull('assignee_id')
@@ -138,7 +138,7 @@ class Index extends Component
     {
         $licenseUpns = $this->upnsWithLicense($teamId);
         $deviceUpns  = $this->upnsWithDevice($teamId);
-        $assetIds    = $this->employeeIdsWithAsset($teamId);
+        $assetIds    = $this->holderIdsWithAsset($teamId);
         $allUpns     = $licenseUpns->merge($deviceUpns)->unique()->values();
 
         switch ($this->preset) {
@@ -179,10 +179,10 @@ class Index extends Component
         // --- Counts für Chips (immer "echt", nicht durch Sidebar gefiltert) ---
         $licenseUpns = $this->upnsWithLicense($teamId);
         $deviceUpns  = $this->upnsWithDevice($teamId);
-        $assetIds    = $this->employeeIdsWithAsset($teamId);
+        $assetIds    = $this->holderIdsWithAsset($teamId);
         $allUpns     = $licenseUpns->merge($deviceUpns)->unique()->values();
 
-        $base = AssetEmployee::where('team_id', $teamId);
+        $base = AssetHolder::where('team_id', $teamId);
 
         $counts = [
             'all'          => (clone $base)->count(),
@@ -201,7 +201,7 @@ class Index extends Component
         ];
 
         // --- Hauptquery ---
-        $query = AssetEmployee::where('team_id', $teamId);
+        $query = AssetHolder::where('team_id', $teamId);
         $this->applyPreset($query, $teamId);
 
         // Sidebar-Filter (kombiniert mit Preset)
@@ -226,13 +226,13 @@ class Index extends Component
             $query->whereIn('id', $assetIds);
         }
 
-        $employees = $query
+        $holders = $query
             ->orderBy($this->sortField, $this->sortDirection)
             ->paginate($this->perPage);
 
-        // --- Counts pro angezeigtem Employee ---
-        $pageEmpIds = $employees->pluck('id')->toArray();
-        $pageUpns   = $employees->pluck('user_principal_name')->toArray();
+        // --- Counts pro angezeigtem Asset-Träger ---
+        $pageEmpIds = $holders->pluck('id')->toArray();
+        $pageUpns   = $holders->pluck('user_principal_name')->toArray();
 
         $itemCounts = AssetItem::whereIn('assignee_id', $pageEmpIds)
             ->select('assignee_id', DB::raw('count(*) as count'))
@@ -252,7 +252,7 @@ class Index extends Component
             ->pluck('count', 'user_principal_name');
 
         // --- Dropdowns ---
-        $departments = AssetEmployee::where('team_id', $teamId)
+        $departments = AssetHolder::where('team_id', $teamId)
             ->whereNotNull('department')
             ->select('department')
             ->distinct()
@@ -269,22 +269,22 @@ class Index extends Component
             ->orderBy('code')
             ->get(['id', 'code', 'name', 'parent_id', 'depth']);
 
-        // --- Rechtes Detail-Panel: gewählter Mitarbeiter + Zähler + Monatskosten ---
-        $selectedEmployee = null;
+        // --- Rechtes Detail-Panel: gewählter Asset-Träger + Zähler + Monatskosten ---
+        $selectedHolder = null;
         $selDeviceCount   = 0;
         $selAssetCount    = 0;
         $selLicenseCount  = 0;
         $selectedCost     = ['hardware' => 0.0, 'device' => 0.0, 'license' => 0.0, 'total' => 0.0];
 
         if ($this->selectedId) {
-            $selectedEmployee = AssetEmployee::where('team_id', $teamId)->find($this->selectedId);
+            $selectedHolder = AssetHolder::where('team_id', $teamId)->find($this->selectedId);
 
-            if ($selectedEmployee) {
-                $upn = $selectedEmployee->user_principal_name;
+            if ($selectedHolder) {
+                $upn = $selectedHolder->user_principal_name;
 
                 // Assets hängen an assignee_id; Geräte/Lizenzen am UPN (ohne UPN → 0).
                 $selAssetCount = AssetItem::where('team_id', $teamId)
-                    ->where('assignee_id', $selectedEmployee->id)->count();
+                    ->where('assignee_id', $selectedHolder->id)->count();
 
                 if ($upn) {
                     $selDeviceCount  = AssetDevice::where('team_id', $teamId)
@@ -294,14 +294,14 @@ class Index extends Component
                 }
 
                 // Identische Zahl wie die Profil-Seite (gemeinsame Methode).
-                $selectedCost = app(CostAggregationService::class)->employeeCost($teamId, $selectedEmployee);
+                $selectedCost = app(CostAggregationService::class)->holderCost($teamId, $selectedHolder);
             } else {
                 $this->selectedId = null; // Auswahl ins Leere (gelöscht / Team-Wechsel) → zurücksetzen
             }
         }
 
-        return view('asset-manager::livewire.employees.index', [
-            'employees'        => $employees,
+        return view('asset-manager::livewire.holders.index', [
+            'holders'        => $holders,
             'itemCounts'       => $itemCounts,
             'deviceCounts'     => $deviceCounts,
             'licenseCounts'    => $licenseCounts,
@@ -309,7 +309,7 @@ class Index extends Component
             'departments'      => $departments,
             'skus'             => $skus,
             'costCenters'      => $costCenters,
-            'selectedEmployee' => $selectedEmployee,
+            'selectedHolder' => $selectedHolder,
             'selDeviceCount'   => $selDeviceCount,
             'selAssetCount'    => $selAssetCount,
             'selLicenseCount'  => $selLicenseCount,

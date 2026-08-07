@@ -130,13 +130,13 @@
                             Löscht <strong>alle importierten Kostenpositionen</strong>, die import-erzeugten
                             <strong>Assets</strong> (Laptop/Internet/Drucker) und die fälschlich angelegten
                             <strong>Funktionskonten</strong> (<code>{{ '@funktion.import.local' }}</code>) und setzt die
-                            <strong>Kostenstellen aller Mitarbeiter</strong> zurück.
+                            <strong>Kostenstellen aller Asset-Träger</strong> zurück.
                             Stammdaten (Gesellschaften, Kostenstellen, Kreditoren, Kostenarten) sowie
                             Intune-Geräte bleiben erhalten.
                         </p>
                     </div>
                     <x-asset-manager-button variant="danger" size="sm" wire:click="resetImport" wire:loading.attr="disabled" wire:target="resetImport"
-                            wire:confirm="Wirklich ALLE importierten Kosten, Funktionskonten und Import-Assets löschen und die Kostenstellen aller Mitarbeiter zurücksetzen? Stammdaten bleiben erhalten.">
+                            wire:confirm="Wirklich ALLE importierten Kosten, Funktionskonten und Import-Assets löschen und die Kostenstellen aller Asset-Träger zurücksetzen? Stammdaten bleiben erhalten.">
                         @svg('heroicon-o-trash', 'w-3.5 h-3.5')
                         Import zurücksetzen
                     </x-asset-manager-button>

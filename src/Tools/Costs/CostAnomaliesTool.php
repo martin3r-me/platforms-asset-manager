@@ -13,7 +13,7 @@ use Platform\Core\Contracts\ToolResult;
 
 /**
  * Einsparpotenziale/Auffälligkeiten: Pool-Hardware (gebundenes Kapital), ungenutzte Lizenzen,
- * Hardware bei inaktiven Mitarbeitern.
+ * Hardware bei inaktiven Asset-Trägern.
  */
 class CostAnomaliesTool implements ToolContract, ToolMetadataContract
 {
@@ -29,7 +29,7 @@ class CostAnomaliesTool implements ToolContract, ToolMetadataContract
     {
         return 'GET /asset-manager/costs/anomalies - Auffälligkeiten/Einsparpotenziale des Teams: '
             . 'pool (Hardware im Lager, gebundenes Kapital), unused_licenses (verfügbare Einheiten × '
-            . 'Stückpreis), inactive_employees (Hardware bei inaktiven Mitarbeitern).';
+            . 'Stückpreis), inactive_employees (Hardware bei inaktiven Asset-Trägern).';
     }
 
     public function getSchema(): array

@@ -11,7 +11,7 @@ use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceSyncLog;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetHandoverLine;
 use Platform\AssetManager\Models\AssetUserLicense;
 use Platform\AssetManager\Jobs\SyncIntuneDevicesJob;
@@ -41,7 +41,7 @@ class Index extends Component
     public string  $bulkLifecycle  = '';
     public ?string $bulkResult     = null;
 
-    /** Master-Detail: 'device' | 'employee' | null  */
+    /** Master-Detail: 'device' | 'holder' | null  */
     public ?string $detailType = null;
     public ?int    $detailId   = null;
 
@@ -141,16 +141,16 @@ class Index extends Component
         $this->detailId   = $deviceId;
     }
 
-    public function selectEmployeeByUpn(string $upn): void
+    public function selectHolderByUpn(string $upn): void
     {
         $team     = Auth::user()->currentTeam;
-        $employee = AssetEmployee::where('team_id', $team->id)
+        $holder = AssetHolder::where('team_id', $team->id)
             ->where('user_principal_name', $upn)
             ->first();
 
-        if ($employee) {
-            $this->detailType = 'employee';
-            $this->detailId   = $employee->id;
+        if ($holder) {
+            $this->detailType = 'holder';
+            $this->detailId   = $holder->id;
         }
     }
 
@@ -428,25 +428,25 @@ class Index extends Component
 
         // Master-Detail-Daten laden
         $selectedDevice   = null;
-        $selectedEmployee = null;
-        $employeeDevices  = collect();
-        $employeeLicenses = collect();
+        $selectedHolder = null;
+        $holderDevices  = collect();
+        $holderLicenses = collect();
 
         if ($this->detailType === 'device' && $this->detailId) {
             $selectedDevice = AssetDevice::where('team_id', $team->id)
                 ->where('id', $this->detailId)
                 ->first();
-        } elseif ($this->detailType === 'employee' && $this->detailId) {
-            $selectedEmployee = AssetEmployee::where('team_id', $team->id)
+        } elseif ($this->detailType === 'holder' && $this->detailId) {
+            $selectedHolder = AssetHolder::where('team_id', $team->id)
                 ->where('id', $this->detailId)
                 ->first();
 
-            if ($selectedEmployee) {
-                $employeeDevices = AssetDevice::where('team_id', $team->id)
-                    ->where('user_principal_name', $selectedEmployee->user_principal_name)
+            if ($selectedHolder) {
+                $holderDevices = AssetDevice::where('team_id', $team->id)
+                    ->where('user_principal_name', $selectedHolder->user_principal_name)
                     ->get();
-                $employeeLicenses = AssetUserLicense::where('team_id', $team->id)
-                    ->where('user_principal_name', $selectedEmployee->user_principal_name)
+                $holderLicenses = AssetUserLicense::where('team_id', $team->id)
+                    ->where('user_principal_name', $selectedHolder->user_principal_name)
                     ->get();
             }
         }
@@ -467,9 +467,9 @@ class Index extends Component
             'costCenters'         => AssetCostCenter::where('team_id', $team->id)->orderBy('code')->get(),
             'columns'             => $this->columnOrder,
             'selectedDevice'      => $selectedDevice,
-            'selectedEmployee'    => $selectedEmployee,
-            'employeeDevices'     => $employeeDevices,
-            'employeeLicenses'    => $employeeLicenses,
+            'selectedHolder'    => $selectedHolder,
+            'holderDevices'     => $holderDevices,
+            'holderLicenses'    => $holderLicenses,
         ])->layout('platform::layouts.app');
     }
 }

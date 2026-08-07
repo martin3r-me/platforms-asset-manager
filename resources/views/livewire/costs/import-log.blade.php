@@ -17,7 +17,7 @@
                 <h2 class="text-sm font-semibold text-[var(--am-text-secondary)]">Import-Log</h2>
                 <p class="text-xs text-[var(--am-text-muted)] mt-1">
                     Zeigt zeilengenau, was aus der Excel <strong>wohin</strong> importiert wurde — je Kostenposition
-                    die Herkunft (Sheet + Excel-Zeile) und das Ziel (Kostenstelle, Mitarbeiter bzw. Asset).
+                    die Herkunft (Sheet + Excel-Zeile) und das Ziel (Kostenstelle, Asset-Träger bzw. Asset).
                     Nur Positionen aus dem Excel-Import ({{ $total }} gesamt).
                 </p>
             </div>

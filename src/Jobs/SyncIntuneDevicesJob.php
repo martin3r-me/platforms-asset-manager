@@ -9,9 +9,9 @@ use Platform\AssetManager\Models\AssetDeviceEvent;
 use Platform\AssetManager\Models\AssetDeviceModel;
 use Platform\AssetManager\Models\AssetDeviceSource;
 use Platform\AssetManager\Models\AssetDeviceSyncLog;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Concerns\RunsTeamSync;
-use Platform\AssetManager\Services\EmployeeService;
+use Platform\AssetManager\Services\HolderService;
 use Platform\AssetManager\Services\IntuneGraphService;
 use Platform\AssetManager\Services\TenantContext;
 use Illuminate\Bus\Queueable;
@@ -70,7 +70,7 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
         return $count;
     }
 
-    public function handle(IntuneGraphService $service, EmployeeService $employeeService): void
+    public function handle(IntuneGraphService $service, HolderService $holderService): void
     {
         $config = AssetConnectorConfig::where('id', $this->connectorId)
             ->where('enabled', true)
@@ -113,7 +113,7 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
             $updated   = 0;
             $intuneIds = [];
 
-            // N+1-Vermeidung: bestehende Geräte (inkl. soft-deleted), Modell-Schlüssel und Employee-UPNs
+            // N+1-Vermeidung: bestehende Geräte (inkl. soft-deleted), Modell-Schlüssel und Asset-Träger-UPNs
             // des Tenants EINMAL vorladen statt je Gerät zu queryen. ShouldBeUnique pro Connector schließt
             // nebenläufige Syncs desselben Tenants aus → der vorgeladene Stand bleibt während des Laufs gültig.
             $existingDevices = AssetDevice::withTrashed()
@@ -137,7 +137,7 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                 $knownModelKeys[($m->manufacturer ?? '') . "\0" . ($m->model ?? '')] = true;
             }
 
-            $knownUpns = AssetEmployee::where('tenant_id', $this->tenantId)
+            $knownUpns = AssetHolder::where('tenant_id', $this->tenantId)
                 ->whereNotNull('user_principal_name')
                 ->pluck('user_principal_name')
                 ->flip();
@@ -228,10 +228,10 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                     }
                 }
 
-                // Employee aus UPN ableiten (Intune liefert userPrincipalName). Nur für noch unbekannte UPNs
+                // Asset-Träger aus UPN ableiten (Intune liefert userPrincipalName). Nur für noch unbekannte UPNs
                 // inline anlegen — bestehende werden vom backfillForTenant-Safety-Net (unten) nachgepflegt.
                 if (!empty($device['userPrincipalName']) && !$knownUpns->has($device['userPrincipalName'])) {
-                    $employeeService->findOrCreateByUpn(
+                    $holderService->findOrCreateByUpn(
                         $this->teamId,
                         $this->tenantId,
                         $device['userPrincipalName'],
@@ -287,7 +287,7 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
             });
 
             // Safety-Net: nochmal alle UPNs einsammeln (fängt Bestandsdaten ab)
-            $employeeService->backfillForTenant($this->teamId, $this->tenantId);
+            $holderService->backfillForTenant($this->teamId, $this->tenantId);
 
             Log::info('AssetManager: Sync erfolgreich', [
                 'connector_id' => $this->connectorId,
@@ -355,7 +355,7 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
     }
 
     /**
-     * Leitet die Geräte-Zuordnung (Frage 6 / 2b) aus dem aktuellen UPN ab: weicht der Ziel-Mitarbeiter von
+     * Leitet die Geräte-Zuordnung (Frage 6 / 2b) aus dem aktuellen UPN ab: weicht der Ziel-Asset-Träger von
      * der offenen Zuordnung ab (oder ist der UPN jetzt leer), wird die offene geschlossen und ggf. eine neue
      * geöffnet. Läuft auf der stabilen Serial-Zeile (ADR 0006) → die intune_id-Rotation ändert die Zuordnung
      * nicht. Quelle 'intune'. Zuordnungs-Fehler dürfen den Sync nie scheitern lassen.
@@ -364,8 +364,8 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
     {
         try {
             $upn = $device->user_principal_name;
-            $employeeId = !empty($upn)
-                ? AssetEmployee::where('tenant_id', $this->tenantId)->where('user_principal_name', $upn)->value('id')
+            $holderId = !empty($upn)
+                ? AssetHolder::where('tenant_id', $this->tenantId)->where('user_principal_name', $upn)->value('id')
                 : null;
 
             $open = AssetAssignment::where('assignable_type', AssetAssignment::SUBJECT_DEVICE)
@@ -374,10 +374,10 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                 ->get();
 
             // Bereits korrekt? Genau eine offene Zuordnung zum Ziel — oder keine offene + kein Ziel.
-            if ($employeeId !== null && $open->count() === 1 && (int) $open->first()->employee_id === (int) $employeeId) {
+            if ($holderId !== null && $open->count() === 1 && (int) $open->first()->holder_id === (int) $holderId) {
                 return;
             }
-            if ($employeeId === null && $open->isEmpty()) {
+            if ($holderId === null && $open->isEmpty()) {
                 return;
             }
 
@@ -386,11 +386,11 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                 AssetAssignment::whereIn('id', $open->pluck('id'))
                     ->update(['returned_at' => now(), 'updated_at' => now()]);
             }
-            if ($employeeId !== null) {
+            if ($holderId !== null) {
                 AssetAssignment::create([
                     'assignable_type' => AssetAssignment::SUBJECT_DEVICE,
                     'assignable_id'   => $device->id,
-                    'employee_id'     => $employeeId,
+                    'holder_id'     => $holderId,
                     'assigned_at'     => now(),
                     'source'          => AssetAssignment::SOURCE_INTUNE,
                 ]);

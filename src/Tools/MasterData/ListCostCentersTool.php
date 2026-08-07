@@ -33,7 +33,7 @@ class ListCostCentersTool implements ToolContract, ToolMetadataContract
         return 'GET /asset-manager/cost-centers - Listet den Kostenstellen-Baum eines Tenants: Code, Name, '
             . 'depth (0 = oberster Knoten / Gesellschaft), parent_code, Aktiv-Status und Trägerzahl. '
             . 'Zeilen kommen in Baum-Reihenfolge. Quelle gültiger Codes für die Kostenstellen-Zuweisung '
-            . '(asset-manager.employees.cost-center.bulk.PUT).';
+            . '(asset-manager.holders.cost-center.bulk.PUT).';
     }
 
     public function getSchema(): array

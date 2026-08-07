@@ -61,7 +61,7 @@
                             <label class="block text-sm font-medium text-[var(--am-text-secondary)] mb-1.5">Zugewiesen an</label>
                             <x-asset-manager-select size="md" wire:model="assigneeId">
                                 <option value="">– Niemand (Lager) –</option>
-                                @foreach($employees as $emp)
+                                @foreach($holders as $emp)
                                     <option value="{{ $emp->id }}">{{ $emp->name }}</option>
                                 @endforeach
                             </x-asset-manager-select>

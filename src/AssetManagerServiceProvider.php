@@ -28,7 +28,7 @@ class AssetManagerServiceProvider extends ServiceProvider
             $this->commands([
                 \Platform\AssetManager\Console\Commands\SyncIntuneDevicesCommand::class,
                 \Platform\AssetManager\Console\Commands\SyncLicensesCommand::class,
-                \Platform\AssetManager\Console\Commands\BackfillEmployeesCommand::class,
+                \Platform\AssetManager\Console\Commands\BackfillHoldersCommand::class,
                 \Platform\AssetManager\Console\Commands\ImportCostExcelCommand::class,
             ]);
         }
@@ -128,11 +128,21 @@ class AssetManagerServiceProvider extends ServiceProvider
             // Anker
             $registry->register(new \Platform\AssetManager\Tools\OverviewTool());
 
-            // Mitarbeiter
-            $registry->register(new \Platform\AssetManager\Tools\Employees\ListEmployeesTool());
-            $registry->register(new \Platform\AssetManager\Tools\Employees\GetEmployeeTool());
-            $registry->register(new \Platform\AssetManager\Tools\Employees\UpdateEmployeeTool());
-            $registry->register(new \Platform\AssetManager\Tools\Employees\BulkAssignCostCenterTool());
+            // Asset-Träger
+            $registry->register(new \Platform\AssetManager\Tools\Holders\ListHoldersTool());
+            $registry->register(new \Platform\AssetManager\Tools\Holders\GetHolderTool());
+            $registry->register(new \Platform\AssetManager\Tools\Holders\UpdateHolderTool());
+            $registry->register(new \Platform\AssetManager\Tools\Holders\BulkAssignCostCenterTool());
+
+            // Alte `…employees…`-Namen als Alias (ADR 0017): Tool-Namen sind über den Live-Connector
+            // nach außen sichtbar. Ohne Alias bräche ein bestehender LLM-Aufruf mit „unbekanntes Tool"
+            // — also ohne Hinweis, wo die Fähigkeit jetzt lebt. Die Aliase delegieren an die neuen
+            // Tools und tragen `deprecated`/`use_instead` in der Antwort. Entfernen, sobald der
+            // Connector eine Weile keine Aufrufe mehr darauf zeigt.
+            $registry->register(new \Platform\AssetManager\Tools\Holders\Legacy\ListEmployeesAlias());
+            $registry->register(new \Platform\AssetManager\Tools\Holders\Legacy\GetEmployeeAlias());
+            $registry->register(new \Platform\AssetManager\Tools\Holders\Legacy\UpdateEmployeeAlias());
+            $registry->register(new \Platform\AssetManager\Tools\Holders\Legacy\BulkAssignCostCenterAlias());
 
             // Geräte + Modelle
             $registry->register(new \Platform\AssetManager\Tools\Devices\ListDevicesTool());

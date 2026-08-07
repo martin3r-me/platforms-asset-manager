@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetCostType;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetVendor;
 use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
@@ -57,7 +57,7 @@ class CreateCostLineTool implements ToolContract, ToolMetadataContract
                 'fx_rate'        => ['type' => 'number', 'description' => 'Umrechnungskurs zu EUR (Default 1).'],
                 'vendor_id'      => ['type' => 'integer', 'description' => 'Kreditor-ID (Team).'],
                 'cost_center_id' => ['type' => 'integer', 'description' => 'Kostenstellen-ID (Team).'],
-                'assignee_id'    => ['type' => 'integer', 'description' => 'Mitarbeiter-ID (Team).'],
+                'assignee_id'    => ['type' => 'integer', 'description' => 'Asset-Träger-ID (Team).'],
                 'valid_from'     => ['type' => 'string', 'description' => 'Gültig ab YYYY-MM-DD.'],
                 'valid_to'       => ['type' => 'string', 'description' => 'Gültig bis YYYY-MM-DD.'],
             ], $this->tenantSchemaProperty()),
@@ -174,7 +174,7 @@ class CreateCostLineTool implements ToolContract, ToolMetadataContract
         if (!empty($arguments['cost_center_id']) && !AssetCostCenter::where('team_id', $teamId)->whereKey((int) $arguments['cost_center_id'])->exists()) {
             return ToolResult::error('VALIDATION_ERROR', 'cost_center_id gehört nicht zum Team.');
         }
-        if (!empty($arguments['assignee_id']) && !AssetEmployee::where('team_id', $teamId)->whereKey((int) $arguments['assignee_id'])->exists()) {
+        if (!empty($arguments['assignee_id']) && !AssetHolder::where('team_id', $teamId)->whereKey((int) $arguments['assignee_id'])->exists()) {
             return ToolResult::error('VALIDATION_ERROR', 'assignee_id gehört nicht zum Team.');
         }
         return null;

@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Platform\AssetManager\Models\AssetCategory;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Services\TenantContext;
 
@@ -54,7 +54,7 @@ class Create extends Component
             'model'              => 'nullable|string|max:255',
             'serialNumber'       => 'nullable|string|max:255',
             // Assignee MUSS zum eigenen Team gehören (sonst danglende cross-team FK).
-            'assigneeId'         => ['nullable', 'integer', Rule::exists('asset_employees', 'id')->where('team_id', $teamId)],
+            'assigneeId'         => ['nullable', 'integer', Rule::exists('asset_holders', 'id')->where('team_id', $teamId)],
             'status'             => 'required|in:in_stock,assigned,retired,lost',
             'purchaseDate'       => 'nullable|date',
             'purchasePrice'      => 'nullable|numeric|min:0',
@@ -91,7 +91,7 @@ class Create extends Component
                 'asset_item_id'   => $item->id,
                 'assignable_type' => \Platform\AssetManager\Models\AssetAssignment::SUBJECT_ITEM,
                 'assignable_id'   => $item->id,
-                'employee_id'     => $this->assigneeId,
+                'holder_id'     => $this->assigneeId,
                 'assigned_at'     => now(),
                 'source'          => \Platform\AssetManager\Models\AssetAssignment::SOURCE_MANUAL,
             ]);
@@ -106,7 +106,7 @@ class Create extends Component
 
         return view('asset-manager::livewire.assets.create', [
             'categories' => AssetCategory::orderBy('sort_order')->get(),
-            'employees'  => AssetEmployee::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get(),
+            'holders'  => AssetHolder::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get(),
         ])->layout('platform::layouts.app');
     }
 }

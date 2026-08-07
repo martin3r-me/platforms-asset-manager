@@ -8,7 +8,7 @@ use Platform\AssetManager\Models\AssetCategory;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetCostType;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetVendor;
 
@@ -29,8 +29,8 @@ class CostExcelImportService
     protected array $costTypes = [];
     /** @var array<string,AssetVendor> name => model */
     protected array $vendors = [];
-    /** @var array<string,AssetEmployee> upperName => model */
-    protected array $employeesByName = [];
+    /** @var array<string,AssetHolder> upperName => model */
+    protected array $holdersByName = [];
 
     protected array $stats = [];
 
@@ -78,7 +78,7 @@ class CostExcelImportService
 
             $this->costTypes = AssetCostType::where('team_id', $teamId)->get()->keyBy('key')->all();
             $this->vendors   = AssetVendor::where('team_id', $teamId)->get()->keyBy('name')->all();
-            $this->employeesByName = AssetEmployee::where('team_id', $teamId)->get()
+            $this->holdersByName = AssetHolder::where('team_id', $teamId)->get()
                 ->keyBy(fn($e) => $this->normName($e->display_name ?: $e->user_principal_name))
                 ->all();
 
@@ -89,7 +89,7 @@ class CostExcelImportService
             $this->importPerCostCenter($this->findSheet($sheets, ['hgk']), 'hgk', true);
             $this->importPerCostCenter($this->findSheet($sheets, ['necta']), 'necta', false);
             // Laptops bewusst NICHT importiert — sie kommen aus Intune (asset_devices) und sind dort
-            // bereits korrekt den Mitarbeitern zugeordnet. Ihre Kosten stecken in der Übersicht (lap_dock).
+            // bereits korrekt den Asset-Trägern zugeordnet. Ihre Kosten stecken in der Übersicht (lap_dock).
             $this->importSeatSheet($this->findSheet($sheets, ['chatgpt']), 'chatgpt', 'E'); // Kosten in Euro
             $this->importSeatSheet($this->findSheet($sheets, ['canva']), 'canva', 'D');
 
@@ -114,7 +114,7 @@ class CostExcelImportService
 
     // ── Sheet-Importer ────────────────────────────────────────────────────
 
-    /** Sheet3: pro Mitarbeiter mehrere Kostenarten (Spalten). */
+    /** Sheet3: pro Asset-Träger mehrere Kostenarten (Spalten). */
     protected function importUebersicht(?array $rows): void
     {
         if (!$rows) return;
@@ -143,7 +143,7 @@ class CostExcelImportService
             $code = $this->cc($row['B'] ?? null);
             if ($name === '') continue;
 
-            $employee = $this->findEmployee($name);
+            $holder = $this->findHolder($name);
             $center   = $this->bootstrap->resolveCostCenter($this->teamId, $code, $this->importTenantId);
 
             foreach ($map as $col => $typeKey) {
@@ -151,7 +151,7 @@ class CostExcelImportService
                 if ($amount == 0.0) continue;
                 $this->upsertLine($typeKey, [
                     'cost_center_id' => $center?->id,
-                    'assignee_id'    => $employee?->id,
+                    'assignee_id'    => $holder?->id,
                     'amount'         => $amount,
                     'label'          => $this->costTypes[$typeKey]->name ?? $typeKey,
                 ]);
@@ -318,10 +318,10 @@ class CostExcelImportService
             $amount = $this->num($row[$amountCol] ?? null);
             if ($amount == 0.0) continue;
 
-            $employee = $this->findEmployee($name);
+            $holder = $this->findHolder($name);
             $this->upsertLine($typeKey, [
                 'cost_center_id' => $this->bootstrap->resolveCostCenter($this->teamId, $code, $this->importTenantId)?->id,
-                'assignee_id'    => $employee?->id,
+                'assignee_id'    => $holder?->id,
                 'amount'         => $amount,
                 'label'          => ($this->costTypes[$typeKey]->name ?? $typeKey) . " — {$name}",
             ]);
@@ -458,13 +458,13 @@ class CostExcelImportService
     }
 
     /**
-     * Findet einen bestehenden Mitarbeiter über den normalisierten Anzeigenamen — legt NICHTS an
-     * und schreibt nichts. Die Kostenstelle am Mitarbeiter ist manuell gepflegte Quelle der Wahrheit
+     * Findet einen bestehenden Asset-Träger über den normalisierten Anzeigenamen — legt NICHTS an
+     * und schreibt nichts. Die Kostenstelle am Asset-Träger ist manuell gepflegte Quelle der Wahrheit
      * (UI), nicht Sache des Imports. Kein Match → null → Cost-Line hängt nur an der Kostenstelle.
      */
-    protected function findEmployee(string $name): ?AssetEmployee
+    protected function findHolder(string $name): ?AssetHolder
     {
-        return $this->employeesByName[$this->normName($name)] ?? null;
+        return $this->holdersByName[$this->normName($name)] ?? null;
     }
 
     protected function resolveVendor(string $name): ?AssetVendor

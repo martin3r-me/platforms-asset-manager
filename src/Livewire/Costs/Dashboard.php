@@ -21,17 +21,17 @@ class Dashboard extends Component
         $teamId = Auth::user()->currentTeam->id;
         // Export im selben Scope wie die Ansicht — sonst enthielte die Datei einen anderen
         // Datenbestand als der Bildschirm, von dem sie ausgelöst wurde.
-        $rows   = $this->inReportScope(fn () => $service->topEmployees($teamId, 9999));
+        $rows   = $this->inReportScope(fn () => $service->topHolders($teamId, 9999));
 
         return new StreamedResponse(function () use ($rows) {
             $out = fopen('php://output', 'w');
-            fputcsv($out, ['Mitarbeiter', 'UPN', 'Abteilung', 'Kostenstelle', 'Hardware EUR/Monat', 'Lizenzen EUR/Monat', 'Gesamt EUR/Monat']);
+            fputcsv($out, ['Asset-Träger', 'UPN', 'Abteilung', 'Kostenstelle', 'Hardware EUR/Monat', 'Lizenzen EUR/Monat', 'Gesamt EUR/Monat']);
             foreach ($rows as $r) {
                 fputcsv($out, [
-                    $r['employee']->name,
-                    $r['employee']->user_principal_name,
-                    $r['employee']->department ?? '',
-                    $r['employee']->cost_center ?? '',
+                    $r['holder']->name,
+                    $r['holder']->user_principal_name,
+                    $r['holder']->department ?? '',
+                    $r['holder']->cost_center ?? '',
                     number_format($r['hardware'], 2, ',', ''),
                     number_format($r['licenses'], 2, ',', ''),
                     number_format($r['total'], 2, ',', ''),
@@ -50,7 +50,7 @@ class Dashboard extends Component
 
         return $this->inReportScope(fn () => view('asset-manager::livewire.costs.dashboard', [
             'totals'          => $service->totalMonthly($teamId),
-            'topEmployees'    => $service->topEmployees($teamId, 10),
+            'topHolders'    => $service->topHolders($teamId, 10),
             'byDepartment'    => $service->byDepartment($teamId),
             'byCostCenter'    => $service->byCostCenter($teamId),
             'byCategory'      => $service->byCategory($teamId),

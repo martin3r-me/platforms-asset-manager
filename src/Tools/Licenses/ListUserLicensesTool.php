@@ -2,7 +2,7 @@
 
 namespace Platform\AssetManager\Tools\Licenses;
 
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetTenant;
 use Platform\AssetManager\Models\AssetUserLicense;
@@ -16,8 +16,8 @@ use Platform\Core\Contracts\ToolResult;
 
 /**
  * Team-/tenant-weiter Auszug der Microsoft-Lizenz-User (User↔SKU-Zuweisungen), pro Nutzer
- * gruppiert und um Mitarbeiter-Kontext (Match, aktiv?, Abteilung, Kostenstelle) angereichert.
- * Read-only — als Basis für einen Lizenz↔Mitarbeiter-Abgleich (verwaiste/inaktive Zuordnungen)
+ * gruppiert und um Asset-Träger-Kontext (Match, aktiv?, Abteilung, Kostenstelle) angereichert.
+ * Read-only — als Basis für einen Lizenz↔Asset-Träger-Abgleich (verwaiste/inaktive Zuordnungen)
  * im Chat. Das Tool bewertet nicht, es liefert Fakten + Kennzahlen.
  *
  * Feld-Semantik (verifiziert an SyncLicensesJob): asset_user_licenses.display_name ist der
@@ -44,12 +44,12 @@ class ListUserLicensesTool implements ToolContract, ToolMetadataContract
     {
         return 'GET /asset-manager/user-licenses - Auszug der Microsoft-Lizenz-User des Teams: pro '
             . 'Nutzer (UPN) dessen zugewiesene Lizenzen (sku_name, Stückpreis, Zuweisungsdatum) PLUS '
-            . 'Mitarbeiter-Kontext (matched, is_active, Abteilung, Kostenstelle) für den Abgleich. '
+            . 'Asset-Träger-Kontext (matched, is_active, Abteilung, Kostenstelle) für den Abgleich. '
             . 'summary liefert Kennzahlen (matched_active/matched_inactive/unmatched) über die VOLLE '
             . 'Menge. Optional: tenant_id (nur ein Tenant), sku_part_number (nur diese Lizenz, z.B. '
             . '"SPB" — licenses[] enthält dann nur diese SKU), search (UPN/Name), match_state '
-            . '(all|matched|unmatched|inactive — unmatched = Lizenz-User ohne Mitarbeiter-Datensatz, '
-            . 'inactive = Mitarbeiter vorhanden aber inaktiv). Die Liste ist auf 500 Nutzer begrenzt '
+            . '(all|matched|unmatched|inactive — unmatched = Lizenz-User ohne Asset-Träger-Datensatz, '
+            . 'inactive = Asset-Träger vorhanden aber inaktiv). Die Liste ist auf 500 Nutzer begrenzt '
             . '(truncated=true → per tenant_id/sku_part_number/search eingrenzen).';
     }
 
@@ -73,7 +73,7 @@ class ListUserLicensesTool implements ToolContract, ToolMetadataContract
                 'match_state' => [
                     'type'        => 'string',
                     'enum'        => ['all', 'matched', 'unmatched', 'inactive'],
-                    'description' => 'Optional (Default all): matched = aktiver Mitarbeiter zur UPN, unmatched = kein Mitarbeiter-Datensatz zur UPN, inactive = Mitarbeiter vorhanden aber is_active=false.',
+                    'description' => 'Optional (Default all): matched = aktiver Asset-Träger zur UPN, unmatched = kein Asset-Träger-Datensatz zur UPN, inactive = Asset-Träger vorhanden aber is_active=false.',
                 ],
             ], $this->tenantSchemaProperty()),
             'required' => [],
@@ -131,17 +131,17 @@ class ListUserLicensesTool implements ToolContract, ToolMetadataContract
             // 2. SKU-Katalog EINMAL laden → sku_name/unit_price je Zuweisung auflösen (kein N+1 über sku()).
             $skuById = AssetLicenseSku::where('team_id', $teamId)->get()->keyBy('sku_id');
 
-            // 3. Mitarbeiter EINMAL laden (per UPN, team-scoped) → Match/Kontext. Muster: ListEmployeesTool.
+            // 3. Asset-Träger EINMAL laden (per UPN, team-scoped) → Match/Kontext. Muster: ListHoldersTool.
             //    UPN ist team-weit eindeutig (unique(team_id, user_principal_name)) → keyBy ist kollisionsfrei.
             $upns = $assignments->pluck('user_principal_name')->filter()->unique()->values()->all();
-            $employeesByUpn = $upns
-                ? AssetEmployee::where('team_id', $teamId)->whereIn('user_principal_name', $upns)->with('costCenter')->get()->keyBy('user_principal_name')
+            $holdersByUpn = $upns
+                ? AssetHolder::where('team_id', $teamId)->whereIn('user_principal_name', $upns)->with('costCenter')->get()->keyBy('user_principal_name')
                 : collect();
 
-            // 4. Nach UPN gruppieren → pro Nutzer eine Zeile mit licenses[] + Mitarbeiter-Kontext.
-            $users = $assignments->groupBy('user_principal_name')->map(function ($rows, $upn) use ($skuById, $employeesByUpn) {
-                /** @var AssetEmployee|null $emp */
-                $emp = $employeesByUpn->get($upn);
+            // 4. Nach UPN gruppieren → pro Nutzer eine Zeile mit licenses[] + Asset-Träger-Kontext.
+            $users = $assignments->groupBy('user_principal_name')->map(function ($rows, $upn) use ($skuById, $holdersByUpn) {
+                /** @var AssetHolder|null $emp */
+                $emp = $holdersByUpn->get($upn);
 
                 $licenses = $rows->map(function (AssetUserLicense $l) use ($skuById) {
                     $sku = $skuById->get($l->sku_id);
@@ -160,7 +160,7 @@ class ListUserLicensesTool implements ToolContract, ToolMetadataContract
                     'display_name'        => $rows->first()->display_name,
                     'tenant_id'           => $rows->first()->tenant_id,
                     'matched'             => $emp !== null,
-                    'employee'            => $emp ? [
+                    'holder'            => $emp ? [
                         'id'                => $emp->id,
                         'name'              => $emp->name,
                         'is_active'         => (bool) $emp->is_active,
@@ -178,16 +178,16 @@ class ListUserLicensesTool implements ToolContract, ToolMetadataContract
             $summary = [
                 'total_users'       => $users->count(),
                 'total_assignments' => $assignments->count(),
-                'matched_active'    => $users->filter(fn ($u) => $u['employee'] && $u['employee']['is_active'])->count(),
-                'matched_inactive'  => $users->filter(fn ($u) => $u['employee'] && !$u['employee']['is_active'])->count(),
+                'matched_active'    => $users->filter(fn ($u) => $u['holder'] && $u['holder']['is_active'])->count(),
+                'matched_inactive'  => $users->filter(fn ($u) => $u['holder'] && !$u['holder']['is_active'])->count(),
                 'unmatched'         => $users->filter(fn ($u) => !$u['matched'])->count(),
             ];
 
             // 6. match_state-Filter auf die gruppierte Menge.
             $filtered = $users->filter(function ($u) use ($matchState) {
                 return match ($matchState) {
-                    'matched'   => $u['employee'] && $u['employee']['is_active'],
-                    'inactive'  => $u['employee'] && !$u['employee']['is_active'],
+                    'matched'   => $u['holder'] && $u['holder']['is_active'],
+                    'inactive'  => $u['holder'] && !$u['holder']['is_active'],
                     'unmatched' => !$u['matched'],
                     default     => true,
                 };
@@ -220,6 +220,6 @@ class ListUserLicensesTool implements ToolContract, ToolMetadataContract
 
     public function getMetadata(): array
     {
-        return ['read_only' => true, 'tags' => ['asset-manager', 'licenses', 'employees']];
+        return ['read_only' => true, 'tags' => ['asset-manager', 'licenses', 'holders']];
     }
 }

@@ -1,10 +1,10 @@
 <?php
 
-namespace Platform\AssetManager\Tools\Employees;
+namespace Platform\AssetManager\Tools\Holders;
 
 use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetCostType;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Services\CostAggregationService;
 use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
@@ -15,23 +15,23 @@ use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 
 /**
- * Vollständiges 360°-Profil eines Mitarbeiters: Stammdaten, Intune-Geräte, Inventar-Items,
+ * Vollständiges 360°-Profil eines Asset-Trägers: Stammdaten, Intune-Geräte, Inventar-Items,
  * Microsoft-Lizenzen, Kostenpositionen, Kostenstelle und Monatskosten-Aufschlüsselung.
  * Beantwortet u.a. "mit welchen Geräten ist X unterwegs" und "was kostet X im Monat".
  */
-class GetEmployeeTool implements ToolContract, ToolMetadataContract
+class GetHolderTool implements ToolContract, ToolMetadataContract
 {
     use ResolvesTeam;
     use ResolvesTenant;
 
     public function getName(): string
     {
-        return 'asset-manager.employee.GET';
+        return 'asset-manager.holder.GET';
     }
 
     public function getDescription(): string
     {
-        return 'GET /asset-manager/employee - Voll-Profil EINES Mitarbeiters per id ODER '
+        return 'GET /asset-manager/employee - Voll-Profil EINES Asset-Trägers per id ODER '
             . 'user_principal_name (UPN). Liefert Stammdaten, alle Intune-Geräte (Modell, Seriennummer, '
             . 'Compliance, last_check_in, aufgelöste Monatskosten), Inventar-Items, Microsoft-Lizenzen, '
             . 'Kostenpositionen, die Kostenstelle und die monatliche Kostenaufschlüsselung '
@@ -45,11 +45,11 @@ class GetEmployeeTool implements ToolContract, ToolMetadataContract
             'properties' => array_merge([
                 'id' => [
                     'type'        => 'integer',
-                    'description' => 'Mitarbeiter-ID (alternativ zu user_principal_name).',
+                    'description' => 'Asset-Träger-ID (alternativ zu user_principal_name).',
                 ],
                 'user_principal_name' => [
                     'type'        => 'string',
-                    'description' => 'UPN des Mitarbeiters (alternativ zu id), z.B. "max.muster@firma.de".',
+                    'description' => 'UPN des Asset-Trägers (alternativ zu id), z.B. "max.muster@firma.de".',
                 ],
             ], $this->tenantSchemaProperty()),
             'required' => [],
@@ -73,7 +73,7 @@ class GetEmployeeTool implements ToolContract, ToolMetadataContract
             }
             TenantContext::forceTenant($tenantId);
 
-            $query = AssetEmployee::where('team_id', $teamId)->with('costCenter');
+            $query = AssetHolder::where('team_id', $teamId)->with('costCenter');
             if (!empty($arguments['id'])) {
                 $query->where('id', (int) $arguments['id']);
             } elseif (!empty($arguments['user_principal_name'])) {
@@ -82,10 +82,10 @@ class GetEmployeeTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('VALIDATION_ERROR', 'Bitte id ODER user_principal_name angeben.');
             }
 
-            /** @var AssetEmployee|null $emp */
+            /** @var AssetHolder|null $emp */
             $emp = $query->first();
             if (!$emp) {
-                return ToolResult::error('NOT_FOUND', 'Mitarbeiter nicht gefunden. Nutze asset-manager.employees.GET zum Suchen.');
+                return ToolResult::error('NOT_FOUND', 'Asset-Träger nicht gefunden. Nutze asset-manager.holders.GET zum Suchen.');
             }
 
             /** @var CostAggregationService $agg */
@@ -142,11 +142,11 @@ class GetEmployeeTool implements ToolContract, ToolMetadataContract
                 'monthly_amount' => (float) $c->monthly_amount,
             ])->values()->all();
 
-            // Hardware-/Geräte-/Lizenz-Kosten aus der zentralen Quelle der Wahrheit (employeeCost) statt
+            // Hardware-/Geräte-/Lizenz-Kosten aus der zentralen Quelle der Wahrheit (holderCost) statt
             // inline neu zu rechnen — verhindert stilles Divergieren bei Kostenmodell-Änderungen (M8).
-            // employeeCost trennt Items (hardware) und Geräte (device); hier wie bisher zu „hardware"
-            // zusammengefasst. Die costline-Sicht ist NICHT Teil von employeeCost und wird ergänzt.
-            $cost     = $agg->employeeCost($teamId, $emp);
+            // holderCost trennt Items (hardware) und Geräte (device); hier wie bisher zu „hardware"
+            // zusammengefasst. Die costline-Sicht ist NICHT Teil von holderCost und wird ergänzt.
+            $cost     = $agg->holderCost($teamId, $emp);
             $hardware = round($cost['hardware'] + $cost['device'], 2);
             $licCost  = $cost['license'];
             $clCost   = (float) AssetCostLine::active()->validOn(now())->where('team_id', $teamId)
@@ -155,7 +155,7 @@ class GetEmployeeTool implements ToolContract, ToolMetadataContract
                 ->sum('monthly_amount');
 
             return ToolResult::success([
-                'employee' => [
+                'holder' => [
                     'id'                  => $emp->id,
                     'name'                => $emp->name,
                     'user_principal_name' => $emp->user_principal_name,
@@ -184,12 +184,12 @@ class GetEmployeeTool implements ToolContract, ToolMetadataContract
                 'currency'       => 'EUR',
             ]);
         } catch (\Throwable $e) {
-            return ToolResult::error('EXECUTION_ERROR', 'Fehler beim Laden des Mitarbeiters: ' . $e->getMessage());
+            return ToolResult::error('EXECUTION_ERROR', 'Fehler beim Laden des Asset-Trägers: ' . $e->getMessage());
         }
     }
 
     public function getMetadata(): array
     {
-        return ['read_only' => true, 'tags' => ['asset-manager', 'employee', 'devices', 'costs']];
+        return ['read_only' => true, 'tags' => ['asset-manager', 'holder', 'devices', 'costs']];
     }
 }

@@ -31,7 +31,7 @@ class CostSummaryTool implements ToolContract, ToolMetadataContract
             . 'Microsoft-Lizenzen), costlines (sonstige Kostenpositionen) und total. total ist per '
             . 'Konstruktion identisch mit dem grandTotal der Kostenstellen×Kostenart-Pivot '
             . '(asset-manager.costs.by). Zusätzlich capacity = Bestand, der dem Pivot NICHT zugeteilt '
-            . 'wird (hardware_unassigned: AfA von Lager-/Pool-Items ohne Mitarbeiter; licenses_catalog: '
+            . 'wird (hardware_unassigned: AfA von Lager-/Pool-Items ohne Asset-Träger; licenses_catalog: '
             . 'SKU-Katalogkosten) — bewusst NICHT Teil von total.';
     }
 

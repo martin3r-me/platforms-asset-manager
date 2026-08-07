@@ -145,7 +145,7 @@ class AssetCostLine extends Model
 
     public function assignee(): BelongsTo
     {
-        return $this->belongsTo(AssetEmployee::class, 'assignee_id');
+        return $this->belongsTo(AssetHolder::class, 'assignee_id');
     }
 
     public function assetItem(): BelongsTo

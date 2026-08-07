@@ -8,7 +8,7 @@
                 <thead>
                     <tr class="border-b border-[color:var(--am-border)]">
                         <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[var(--am-bg)] text-[var(--am-text-muted)]">Bereich</th>
-                        <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[var(--am-bg)] text-[var(--am-text-muted)]">Mitarbeiter</th>
+                        <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[var(--am-bg)] text-[var(--am-text-muted)]">Asset-Träger</th>
                         <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[var(--am-bg)] text-[var(--am-text-muted)]">Hardware</th>
                         <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[var(--am-bg)] text-[var(--am-text-muted)]">Lizenzen</th>
                         <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider bg-[var(--am-bg)] text-[var(--am-text-muted)]">Gesamt / Monat</th>

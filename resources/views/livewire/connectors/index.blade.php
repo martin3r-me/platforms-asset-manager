@@ -142,7 +142,7 @@
                                     <div class="flex-1">
                                         <p class="text-sm font-medium text-red-700">Tenant „{{ $selectedTenant->name }}" wirklich löschen?</p>
                                         <p class="text-xs text-red-700 mt-1">
-                                            <strong>Alle</strong> Geräte, Lizenzen, Mitarbeiter, Assets und der Connector dieses Tenants
+                                            <strong>Alle</strong> Geräte, Lizenzen, Asset-Träger, Assets und der Connector dieses Tenants
                                             werden unwiderruflich entfernt (Cascade). Kostenstellen/Kostenarten bleiben (team-weit).
                                         </p>
                                         <div class="flex items-center gap-2 mt-3">

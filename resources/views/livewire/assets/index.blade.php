@@ -65,7 +65,7 @@
                 <x-asset-manager-filter-section title="Zugewiesen an">
                     <x-asset-manager-select size="sm" wire:model.live="filterAssignee">
                         <option value="">Alle</option>
-                        @foreach($employees as $emp)
+                        @foreach($holders as $emp)
                             <option value="{{ $emp->id }}">{{ $emp->name }}</option>
                         @endforeach
                     </x-asset-manager-select>
@@ -98,9 +98,9 @@
                     </x-asset-manager-button>
                 @endcan
                 <x-asset-manager-button variant="secondary" size="md" class="w-full"
-                             href="{{ route('asset-manager.employees.index') }}" wire:navigate>
+                             href="{{ route('asset-manager.holders.index') }}" wire:navigate>
                     @svg('heroicon-o-users', 'w-4 h-4')
-                    Zu den Mitarbeitern
+                    Zu den Asset-Trägern
                 </x-asset-manager-button>
                 <x-asset-manager-button variant="secondary" size="md" class="w-full"
                              href="{{ route('asset-manager.devices.index') }}" wire:navigate>
@@ -176,7 +176,7 @@
                                 <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Direkt zuweisen an</label>
                                 <x-asset-manager-select size="sm" wire:model="bcAssigneeId">
                                     <option value="">– Niemand (Lager) –</option>
-                                    @foreach($employees as $emp)
+                                    @foreach($holders as $emp)
                                         <option value="{{ $emp->id }}">{{ $emp->name }}</option>
                                     @endforeach
                                 </x-asset-manager-select>
@@ -212,7 +212,7 @@
                     <div class="flex items-center gap-1.5">
                         <select wire:model="bulkAssignee" class="px-2 py-1 text-xs rounded-md bg-white/15 border border-white/20 text-[var(--am-on-primary)] [&>option]:text-gray-900">
                             <option value="">An wen zuweisen…</option>
-                            @foreach($employees as $emp)
+                            @foreach($holders as $emp)
                                 <option value="{{ $emp->id }}">{{ $emp->name }}</option>
                             @endforeach
                         </select>

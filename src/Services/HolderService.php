@@ -4,15 +4,15 @@ namespace Platform\AssetManager\Services;
 
 use Illuminate\Support\Facades\DB;
 use Platform\AssetManager\Models\AssetDevice;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetHandover;
 use Platform\AssetManager\Models\AssetTenant;
 use Platform\AssetManager\Models\AssetUserLicense;
 
-class EmployeeService
+class HolderService
 {
     /**
-     * Findet einen Employee anhand UPN (tenant-skopiert) oder legt ihn an (source=derived).
+     * Findet einen Asset-Träger anhand UPN (tenant-skopiert) oder legt ihn an (source=derived).
      * Aktualisiert display_name nur, wenn der bestehende leer ist.
      *
      * tenant_id ist die Identitäts-Achse (Unique (tenant_id, user_principal_name)); team_id wird
@@ -24,46 +24,46 @@ class EmployeeService
         string $upn,
         ?string $displayName = null,
         string $source = 'derived'
-    ): AssetEmployee {
+    ): AssetHolder {
         // withoutTenantScope() ist hier PFLICHT, nicht Kosmetik: der Tenant kommt als Parameter, und
         // der Global Scope würde zusätzlich auf den *aktiven* Tenant filtern. Weichen beide ab (Job
         // ohne gesetzten Kontext, Aufruf aus einer anderen Sicht), findet firstOrNew den bestehenden
         // Träger nicht und legt einen zweiten an — direkt in den (tenant_id, upn)-Unique-Index.
-        $employee = AssetEmployee::withoutTenantScope()->firstOrNew([
+        $holder = AssetHolder::withoutTenantScope()->firstOrNew([
             'tenant_id'           => $tenantId,
             'user_principal_name' => $upn,
         ]);
 
-        if (!$employee->exists) {
-            $employee->team_id      = $teamId;
-            $employee->source       = $source;
-            $employee->display_name = $displayName;
-            $employee->email        = $upn;
-            $employee->is_active    = true;
-            $employee->save();
+        if (!$holder->exists) {
+            $holder->team_id      = $teamId;
+            $holder->source       = $source;
+            $holder->display_name = $displayName;
+            $holder->email        = $upn;
+            $holder->is_active    = true;
+            $holder->save();
         } else {
             $dirty = false;
-            if ($displayName && empty($employee->display_name)) {
-                $employee->display_name = $displayName;
+            if ($displayName && empty($holder->display_name)) {
+                $holder->display_name = $displayName;
                 $dirty = true;
             }
             // team_id defensiv nachziehen, falls abweichend (N14): tenant_id ist die Identitäts-Achse und
             // ein Tenant gehört genau EINEM Team — bei Drift (z. B. historische Daten) gewinnt das aktuelle
             // team_id, damit team-weite Auswertungen/Kostenmodell konsistent bleiben.
-            if ((int) $employee->team_id !== $teamId) {
-                $employee->team_id = $teamId;
+            if ((int) $holder->team_id !== $teamId) {
+                $holder->team_id = $teamId;
                 $dirty = true;
             }
             if ($dirty) {
-                $employee->save();
+                $holder->save();
             }
         }
 
-        return $employee;
+        return $holder;
     }
 
     /**
-     * Reichert einen Mitarbeiter mit Graph-Profildaten an (department/jobTitle/Rufnummern) — die gemeinsame
+     * Reichert einen Asset-Träger mit Graph-Profildaten an (department/jobTitle/Rufnummern) — die gemeinsame
      * Precedence-Logik für den User-Import UND den regulären Lizenz-Sync (ADR 0014), damit die Regel nicht
      * dupliziert wird:
      *   - department/job_title: Entra ist führend — NICHT-leere Graph-Werte überschreiben, leere lassen den
@@ -73,21 +73,21 @@ class EmployeeService
      *
      * Mutiert das übergebene Objekt (dirty), SPEICHERT NICHT — der Aufrufer ruft save().
      */
-    public function applyGraphProfile(AssetEmployee $employee, array $graphUser): void
+    public function applyGraphProfile(AssetHolder $holder, array $graphUser): void
     {
         if (! empty($graphUser['department'])) {
-            $employee->department = $graphUser['department'];
+            $holder->department = $graphUser['department'];
         }
         if (! empty($graphUser['jobTitle'])) {
-            $employee->job_title = $graphUser['jobTitle'];
+            $holder->job_title = $graphUser['jobTitle'];
         }
 
-        if (! $employee->phone_overridden) {
+        if (! $holder->phone_overridden) {
             if (! empty($graphUser['mobilePhone'])) {
-                $employee->mobile_phone = self::normalizePhone($graphUser['mobilePhone']);
+                $holder->mobile_phone = self::normalizePhone($graphUser['mobilePhone']);
             }
             if (! empty($graphUser['businessPhones'][0])) {
-                $employee->business_phone = self::normalizePhone($graphUser['businessPhones'][0]);
+                $holder->business_phone = self::normalizePhone($graphUser['businessPhones'][0]);
             }
         }
     }
@@ -132,9 +132,9 @@ class EmployeeService
     }
 
     /**
-     * Gezielte Einzel-Anonymisierung EINES Mitarbeiters (DSGVO Art. 17, Entscheidung E2 / ADR 0005).
+     * Gezielte Einzel-Anonymisierung EINES Asset-Trägers (DSGVO Art. 17, Entscheidung E2 / ADR 0005).
      *
-     * Pseudonymisiert die PII des Mitarbeiters (Anzeigename, E-Mail, UPN) und leert raw_data; maskiert
+     * Pseudonymisiert die PII des Asset-Trägers (Anzeigename, E-Mail, UPN) und leert raw_data; maskiert
      * begleitend die PII der über die UPN verknüpften Geräte UND Lizenz-Zuweisungen (team-/tenant-scoped),
      * wobei die UPN auf denselben stabilen Pseudonym gesetzt wird, damit die Verknüpfung erhalten bleibt.
      *
@@ -142,17 +142,17 @@ class EmployeeService
      * Person noch im M365 des Tenants, legt der nächste Sync sie unter ihrer echten UPN neu an — sinnvoll
      * nur für ausgeschiedene Personen. Aufrufer MUSS die Berechtigung (Owner/Admin) bereits geprüft haben.
      */
-    public function anonymize(AssetEmployee $employee): void
+    public function anonymize(AssetHolder $holder): void
     {
-        $teamId   = (int) $employee->team_id;
-        $tenantId = $employee->tenant_id;
-        $oldUpn   = $employee->user_principal_name;
+        $teamId   = (int) $holder->team_id;
+        $tenantId = $holder->tenant_id;
+        $oldUpn   = $holder->user_principal_name;
 
-        // Stabiler, kollisionsfreier Pseudonym je Mitarbeiter (id ist eindeutig; .invalid-TLD existiert nie).
-        $pseudoUpn  = 'anonymisiert-' . $employee->id . '@anonymized.invalid';
-        $pseudoName = 'Anonymisiert #' . $employee->id;
+        // Stabiler, kollisionsfreier Pseudonym je Asset-Träger (id ist eindeutig; .invalid-TLD existiert nie).
+        $pseudoUpn  = 'anonymisiert-' . $holder->id . '@anonymized.invalid';
+        $pseudoName = 'Anonymisiert #' . $holder->id;
 
-        DB::transaction(function () use ($employee, $teamId, $tenantId, $oldUpn, $pseudoUpn, $pseudoName) {
+        DB::transaction(function () use ($holder, $teamId, $tenantId, $oldUpn, $pseudoUpn, $pseudoName) {
             if ($oldUpn) {
                 // Verknüpfte Geräte (per UPN) PII maskieren — UPN auf den Pseudonym setzen (Link bleibt).
                 AssetDevice::withoutTenantScope()->where('team_id', $teamId)
@@ -175,11 +175,11 @@ class EmployeeService
                     ]);
             }
 
-            // Geräteausgabe-Protokolle dieses Mitarbeiters: PII der Person pseudonymisieren — signer_name
+            // Geräteausgabe-Protokolle dieses Asset-Trägers: PII der Person pseudonymisieren — signer_name
             // sowie die User-Felder im device_snapshot. Gerätedaten (Name/Seriennr./Modell) bleiben, da
             // keine Personen-PII. Protokoll bleibt als anonymisierte Historie erhalten (kein Löschen).
             $handovers = AssetHandover::where('team_id', $teamId)
-                ->where('employee_id', $employee->id)
+                ->where('holder_id', $holder->id)
                 ->with('lines')
                 ->get();
 
@@ -198,7 +198,7 @@ class EmployeeService
                 }
             }
 
-            $employee->update([
+            $holder->update([
                 'user_principal_name' => $pseudoUpn,
                 'display_name'        => $pseudoName,
                 'email'               => null,
@@ -209,13 +209,13 @@ class EmployeeService
 
     /**
      * Backfill für genau einen Tenant: alle UPNs aus seinen Geräten + Lizenz-Zuweisungen einsammeln
-     * und fehlende Employees anlegen. Returnt Anzahl neu angelegter.
+     * und fehlende Asset-Träger anlegen. Returnt Anzahl neu angelegter.
      */
     public function backfillForTenant(int $teamId, int $tenantId): int
     {
-        // Bestehende Employees des Tenants EINMAL vorladen — statt je UPN ein exists() PLUS ein
+        // Bestehende Asset-Träger des Tenants EINMAL vorladen — statt je UPN ein exists() PLUS ein
         // firstOrNew (~2 Queries je UPN in einer Schleife, die nach jedem Sync läuft).
-        $existing = AssetEmployee::withoutTenantScope()->where('tenant_id', $tenantId)
+        $existing = AssetHolder::withoutTenantScope()->where('tenant_id', $tenantId)
             ->whereNotNull('user_principal_name')
             ->get(['id', 'user_principal_name', 'display_name'])
             ->keyBy('user_principal_name');
@@ -249,7 +249,7 @@ class EmployeeService
             $emp = $existing->get($upn);
             if ($emp === null) {
                 // Neu anlegen (verhaltensgleich zu findOrCreateByUpn: source=derived, email=upn, aktiv).
-                AssetEmployee::create([
+                AssetHolder::create([
                     'team_id'             => $teamId,
                     'tenant_id'           => $tenantId,
                     'user_principal_name' => $upn,
@@ -270,7 +270,7 @@ class EmployeeService
 
     /**
      * Backfill für ein ganzes Team = über alle Tenants des Teams. Hält Konsole/Job
-     * (BackfillEmployeesCommand/Job) team-orientiert, scoped intern aber sauber pro Tenant.
+     * (BackfillHoldersCommand/Job) team-orientiert, scoped intern aber sauber pro Tenant.
      */
     public function backfillForTeam(int $teamId): int
     {

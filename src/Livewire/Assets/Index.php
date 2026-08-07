@@ -10,7 +10,7 @@ use Illuminate\Validation\Rule;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Models\AssetAssignment;
 use Platform\AssetManager\Models\AssetCategory;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Services\TenantContext;
 
@@ -95,15 +95,15 @@ class Index extends Component
         Gate::authorize('create', AssetItem::class);
         if (empty($this->selected) || !$this->bulkAssignee) return;
 
-        $employee = AssetEmployee::where('team_id', $this->teamId())->find($this->bulkAssignee);
-        if (!$employee) return;
+        $holder = AssetHolder::where('team_id', $this->teamId())->find($this->bulkAssignee);
+        if (!$holder) return;
 
         $items = AssetItem::where('team_id', $this->teamId())->whereIn('id', $this->selected)->get();
         foreach ($items as $item) {
-            $item->assignTo($employee);
+            $item->assignTo($holder);
         }
 
-        $this->bulkResult = count($items) . ' Asset(s) an ' . $employee->name . ' zugewiesen.';
+        $this->bulkResult = count($items) . ' Asset(s) an ' . $holder->name . ' zugewiesen.';
         $this->selected = [];
         $this->selectPage = false;
         $this->bulkAssignee = null;
@@ -191,7 +191,7 @@ class Index extends Component
             'bcModel'              => 'nullable|string|max:255',
             'bcQuantity'           => 'required|integer|min:1|max:500',
             // Assignee MUSS zum eigenen Team gehören (sonst danglende cross-team FK).
-            'bcAssigneeId'         => ['nullable', 'integer', Rule::exists('asset_employees', 'id')->where('team_id', $this->teamId())],
+            'bcAssigneeId'         => ['nullable', 'integer', Rule::exists('asset_holders', 'id')->where('team_id', $this->teamId())],
             'bcPurchasePrice'      => 'nullable|numeric|min:0',
             'bcDepreciationMonths' => 'nullable|integer|min:1|max:240',
         ]);
@@ -222,7 +222,7 @@ class Index extends Component
                     'asset_item_id'   => $item->id,
                     'assignable_type' => AssetAssignment::SUBJECT_ITEM,
                     'assignable_id'   => $item->id,
-                    'employee_id'     => $this->bcAssigneeId,
+                    'holder_id'     => $this->bcAssigneeId,
                     'assigned_at'     => now(),
                     'source'          => AssetAssignment::SOURCE_MANUAL,
                 ]);
@@ -276,13 +276,13 @@ class Index extends Component
         ];
 
         $categories = AssetCategory::orderBy('sort_order')->get();
-        $employees  = AssetEmployee::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get();
+        $holders  = AssetHolder::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get();
 
         return view('asset-manager::livewire.assets.index', [
             'items'        => $items,
             'stats'        => $stats,
             'categories'   => $categories,
-            'employees'    => $employees,
+            'holders'    => $holders,
             'totalFiltered'=> $this->filteredQuery()->count(),
         ])->layout('platform::layouts.app');
     }

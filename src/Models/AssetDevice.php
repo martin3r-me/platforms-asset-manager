@@ -162,10 +162,10 @@ class AssetDevice extends Model
         return $this->belongsTo(AssetVendor::class, 'vendor_id');
     }
 
-    /** Mitarbeiter über die UPN (Geräte tragen nur die UPN als String, keine echte FK). */
+    /** Asset-Träger über die UPN (Geräte tragen nur die UPN als String, keine echte FK). */
     public function assignee(): BelongsTo
     {
-        return $this->belongsTo(AssetEmployee::class, 'user_principal_name', 'user_principal_name');
+        return $this->belongsTo(AssetHolder::class, 'user_principal_name', 'user_principal_name');
     }
 
     /** Provider-Quellen, die dieses physische Gerät kennen (Intune, ABM …) — ADR 0009. */

@@ -12,7 +12,7 @@ use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 
 /**
- * Teuerste Mitarbeiter nach monatlichen Gesamtkosten (Hardware inkl. Geräte, Lizenzen, Kostenpositionen).
+ * Teuerste Asset-Träger nach monatlichen Gesamtkosten (Hardware inkl. Geräte, Lizenzen, Kostenpositionen).
  */
 class TopEmployeesByCostTool implements ToolContract, ToolMetadataContract
 {
@@ -26,7 +26,7 @@ class TopEmployeesByCostTool implements ToolContract, ToolMetadataContract
 
     public function getDescription(): string
     {
-        return 'GET /asset-manager/costs/top-employees - Mitarbeiter mit den höchsten monatlichen '
+        return 'GET /asset-manager/costs/top-employees - Asset-Träger mit den höchsten monatlichen '
             . 'Gesamtkosten (hardware/licenses/costlines/total). Parameter limit (Default 10, max 200).';
     }
 
@@ -35,7 +35,7 @@ class TopEmployeesByCostTool implements ToolContract, ToolMetadataContract
         return [
             'type'       => 'object',
             'properties' => array_merge([
-                'limit' => ['type' => 'integer', 'description' => 'Anzahl Mitarbeiter (Default 10, max 200).'],
+                'limit' => ['type' => 'integer', 'description' => 'Anzahl Asset-Träger (Default 10, max 200).'],
             ], $this->tenantSchemaPropertyWithAll()),
             'required' => [],
         ];
@@ -65,26 +65,26 @@ class TopEmployeesByCostTool implements ToolContract, ToolMetadataContract
 
             $limit = min(max((int) ($arguments['limit'] ?? 10), 1), 200);
 
-            $rows = app(CostAggregationService::class)->topEmployees($teamId, $limit)
+            $rows = app(CostAggregationService::class)->topHolders($teamId, $limit)
                 ->map(fn ($r) => [
-                    'employee'            => $r['employee']->name,
-                    'user_principal_name' => $r['employee']->user_principal_name,
-                    'department'          => $r['employee']->department,
-                    'cost_center'         => $r['employee']->cost_center,
+                    'holder'            => $r['holder']->name,
+                    'user_principal_name' => $r['holder']->user_principal_name,
+                    'department'          => $r['holder']->department,
+                    'cost_center'         => $r['holder']->cost_center,
                     'hardware'            => $r['hardware'],
                     'licenses'            => $r['licenses'],
                     'costlines'           => $r['costlines'],
                     'total'               => $r['total'],
                 ])->values()->all();
 
-            return ToolResult::success(['employees' => $rows, 'count' => count($rows), 'currency' => 'EUR']);
+            return ToolResult::success(['holders' => $rows, 'count' => count($rows), 'currency' => 'EUR']);
         } catch (\Throwable $e) {
-            return ToolResult::error('EXECUTION_ERROR', 'Fehler beim Berechnen der Top-Mitarbeiter: ' . $e->getMessage());
+            return ToolResult::error('EXECUTION_ERROR', 'Fehler beim Berechnen der Top-Asset-Träger: ' . $e->getMessage());
         }
     }
 
     public function getMetadata(): array
     {
-        return ['read_only' => true, 'tags' => ['asset-manager', 'costs', 'employees']];
+        return ['read_only' => true, 'tags' => ['asset-manager', 'costs', 'holders']];
     }
 }

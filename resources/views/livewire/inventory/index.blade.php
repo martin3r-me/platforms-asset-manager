@@ -142,9 +142,9 @@
                         </x-asset-manager-button>
                     @endcan
                     <x-asset-manager-button variant="secondary" size="md" class="w-full"
-                                 href="{{ route('asset-manager.employees.index') }}" wire:navigate>
+                                 href="{{ route('asset-manager.holders.index') }}" wire:navigate>
                         @svg('heroicon-o-users', 'w-4 h-4')
-                        Zu den Mitarbeitern
+                        Zu den Asset-Trägern
                     </x-asset-manager-button>
                     <x-asset-manager-button variant="secondary" size="md" class="w-full"
                                  href="{{ route('asset-manager.devices.index') }}" wire:navigate>

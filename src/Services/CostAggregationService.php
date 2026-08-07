@@ -9,7 +9,7 @@ use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceModel;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetUserLicense;
@@ -40,7 +40,7 @@ class CostAggregationService
         $b     = $this->canonicalBuckets($teamId);
         $total = $b['hardware'] + $b['licenses'] + $b['costlines'];
 
-        // Kapazität (kein Spend): AfA von Items OHNE Mitarbeiter (Lager/Pool) + SKU-Katalogkosten
+        // Kapazität (kein Spend): AfA von Items OHNE Asset-Träger (Lager/Pool) + SKU-Katalogkosten
         // (gekauft/konsumiert, unabhängig von realen Zuweisungen). Items mit eigener cost_line auch hier
         // ausschließen (deren Kosten stecken bereits im costlines-Bucket).
         $itemIdsWithCostLine = $this->itemIdsWithCostLine($teamId);
@@ -104,14 +104,14 @@ class CostAggregationService
     }
 
     /**
-     * Top-N Mitarbeiter nach monatlichen Gesamtkosten (Hardware + Lizenzen).
-     * Returns: Collection [['employee' => AssetEmployee, 'hardware' => float, 'licenses' => float, 'total' => float]]
+     * Top-N Asset-Träger nach monatlichen Gesamtkosten (Hardware + Lizenzen).
+     * Returns: Collection [['holder' => AssetHolder, 'hardware' => float, 'licenses' => float, 'total' => float]]
      */
-    public function topEmployees(int $teamId, int $limit = 10): Collection
+    public function topHolders(int $teamId, int $limit = 10): Collection
     {
-        $employees = AssetEmployee::where('team_id', $teamId)->get();
+        $holders = AssetHolder::where('team_id', $teamId)->get();
 
-        // Hardware-Kosten pro Employee (via assignee_id)
+        // Hardware-Kosten pro Asset-Träger (via assignee_id)
         $items = AssetItem::where('team_id', $teamId)
             ->whereNotNull('assignee_id')
             ->get()
@@ -128,7 +128,7 @@ class CostAggregationService
             ->get()
             ->groupBy('user_principal_name');
 
-        // Sonstige Kostenpositionen (cost_line) pro Mitarbeiter
+        // Sonstige Kostenpositionen (cost_line) pro Asset-Träger
         $costLineSums = AssetCostLine::active()
             ->validOn(now())
             ->where('team_id', $teamId)
@@ -138,12 +138,12 @@ class CostAggregationService
             ->groupBy('assignee_id')
             ->map(fn($g) => (float) $g->sum('monthly_amount'));
 
-        // Geräte-Kosten pro Mitarbeiter (via UPN) — werden zur Hardware-Summe gezählt
+        // Geräte-Kosten pro Asset-Träger (via UPN) — werden zur Hardware-Summe gezählt
         $deviceSums = $this->deviceCostRows($teamId)
             ->groupBy('upn')
             ->map(fn($g) => (float) $g->sum('amount'));
 
-        $results = $employees->map(function ($emp) use ($items, $licenseAssignments, $skuPrices, $costLineSums, $deviceSums) {
+        $results = $holders->map(function ($emp) use ($items, $licenseAssignments, $skuPrices, $costLineSums, $deviceSums) {
             $hardware = ($items[$emp->id] ?? collect())->sum(fn($i) => $i->monthlyCost())
                 + (float) ($deviceSums[$emp->user_principal_name] ?? 0);
 
@@ -153,7 +153,7 @@ class CostAggregationService
             $costlines = (float) ($costLineSums[$emp->id] ?? 0);
 
             return [
-                'employee'  => $emp,
+                'holder'  => $emp,
                 'hardware'  => round($hardware, 2),
                 'licenses'  => round($licenses, 2),
                 'costlines' => round($costlines, 2),
@@ -171,18 +171,18 @@ class CostAggregationService
     /**
      * Kosten pro Department.
      *
-     * Department ist eine Mitarbeiter-Eigenschaft (kein FK) → Gruppierung über den Freitext bleibt nötig
-     * und die Basis ist die Mitarbeiter-Sicht (topEmployees). Posten OHNE Mitarbeiterbezug (assignee-lose
-     * Kostenpositionen wie Internet/Drucker/BPEvent, Geräte/Lizenzen ohne passenden Mitarbeiter) tauchen
+     * Department ist eine Asset-Träger-Eigenschaft (kein FK) → Gruppierung über den Freitext bleibt nötig
+     * und die Basis ist die Asset-Träger-Sicht (topEmployees). Posten OHNE Mitarbeiterbezug (assignee-lose
+     * Kostenpositionen wie Internet/Drucker/BPEvent, Geräte/Lizenzen ohne passenden Asset-Träger) tauchen
      * dort nicht auf — damit sie nicht still verschwinden, wird der Rest gegenüber der kanonischen Summe
      * gebildet und unter „Ohne Abteilung" gesammelt. So entspricht die Summe dem Dashboard-Total/Pivot.
      */
     public function byDepartment(int $teamId): Collection
     {
-        $rows = $this->topEmployees($teamId, 9999);  // alle relevanten Mitarbeiter
+        $rows = $this->topHolders($teamId, 9999);  // alle relevanten Asset-Träger
 
         $byDept = $rows
-            ->groupBy(fn($r) => $r['employee']->department ?: 'Ohne Abteilung')
+            ->groupBy(fn($r) => $r['holder']->department ?: 'Ohne Abteilung')
             ->map(function ($group, $dept) {
                 return [
                     'label'     => $dept,
@@ -194,7 +194,7 @@ class CostAggregationService
                 ];
             });
 
-        // Residual = kanonische Summe − bereits Mitarbeitern zugeordnete Summe (≥ 0, da topEmployees
+        // Residual = kanonische Summe − bereits Asset-Trägern zugeordnete Summe (≥ 0, da topEmployees
         // eine Teilmenge ist). Landet gesammelt in „Ohne Abteilung", damit nichts still wegfällt.
         $canon = $this->canonicalBuckets($teamId);
         $resHw = round(max(0.0, $canon['hardware']  - (float) $byDept->sum('hardware')), 2);
@@ -221,13 +221,13 @@ class CostAggregationService
      *
      * Aus DERSELBEN Postenliste wie der Pivot (normalizedLines) gruppiert nach cost_center_id (FK, nicht
      * Freitext-String) → reconciled mit den Pivot-Zeilensummen und enthält auch assignee-lose Posten
-     * (Internet/Drucker/BPEvent etc.), die die alte Mitarbeiter-Sicht verschluckt hat. Label via Relation.
+     * (Internet/Drucker/BPEvent etc.), die die alte Asset-Träger-Sicht verschluckt hat. Label via Relation.
      */
     public function byCostCenter(int $teamId): Collection
     {
         $types     = AssetCostType::where('team_id', $teamId)->get()->keyBy('id');
         $centers   = AssetCostCenter::where('team_id', $teamId)->get()->keyBy('id');
-        $empCounts = AssetEmployee::where('team_id', $teamId)
+        $empCounts = AssetHolder::where('team_id', $teamId)
             ->whereNotNull('cost_center_id')
             ->get(['cost_center_id'])
             ->countBy(fn ($e) => (int) $e->cost_center_id);
@@ -318,8 +318,8 @@ class CostAggregationService
             ->get();
         $unusedSavings = $unusedSkus->sum(fn($s) => (float) $s->unit_price * $s->available_units);
 
-        // Hardware bei inaktiven Mitarbeitern
-        $inactiveEmpIds = AssetEmployee::where('team_id', $teamId)
+        // Hardware bei inaktiven Asset-Trägern
+        $inactiveEmpIds = AssetHolder::where('team_id', $teamId)
             ->where('is_active', false)
             ->pluck('id');
         $inactiveWithItems = AssetItem::where('team_id', $teamId)
@@ -385,10 +385,10 @@ class CostAggregationService
                 ]));
         }
 
-        // Kostenstelle je Mitarbeiter (per id + per UPN)
-        $employees    = AssetEmployee::where('team_id', $teamId)->get(['id', 'user_principal_name', 'cost_center_id']);
-        $ccById       = $employees->pluck('cost_center_id', 'id');
-        $ccByUpn      = $employees->pluck('cost_center_id', 'user_principal_name');
+        // Kostenstelle je Asset-Träger (per id + per UPN)
+        $holders    = AssetHolder::where('team_id', $teamId)->get(['id', 'user_principal_name', 'cost_center_id']);
+        $ccById       = $holders->pluck('cost_center_id', 'id');
+        $ccByUpn      = $holders->pluck('cost_center_id', 'user_principal_name');
 
         // 2) hardware_afa
         $afaType = $types->firstWhere('aggregation_source', AssetCostType::SOURCE_HARDWARE_AFA);
@@ -447,12 +447,12 @@ class CostAggregationService
 
     /**
      * Geräte-Kostenposten (virtuell): pro Intune-Gerät der aufgelöste Monatsbetrag (Override → Modell-Default),
-     * die aufgelöste Kostenart (Override → Modell) und die Kostenstelle (Geräte-Override → Mitarbeiter via UPN).
+     * die aufgelöste Kostenart (Override → Modell) und die Kostenstelle (Geräte-Override → Asset-Träger via UPN).
      * Gezählt werden nur Geräte, deren Kostenart aggregation_source='asset_device' hat — das verhindert
      * Doppelzählung (z. B. wenn die alte Laptop-Kostenart von cost_line auf asset_device umgestellt wird,
      * fallen ihre manuellen Importzeilen automatisch aus dem cost_line-Block).
      *
-     * Öffentlich, damit Einzelansichten (z. B. Employees/Show) dieselbe gated, N+1-freie Rechnung
+     * Öffentlich, damit Einzelansichten (z. B. Asset-Träger/Show) dieselbe gated, N+1-freie Rechnung
      * wiederverwenden statt resolvedMonthlyCost() im Loop aufzurufen.
      *
      * @return Collection<int,array{device_id:int, cost_center_id:?int, cost_type_id:int, amount:float, upn:?string}>
@@ -472,7 +472,7 @@ class CostAggregationService
             return $this->deviceCostRowsCache[$teamId] = collect();
         }
 
-        $ccByUpn = AssetEmployee::where('team_id', $teamId)->pluck('cost_center_id', 'user_principal_name');
+        $ccByUpn = AssetHolder::where('team_id', $teamId)->pluck('cost_center_id', 'user_principal_name');
 
         // Katalog + tenant-eigene Modell-Kosten einmal vorladen. Der Resolver kapselt auch die
         // Behandlung von Schlüsselkollisionen (mehrere Modelle → selber normalisierter Key).
@@ -503,10 +503,10 @@ class CostAggregationService
     }
 
     /**
-     * Monatskosten EINES Mitarbeiters, aufgeschlüsselt nach Anzeige-Bucket.
+     * Monatskosten EINES Asset-Trägers, aufgeschlüsselt nach Anzeige-Bucket.
      *
-     * Einzige Quelle der Wahrheit für die Mitarbeiter-Sicht: Employees/Show (Kosten-Sidebar) UND das
-     * Zusammenfassungs-Panel der Liste (Employees/Index) rufen diese Methode → garantiert identische Zahl.
+     * Einzige Quelle der Wahrheit für die Asset-Träger-Sicht: Asset-Träger/Show (Kosten-Sidebar) UND das
+     * Zusammenfassungs-Panel der Liste (Asset-Träger/Index) rufen diese Methode → garantiert identische Zahl.
      * Buckets bewusst wie die Profil-Seite: Hardware-AfA (manuelle Items über assignee_id) + Intune-Geräte
      * (über UPN, gated via deviceCostRows) + MS-Lizenzen (SKU-unit_price). Assignee-gebundene cost_line-Posten
      * sind hier — wie im Profil — NICHT enthalten.
@@ -515,7 +515,7 @@ class CostAggregationService
      *                                        damit Aufrufer mit eigener Geräte-Map keine Doppelberechnung auslösen.
      * @return array{hardware:float, device:float, license:float, total:float}
      */
-    public function employeeCost(int $teamId, AssetEmployee $emp, ?Collection $deviceRows = null): array
+    public function holderCost(int $teamId, AssetHolder $emp, ?Collection $deviceRows = null): array
     {
         $upn        = $emp->user_principal_name;
         $deviceRows ??= $this->deviceCostRows($teamId)->keyBy('device_id');

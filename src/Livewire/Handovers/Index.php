@@ -11,7 +11,7 @@ use Livewire\WithPagination;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceEvent;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetHandover;
 use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Models\AssetHandoverLine;
@@ -35,7 +35,7 @@ class Index extends Component
     public bool  $includeIssued = false; // belegte Geräte (mit offener Ausgabe) im Picker zeigen
 
     // Kopf-Formular
-    public ?int    $fEmployeeId    = null;
+    public ?int    $fHolderId    = null;
     public string  $fIssuedAt      = '';
     public string  $fSignerName    = '';
     public ?string $fSignatureData = null;
@@ -60,7 +60,7 @@ class Index extends Component
     {
         $new      = (bool) request()->boolean('new');
         $deviceId = request()->integer('device') ?: null;
-        $empId    = request()->integer('employee') ?: null;
+        $empId    = request()->integer('holder') ?: null;
 
         if ($new || $deviceId || $empId) {
             $this->startNew($deviceId, $empId);
@@ -88,7 +88,7 @@ class Index extends Component
             if ($device) {
                 $this->fLines = [$this->emptyLine($device->id)];
                 if (! $empId && $device->user_principal_name) {
-                    $assignee = AssetEmployee::where('team_id', $teamId)
+                    $assignee = AssetHolder::where('team_id', $teamId)
                         ->where('user_principal_name', $device->user_principal_name)
                         ->first();
                     $empId = $assignee?->id;
@@ -97,8 +97,8 @@ class Index extends Component
         }
 
         if ($empId) {
-            $emp = AssetEmployee::where('team_id', $teamId)->find($empId);
-            $this->fEmployeeId = $emp?->id;
+            $emp = AssetHolder::where('team_id', $teamId)->find($empId);
+            $this->fHolderId = $emp?->id;
         }
 
         if (empty($this->fLines)) {
@@ -117,7 +117,7 @@ class Index extends Component
 
         $this->resetEditor();
         $this->editId         = $handover->id;
-        $this->fEmployeeId    = $handover->employee_id;
+        $this->fHolderId    = $handover->holder_id;
         $this->fIssuedAt      = $handover->issued_at?->format('Y-m-d') ?? '';
         $this->fSignerName    = $handover->signer_name ?? '';
         $this->fSignatureData = $handover->signature_data;
@@ -181,14 +181,14 @@ class Index extends Component
         $teamId = $this->teamId();
 
         $this->validate([
-            'fEmployeeId'         => ['required', 'integer', Rule::exists('asset_employees', 'id')->where('team_id', $teamId)],
+            'fHolderId'         => ['required', 'integer', Rule::exists('asset_holders', 'id')->where('team_id', $teamId)],
             'fIssuedAt'           => 'nullable|date',
             'fSignerName'         => 'nullable|string|max:255',
             'fNotes'              => 'nullable|string|max:2000',
             'fLines'              => 'required|array|min:1',
             'fLines.*.device_id'  => ['required', 'integer', Rule::exists('asset_devices', 'id')->where('team_id', $teamId)],
         ], [], [
-            'fEmployeeId'        => 'Empfänger',
+            'fHolderId'        => 'Empfänger',
             'fLines.*.device_id' => 'Gerät',
         ]);
 
@@ -199,7 +199,7 @@ class Index extends Component
             return;
         }
 
-        $employee = AssetEmployee::where('team_id', $teamId)->findOrFail($this->fEmployeeId);
+        $holder = AssetHolder::where('team_id', $teamId)->findOrFail($this->fHolderId);
 
         $isNew = $this->editId === null;
         $signatureJustAdded = $this->fSignatureData
@@ -207,11 +207,11 @@ class Index extends Component
 
         $closed = [];
 
-        DB::transaction(function () use ($teamId, $employee, $signatureJustAdded, &$closed) {
+        DB::transaction(function () use ($teamId, $holder, $signatureJustAdded, &$closed) {
             $header = [
                 'team_id'            => $teamId,
-                'tenant_id'          => $employee->tenant_id,
-                'employee_id'        => $employee->id,
+                'tenant_id'          => $holder->tenant_id,
+                'holder_id'        => $holder->id,
                 'issued_at'          => $this->fIssuedAt ?: null,
                 'signer_name'        => $this->fSignerName ?: null,
                 'signature_data'     => $this->fSignatureData ?: null,
@@ -276,7 +276,7 @@ class Index extends Component
                     'device_snapshot' => AssetHandoverLine::captureDeviceSnapshot($device),
                     'status'          => AssetHandoverLine::STATUS_ISSUED,
                 ]);
-                AssetDeviceEvent::record($device, 'issued', 'Ausgegeben an ' . ($employee->display_name ?: $employee->user_principal_name) . ' (Protokoll #' . $handover->id . ')', userId: Auth::id());
+                AssetDeviceEvent::record($device, 'issued', 'Ausgegeben an ' . ($holder->display_name ?: $holder->user_principal_name) . ' (Protokoll #' . $handover->id . ')', userId: Auth::id());
             }
 
             $handover->load('lines');
@@ -358,7 +358,7 @@ class Index extends Component
 
     protected function resetEditor(): void
     {
-        $this->reset(['editId', 'fEmployeeId', 'fSignerName', 'fSignatureData', 'fNotes', 'fLines', 'returningLineId', 'returnCondition']);
+        $this->reset(['editId', 'fHolderId', 'fSignerName', 'fSignatureData', 'fNotes', 'fLines', 'returningLineId', 'returnCondition']);
         $this->fIssuedAt = now()->toDateString();
     }
 
@@ -377,13 +377,13 @@ class Index extends Component
         $teamId = $this->teamId();
 
         $handovers = AssetHandover::where('team_id', $teamId)
-            ->with(['employee', 'lines'])
+            ->with(['holder', 'lines'])
             ->when($this->filterStatus, fn ($q) => $q->where('status', $this->filterStatus))
             ->when($this->search, function ($q) {
                 $term = '%' . $this->search . '%';
                 $q->where(function ($w) use ($term) {
                     $w->where('signer_name', 'like', $term)
-                      ->orWhereHas('employee', fn ($e) => $e->where('display_name', 'like', $term)
+                      ->orWhereHas('holder', fn ($e) => $e->where('display_name', 'like', $term)
                           ->orWhere('user_principal_name', 'like', $term))
                       ->orWhereHas('lines.device', fn ($d) => $d->where('device_name', 'like', $term)
                           ->orWhere('serial_number', 'like', $term));
@@ -405,7 +405,7 @@ class Index extends Component
             ->values()
             ->all();
 
-        $employees = AssetEmployee::where('team_id', $teamId)
+        $holders = AssetHolder::where('team_id', $teamId)
             ->orderByRaw('COALESCE(display_name, user_principal_name)')
             ->get(['id', 'display_name', 'user_principal_name']);
 
@@ -413,7 +413,7 @@ class Index extends Component
             'handovers'     => $handovers,
             'devices'       => $devices,
             'openDeviceIds' => $openDeviceIds,
-            'employees'     => $employees,
+            'holders'     => $holders,
         ])->layout('platform::layouts.app');
     }
 }

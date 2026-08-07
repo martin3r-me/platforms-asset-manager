@@ -5,7 +5,7 @@ namespace Platform\AssetManager\Services;
 use Illuminate\Support\Facades\DB;
 use Platform\AssetManager\Models\AssetCategory;
 use Platform\AssetManager\Models\AssetCostLine;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetItem;
 
 /**
@@ -57,7 +57,7 @@ class CostResetService
                 ->forceDelete();
 
             // 3) Synthetische Funktionskonten (Kostenstellen-Codes, die fälschlich als Träger angelegt wurden)
-            $holders = AssetEmployee::withoutTenantScope()
+            $holders = AssetHolder::withoutTenantScope()
                 ->where('team_id', $teamId)
                 ->where('tenant_id', $tenantId)
                 ->where('user_principal_name', 'like', '%@funktion.import.local')
@@ -70,7 +70,7 @@ class CostResetService
             //    Geräte-/Lizenz-Pivot in „Ohne Kostenstelle" und manuell gepflegte Zuordnungen gehen
             //    verloren. (Die @funktion.import.local-Konten sind in Schritt 3 bereits gelöscht; dieser
             //    Schritt fängt zusätzlich import-markierte Funktionskonten mit abweichender UPN ab.)
-            $clearedCostCenters = AssetEmployee::withoutTenantScope()
+            $clearedCostCenters = AssetHolder::withoutTenantScope()
                 ->where('team_id', $teamId)
                 ->where('tenant_id', $tenantId)
                 ->where(function ($q) {

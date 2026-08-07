@@ -39,7 +39,7 @@ class AssetHandover extends Model
     protected $fillable = [
         'team_id',
         'tenant_id',
-        'employee_id',
+        'holder_id',
         'created_by_user_id',
         'issued_at',
         'signer_name',
@@ -59,9 +59,9 @@ class AssetHandover extends Model
         return $this->hasMany(AssetHandoverLine::class, 'handover_id');
     }
 
-    public function employee(): BelongsTo
+    public function holder(): BelongsTo
     {
-        return $this->belongsTo(AssetEmployee::class, 'employee_id');
+        return $this->belongsTo(AssetHolder::class, 'holder_id');
     }
 
     public function team(): BelongsTo

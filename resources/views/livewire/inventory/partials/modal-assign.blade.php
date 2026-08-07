@@ -1,13 +1,13 @@
-{{-- Zuordnen — manuelles Asset (E2/E7): Mitarbeiter + Gültig ab/bis, keine Signatur-Toggles. --}}
+{{-- Zuordnen — manuelles Asset (E2/E7): Asset-Träger + Gültig ab/bis, keine Signatur-Toggles. --}}
 <x-ui-modal model="showAssign" size="md">
-    <x-slot name="header">Mitarbeiter zuordnen</x-slot>
+    <x-slot name="header">Asset-Träger zuordnen</x-slot>
 
     <div class="space-y-4">
         <div>
-            <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Mitarbeiter</label>
+            <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Asset-Träger</label>
             <x-asset-manager-select size="md" wire:model="aAssigneeId">
                 <option value="">– Niemand (zurück ins Lager) –</option>
-                @foreach($employees as $emp)
+                @foreach($holders as $emp)
                     <option value="{{ $emp->id }}">{{ $emp->name }}</option>
                 @endforeach
             </x-asset-manager-select>

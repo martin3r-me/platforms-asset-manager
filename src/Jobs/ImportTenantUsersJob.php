@@ -3,7 +3,7 @@
 namespace Platform\AssetManager\Jobs;
 
 use Platform\AssetManager\Models\AssetConnectorConfig;
-use Platform\AssetManager\Services\EmployeeService;
+use Platform\AssetManager\Services\HolderService;
 use Platform\AssetManager\Services\IntuneGraphService;
 use Platform\AssetManager\Services\TenantContext;
 use Illuminate\Bus\Queueable;
@@ -36,7 +36,7 @@ class ImportTenantUsersJob implements ShouldQueue
         return $count;
     }
 
-    public function handle(IntuneGraphService $graph, EmployeeService $employees): void
+    public function handle(IntuneGraphService $graph, HolderService $holders): void
     {
         $config = AssetConnectorConfig::where('id', $this->connectorId)
             ->where('enabled', true)
@@ -70,23 +70,23 @@ class ImportTenantUsersJob implements ShouldQueue
         $count = 0;
         foreach ($users as $u) {
             if (empty($u['userPrincipalName'])) continue;
-            $employee = $employees->findOrCreateByUpn(
+            $holder = $holders->findOrCreateByUpn(
                 $teamId,
                 $tenantId,
                 $u['userPrincipalName'],
                 $u['displayName'] ?? null,
                 'graph'
             );
-            if ($employee->source === 'derived') {
-                $employee->source = 'graph';
+            if ($holder->source === 'derived') {
+                $holder->source = 'graph';
             }
 
             // Graph-Profil (department/jobTitle/Rufnummern) anreichern — gemeinsame Precedence-Logik (ADR 0014).
-            $employees->applyGraphProfile($employee, $u);
+            $holders->applyGraphProfile($holder, $u);
 
-            $employee->graph_id  = $u['id'] ?? $employee->graph_id;
-            $employee->synced_at = now();
-            $employee->save();
+            $holder->graph_id  = $u['id'] ?? $holder->graph_id;
+            $holder->synced_at = now();
+            $holder->save();
             $count++;
         }
 

@@ -102,7 +102,7 @@ class CostBootstrap
      *  vendor              Default-Kreditor (Name) oder null
      *  system              HGK|Moss|null  (Buchungssystem)
      *  frequency           monthly|quarterly|yearly|once  (Default für neue Positionen)
-     *  per_employee        true = wird je Mitarbeiter erfasst
+     *  per_employee        true = wird je Asset-Träger erfasst
      *  aggregation_source  cost_line|hardware_afa|ms_license  (woher der Pivot-Wert kommt)
      *  allow_negative      true = negative Beträge erlaubt (Rabatt)
      */

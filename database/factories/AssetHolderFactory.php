@@ -3,14 +3,14 @@
 namespace Platform\AssetManager\Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 
 /**
- * @extends Factory<AssetEmployee>
+ * @extends Factory<AssetHolder>
  */
-class AssetEmployeeFactory extends Factory
+class AssetHolderFactory extends Factory
 {
-    protected $model = AssetEmployee::class;
+    protected $model = AssetHolder::class;
 
     public function definition(): array
     {
@@ -37,13 +37,13 @@ class AssetEmployeeFactory extends Factory
         ];
     }
 
-    /** Inaktiver (ausgeschiedener) Mitarbeiter. */
+    /** Inaktiver (ausgeschiedener) Asset-Träger. */
     public function inactive(): static
     {
         return $this->state(fn () => ['is_active' => false]);
     }
 
-    /** Synthetisches Funktionskonto (kein echter Mitarbeiter). */
+    /** Synthetisches Funktionskonto (kein echter Asset-Träger). */
     public function functionAccount(): static
     {
         return $this->state(fn () => ['account_type' => 'function']);

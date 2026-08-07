@@ -25,7 +25,7 @@
 </head>
 <body>
     @php
-        $emp = $handover->employee;
+        $emp = $handover->holder;
         $recipientName = $emp?->display_name ?: ($emp?->user_principal_name ?? '—');
     @endphp
 

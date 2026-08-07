@@ -60,7 +60,7 @@ class AssetItem extends Model
 
     public function assignee(): BelongsTo
     {
-        return $this->belongsTo(AssetEmployee::class, 'assignee_id');
+        return $this->belongsTo(AssetHolder::class, 'assignee_id');
     }
 
     public function assignments(): HasMany
@@ -109,18 +109,18 @@ class AssetItem extends Model
     /**
      * Setzt den Assignee + passt Status und assigned_at an. Schreibt Historie.
      */
-    public function assignTo(?AssetEmployee $employee, ?string $notes = null): void
+    public function assignTo(?AssetHolder $holder, ?string $notes = null): void
     {
-        if ($employee && $this->assignee_id === $employee->id) return;
+        if ($holder && $this->assignee_id === $holder->id) return;
 
         // Vorherige offene Zuweisung schließen
         $this->assignments()
             ->whereNull('returned_at')
             ->update(['returned_at' => now(), 'updated_at' => now()]);
 
-        if ($employee) {
+        if ($holder) {
             $this->update([
-                'assignee_id' => $employee->id,
+                'assignee_id' => $holder->id,
                 'assigned_at' => now(),
                 'status'      => 'assigned',
             ]);
@@ -128,7 +128,7 @@ class AssetItem extends Model
                 'asset_item_id'   => $this->id,
                 'assignable_type' => AssetAssignment::SUBJECT_ITEM,
                 'assignable_id'   => $this->id,
-                'employee_id'     => $employee->id,
+                'holder_id'     => $holder->id,
                 'assigned_at'     => now(),
                 'notes'           => $notes,
                 'source'          => AssetAssignment::SOURCE_MANUAL,

@@ -75,13 +75,13 @@
                 <x-asset-manager-filter-section title="Zuweisung">
                     <x-asset-manager-select size="sm" wire:model="assigneeId">
                         <option value="">– Niemand (Lager) –</option>
-                        @foreach($employees as $emp)
+                        @foreach($holders as $emp)
                             <option value="{{ $emp->id }}">{{ $emp->name }}</option>
                         @endforeach
                     </x-asset-manager-select>
                     @if($item->assignee)
-                        <a href="{{ route('asset-manager.employees.show', $item->assignee) }}" wire:navigate class="block mt-2 text-[10px] text-[var(--am-accent)] hover:underline">
-                            → Mitarbeiter-Profil ansehen
+                        <a href="{{ route('asset-manager.holders.show', $item->assignee) }}" wire:navigate class="block mt-2 text-[10px] text-[var(--am-accent)] hover:underline">
+                            → Asset-Träger-Profil ansehen
                         </a>
                     @endif
                 </x-asset-manager-filter-section>
@@ -144,9 +144,9 @@
                 @forelse($activities as $a)
                     <div class="p-3 rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm">
                         <div class="flex items-start justify-between gap-2 mb-1.5">
-                            <a href="{{ $a->employee ? route('asset-manager.employees.show', $a->employee) : '#' }}" @if($a->employee) wire:navigate @endif
+                            <a href="{{ $a->holder ? route('asset-manager.holders.show', $a->holder) : '#' }}" @if($a->holder) wire:navigate @endif
                                 class="text-[12px] font-medium text-[var(--am-text-secondary)] hover:text-[var(--am-accent)]">
-                                {{ $a->employee?->name ?? '— gelöscht —' }}
+                                {{ $a->holder?->name ?? '— gelöscht —' }}
                             </a>
                             @if($a->isOpen())
                                 <x-asset-manager-badge color="emerald" size="xs">aktuell</x-asset-manager-badge>

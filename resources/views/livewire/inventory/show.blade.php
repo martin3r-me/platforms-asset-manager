@@ -306,7 +306,7 @@
                         <table class="w-full text-sm">
                             <thead>
                                 <tr class="text-left text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] border-b border-[color:var(--am-border)]">
-                                    <th class="py-2 pr-3">Mitarbeiter</th>
+                                    <th class="py-2 pr-3">Asset-Träger</th>
                                     <th class="py-2 pr-3">Zeitraum</th>
                                     <th class="py-2 pr-3">Quelle</th>
                                     <th class="py-2"></th>
@@ -316,8 +316,8 @@
                                 @foreach($assignments as $a)
                                     <tr>
                                         <td class="py-2 pr-3">
-                                            @if($a->employee)
-                                                <a href="{{ route('asset-manager.employees.show', $a->employee) }}" wire:navigate class="font-medium text-[var(--am-text)] hover:text-[var(--am-accent)]">{{ $a->employee->name }}</a>
+                                            @if($a->holder)
+                                                <a href="{{ route('asset-manager.holders.show', $a->holder) }}" wire:navigate class="font-medium text-[var(--am-text)] hover:text-[var(--am-accent)]">{{ $a->holder->name }}</a>
                                             @else
                                                 <span class="text-[var(--am-text-muted)]">— gelöscht —</span>
                                             @endif
@@ -360,9 +360,9 @@
                     <x-asset-manager-panel title="Verknüpfungen">
                         <ul class="text-sm space-y-2">
                             @if($item && $item->assignee)
-                                <li><a href="{{ route('asset-manager.employees.show', $item->assignee) }}" wire:navigate class="text-[var(--am-accent)] hover:underline">→ Mitarbeiter-Profil ({{ $item->assignee->name }})</a></li>
+                                <li><a href="{{ route('asset-manager.holders.show', $item->assignee) }}" wire:navigate class="text-[var(--am-accent)] hover:underline">→ Asset-Träger-Profil ({{ $item->assignee->name }})</a></li>
                             @elseif($device && $device->assignee)
-                                <li><a href="{{ route('asset-manager.employees.show', $device->assignee) }}" wire:navigate class="text-[var(--am-accent)] hover:underline">→ Mitarbeiter-Profil ({{ $device->assignee->name }})</a></li>
+                                <li><a href="{{ route('asset-manager.holders.show', $device->assignee) }}" wire:navigate class="text-[var(--am-accent)] hover:underline">→ Asset-Träger-Profil ({{ $device->assignee->name }})</a></li>
                             @endif
                             @if($device && $device->deviceModel())
                                 <li class="text-[var(--am-text-secondary)]">Geräte-Modell: <span class="text-[var(--am-text)]">{{ trim($device->deviceModel()->manufacturer . ' ' . $device->deviceModel()->model) }}</span></li>
@@ -397,7 +397,7 @@
                                 @foreach($handoverLines as $line)
                                     <li class="flex items-center justify-between py-2">
                                         <div>
-                                            <span class="font-medium text-[var(--am-text)]">{{ $line->handover?->employee?->name ?? '—' }}</span>
+                                            <span class="font-medium text-[var(--am-text)]">{{ $line->handover?->holder?->name ?? '—' }}</span>
                                             <span class="ml-2 text-xs text-[var(--am-text-muted)]">
                                                 @if($line->returned_at) zurückgegeben am {{ $line->returned_at->format('d.m.Y') }} @else offen @endif
                                             </span>

@@ -24,7 +24,7 @@ class AssetAssignment extends Model
         'asset_item_id',
         'assignable_type',
         'assignable_id',
-        'employee_id',
+        'holder_id',
         'assigned_at',
         'returned_at',
         'notes',
@@ -73,8 +73,8 @@ class AssetAssignment extends Model
             }
         }
 
-        if ($this->employee_id) {
-            $tenantId = AssetEmployee::withoutTenantScope()->whereKey($this->employee_id)->value('tenant_id');
+        if ($this->holder_id) {
+            $tenantId = AssetHolder::withoutTenantScope()->whereKey($this->holder_id)->value('tenant_id');
             if ($tenantId !== null) {
                 return (int) $tenantId;
             }
@@ -94,9 +94,9 @@ class AssetAssignment extends Model
         return $this->belongsTo(AssetDevice::class, 'assignable_id');
     }
 
-    public function employee(): BelongsTo
+    public function holder(): BelongsTo
     {
-        return $this->belongsTo(AssetEmployee::class, 'employee_id');
+        return $this->belongsTo(AssetHolder::class, 'holder_id');
     }
 
     /** Das zugeordnete Objekt (Item oder Gerät) gemäß Diskriminator. */

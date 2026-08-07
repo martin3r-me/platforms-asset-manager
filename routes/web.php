@@ -12,8 +12,8 @@ use Platform\AssetManager\Livewire\Assets\Create as AssetsCreate;
 use Platform\AssetManager\Livewire\Assets\Show as AssetsShow;
 use Platform\AssetManager\Livewire\Inventory\Index as InventoryIndex;
 use Platform\AssetManager\Livewire\Inventory\Show as InventoryShow;
-use Platform\AssetManager\Livewire\Employees\Index as EmployeesIndex;
-use Platform\AssetManager\Livewire\Employees\Show as EmployeesShow;
+use Platform\AssetManager\Livewire\Holders\Index as HoldersIndex;
+use Platform\AssetManager\Livewire\Holders\Show as HoldersShow;
 use Platform\AssetManager\Livewire\Costs\Dashboard as CostsDashboard;
 use Platform\AssetManager\Livewire\Costs\Allocation as CostsAllocation;
 use Platform\AssetManager\Livewire\Costs\Import as CostsImport;
@@ -57,8 +57,16 @@ Route::get('/assets/create', fn () => redirect()->route('asset-manager.inventory
 // Redirect erhält Bookmarks/route()-Aufrufe; {item} ist die ID (kein Model-Binding im Closure).
 Route::get('/assets/{item}', fn ($item) => redirect()->route('asset-manager.inventory.show', ['type' => 'manual', 'id' => $item]))->name('asset-manager.assets.show');
 
-Route::get('/employees', EmployeesIndex::class)->name('asset-manager.employees.index');
-Route::get('/employees/{employee}', EmployeesShow::class)->name('asset-manager.employees.show');
+// Asset-Träger (ADR 0017). Die alten /employees-Routen leiten weiter — Muster wie devices.show,
+// damit Bookmarks und bestehende route()-Aufrufe nicht brechen. Die Redirect-Routen behalten ihre
+// alten NAMEN, sonst müsste jeder route('asset-manager.employees.*')-Aufruf im selben Zug fallen.
+Route::get('/holders', HoldersIndex::class)->name('asset-manager.holders.index');
+Route::get('/holders/{holder}', HoldersShow::class)->name('asset-manager.holders.show');
+
+Route::get('/employees', fn () => redirect()->route('asset-manager.holders.index'))
+    ->name('asset-manager.employees.index');
+Route::get('/employees/{holder}', fn ($holder) => redirect()->route('asset-manager.holders.show', ['holder' => $holder]))
+    ->name('asset-manager.employees.show');
 
 // Geräteausgaben (Übergabeprotokolle): globale Liste + PDF-Protokoll.
 Route::get('/handovers', HandoversIndex::class)->name('asset-manager.handovers.index');

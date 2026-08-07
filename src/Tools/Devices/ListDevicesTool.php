@@ -15,7 +15,7 @@ use Platform\Core\Tools\Concerns\HasStandardGetOperations;
 
 /**
  * Listet Intune-Geräte des aktiven Teams inkl. aufgelöster Monatskosten, Kostenquelle
- * (override/model/none) und zugeordnetem Mitarbeiter.
+ * (override/model/none) und zugeordnetem Asset-Träger.
  */
 class ListDevicesTool implements ToolContract, ToolMetadataContract
 {

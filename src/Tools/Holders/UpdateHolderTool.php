@@ -1,10 +1,10 @@
 <?php
 
-namespace Platform\AssetManager\Tools\Employees;
+namespace Platform\AssetManager\Tools\Holders;
 
 use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetCostCenter;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Services\CostBootstrapService;
 use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
@@ -15,22 +15,22 @@ use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 
 /**
- * Einzel-Update eines Mitarbeiters (Kostenstelle, Abteilung, Aktiv-Status, Jobtitel, Kontotyp).
- * Für Massenänderungen der Kostenstelle → asset-manager.employees.cost-center.bulk.PUT.
+ * Einzel-Update eines Asset-Trägers (Kostenstelle, Abteilung, Aktiv-Status, Jobtitel, Kontotyp).
+ * Für Massenänderungen der Kostenstelle → asset-manager.holders.cost-center.bulk.PUT.
  */
-class UpdateEmployeeTool implements ToolContract, ToolMetadataContract
+class UpdateHolderTool implements ToolContract, ToolMetadataContract
 {
     use ResolvesTeam;
     use ResolvesTenant;
 
     public function getName(): string
     {
-        return 'asset-manager.employee.PUT';
+        return 'asset-manager.holder.PUT';
     }
 
     public function getDescription(): string
     {
-        return 'PUT /asset-manager/employee - Aktualisiert EINEN Mitarbeiter (per id ODER '
+        return 'PUT /asset-manager/employee - Aktualisiert EINEN Asset-Träger (per id ODER '
             . 'user_principal_name). Optionale Felder: cost_center (Kostenstellen-Code; setzt Code + '
             . 'cost_center_id konsistent; "" leert die Zuordnung), department, is_active (boolean), '
             . 'job_title, account_type ("function" für Funktionskonten). Unbekannter Kostenstellen-Code '
@@ -42,7 +42,7 @@ class UpdateEmployeeTool implements ToolContract, ToolMetadataContract
         return [
             'type'       => 'object',
             'properties' => array_merge([
-                'id'                  => ['type' => 'integer', 'description' => 'Mitarbeiter-ID (alternativ zu user_principal_name).'],
+                'id'                  => ['type' => 'integer', 'description' => 'Asset-Träger-ID (alternativ zu user_principal_name).'],
                 'user_principal_name' => ['type' => 'string', 'description' => 'UPN (alternativ zu id).'],
                 'cost_center'         => ['type' => 'string', 'description' => 'Kostenstellen-Code (z.B. "2599"). "" zum Leeren.'],
                 'department'          => ['type' => 'string', 'description' => 'Abteilung.'],
@@ -77,7 +77,7 @@ class UpdateEmployeeTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('ACCESS_DENIED', 'Diese Aktion erfordert die Rolle Owner oder Admin im Team.');
             }
 
-            $query = AssetEmployee::where('team_id', $teamId);
+            $query = AssetHolder::where('team_id', $teamId);
             if (!empty($arguments['id'])) {
                 $query->where('id', (int) $arguments['id']);
             } elseif (!empty($arguments['user_principal_name'])) {
@@ -86,10 +86,10 @@ class UpdateEmployeeTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('VALIDATION_ERROR', 'Bitte id ODER user_principal_name angeben.');
             }
 
-            /** @var AssetEmployee|null $emp */
+            /** @var AssetHolder|null $emp */
             $emp = $query->first();
             if (!$emp) {
-                return ToolResult::error('NOT_FOUND', 'Mitarbeiter nicht gefunden.');
+                return ToolResult::error('NOT_FOUND', 'Asset-Träger nicht gefunden.');
             }
 
             // Kostenstelle (setzt cost_center-Code UND cost_center_id konsistent)
@@ -134,15 +134,15 @@ class UpdateEmployeeTool implements ToolContract, ToolMetadataContract
                 'is_active'         => (bool) $emp->is_active,
                 'job_title'         => $emp->job_title,
                 'account_type'      => $emp->account_type,
-                'message'           => "Mitarbeiter '{$emp->name}' aktualisiert.",
+                'message'           => "Asset-Träger '{$emp->name}' aktualisiert.",
             ]);
         } catch (\Throwable $e) {
-            return ToolResult::error('EXECUTION_ERROR', 'Fehler beim Aktualisieren des Mitarbeiters: ' . $e->getMessage());
+            return ToolResult::error('EXECUTION_ERROR', 'Fehler beim Aktualisieren des Asset-Trägers: ' . $e->getMessage());
         }
     }
 
     public function getMetadata(): array
     {
-        return ['read_only' => false, 'risk_level' => 'write', 'tags' => ['asset-manager', 'employee']];
+        return ['read_only' => false, 'risk_level' => 'write', 'tags' => ['asset-manager', 'holder']];
     }
 }

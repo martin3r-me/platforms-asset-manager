@@ -7,7 +7,7 @@ use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetLicenseSyncLog;
 use Platform\AssetManager\Models\AssetUserLicense;
 use Platform\AssetManager\Concerns\RunsTeamSync;
-use Platform\AssetManager\Services\EmployeeService;
+use Platform\AssetManager\Services\HolderService;
 use Platform\AssetManager\Services\IntuneGraphService;
 use Platform\AssetManager\Services\TenantContext;
 use Illuminate\Bus\Queueable;
@@ -73,7 +73,7 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
         return $count;
     }
 
-    public function handle(IntuneGraphService $service, EmployeeService $employeeService): void
+    public function handle(IntuneGraphService $service, HolderService $holderService): void
     {
         $config = AssetConnectorConfig::where('id', $this->connectorId)
             ->where('enabled', true)
@@ -167,8 +167,8 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
 
                 if (!$upn) continue;
 
-                // Employee aus Graph-User-Daten anlegen/aktualisieren (tenant-skopiert)
-                $employee = $employeeService->findOrCreateByUpn(
+                // Asset-Träger aus Graph-User-Daten anlegen/aktualisieren (tenant-skopiert)
+                $holder = $holderService->findOrCreateByUpn(
                     $this->teamId,
                     $this->tenantId,
                     $upn,
@@ -176,14 +176,14 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
                     'graph'
                 );
                 // Wenn Sync von Graph kommt, source nachträglich auf 'graph' upgrade
-                if ($employee->source === 'derived') {
-                    $employee->source = 'graph';
+                if ($holder->source === 'derived') {
+                    $holder->source = 'graph';
                 }
-                $employee->synced_at = now();
+                $holder->synced_at = now();
                 // Graph-Profil (department/jobTitle/Rufnummern) beim REGULÄREN Sync mitziehen — gemeinsame
                 // Precedence-Logik (ADR 0014), damit die Anreicherung nicht nur am manuellen User-Import hängt.
-                $employeeService->applyGraphProfile($employee, $user);
-                $employee->save();
+                $holderService->applyGraphProfile($holder, $user);
+                $holder->save();
 
                 foreach (($user['assignedLicenses'] ?? []) as $license) {
                     $skuId = $license['skuId'] ?? null;
@@ -242,7 +242,7 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
             });
 
             // Safety-Net: alle UPNs aus Bestandsdaten nachziehen
-            $employeeService->backfillForTenant($this->teamId, $this->tenantId);
+            $holderService->backfillForTenant($this->teamId, $this->tenantId);
 
             Log::info('AssetManager: Lizenz-Sync erfolgreich', [
                 'connector_id' => $this->connectorId,

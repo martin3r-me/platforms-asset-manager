@@ -30,7 +30,7 @@ class GetDeviceTool implements ToolContract, ToolMetadataContract
     {
         return 'GET /asset-manager/device - Detail eines Intune-Geräts per id. Zeigt die '
             . 'Kosten-Auflösungskette (Geräte-Override vs. Modell-Default), das gematchte Geräte-Modell, '
-            . 'den zugeordneten Mitarbeiter und Kostenstelle/Kostenart.';
+            . 'den zugeordneten Asset-Träger und Kostenstelle/Kostenart.';
     }
 
     public function getSchema(): array

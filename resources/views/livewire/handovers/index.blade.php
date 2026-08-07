@@ -59,13 +59,13 @@
                         {{-- Empfänger --}}
                         <div>
                             <label class="block text-xs text-[var(--am-text-secondary)] mb-1">Empfänger *</label>
-                            <x-asset-manager-select size="md" wire:model="fEmployeeId">
+                            <x-asset-manager-select size="md" wire:model="fHolderId">
                                 <option value="">– wählen –</option>
-                                @foreach($employees as $e)
+                                @foreach($holders as $e)
                                     <option value="{{ $e->id }}">{{ $e->display_name ?: $e->user_principal_name }}</option>
                                 @endforeach
                             </x-asset-manager-select>
-                            @error('fEmployeeId')<span class="text-[10px] text-red-700">{{ $message }}</span>@enderror
+                            @error('fHolderId')<span class="text-[10px] text-red-700">{{ $message }}</span>@enderror
                         </div>
 
                         <div>
@@ -244,7 +244,7 @@
                             @foreach($handovers as $h)
                                 <tr wire:key="ho-{{ $h->id }}" wire:click="edit({{ $h->id }})"
                                     class="cursor-pointer transition-colors {{ $editId === $h->id ? 'bg-[var(--am-accent-surface)] shadow-[inset_3px_0_0_var(--am-accent)]' : 'hover:bg-[var(--am-bg)]' }}">
-                                    <td class="px-4 py-2.5 font-medium text-[var(--am-text)]">{{ $h->employee?->display_name ?: ($h->employee?->user_principal_name ?? '—') }}</td>
+                                    <td class="px-4 py-2.5 font-medium text-[var(--am-text)]">{{ $h->holder?->display_name ?: ($h->holder?->user_principal_name ?? '—') }}</td>
                                     <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">
                                         @php $names = $h->lines->map(fn($l) => $l->deviceName()); @endphp
                                         {{ $names->take(2)->implode(', ') }}@if($names->count() > 2) +{{ $names->count() - 2 }}@endif

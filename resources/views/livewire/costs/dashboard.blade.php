@@ -23,7 +23,7 @@
             <div class="p-4 space-y-2 bg-[var(--am-bg)]" x-data="{ section: 'overview' }">
                 @foreach([
                     ['key' => 'overview',   'label' => 'Übersicht',           'icon' => 'heroicon-o-squares-2x2'],
-                    ['key' => 'employees',  'label' => 'Top Mitarbeiter',     'icon' => 'heroicon-o-trophy'],
+                    ['key' => 'holders',  'label' => 'Top Asset-Träger',     'icon' => 'heroicon-o-trophy'],
                     ['key' => 'department', 'label' => 'Abteilung',           'icon' => 'heroicon-o-building-office'],
                     ['key' => 'costcenter', 'label' => 'Kostenstelle',        'icon' => 'heroicon-o-clipboard-document-list'],
                     ['key' => 'category',   'label' => 'Hardware-Kategorien', 'icon' => 'heroicon-o-cube-transparent'],
@@ -70,7 +70,7 @@
                         <h3 class="text-[11px] font-semibold text-[var(--am-text-secondary)]">Hardware bei Inaktiven</h3>
                     </div>
                     <div class="text-lg font-semibold text-red-600 tabular-nums">{{ $anomalies['inactive_employees']['count'] }}</div>
-                    <div class="text-[10px] text-[var(--am-text-muted)]">Items zugewiesen an inaktive Mitarbeiter — {{ number_format($anomalies['inactive_employees']['monthly'], 2, ',', '.') }} € / Monat. Rückgabe einleiten.</div>
+                    <div class="text-[10px] text-[var(--am-text-muted)]">Items zugewiesen an inaktive Asset-Träger — {{ number_format($anomalies['inactive_employees']['monthly'], 2, ',', '.') }} € / Monat. Rückgabe einleiten.</div>
                 </div>
 
             </div>
@@ -116,12 +116,12 @@
 
             {{-- TOP MITARBEITER --}}
             <section id="section-employees" class="space-y-3 scroll-mt-4">
-                <h2 class="text-sm font-semibold text-[var(--am-text)]">Top 10 Mitarbeiter nach Monatskosten</h2>
+                <h2 class="text-sm font-semibold text-[var(--am-text)]">Top 10 Asset-Träger nach Monatskosten</h2>
 
                 <x-asset-manager-panel body-class="p-0">
-                    @if($topEmployees->isEmpty())
+                    @if($topHolders->isEmpty())
                         <div class="p-8 text-center text-sm text-[var(--am-text-secondary)]">
-                            Keine Mitarbeiter mit Kostendaten gefunden.
+                            Keine Asset-Träger mit Kostendaten gefunden.
                             <div class="text-xs text-[var(--am-text-muted)] mt-1">Hinweis: Pflege bei Assets <strong>Kaufpreis + AfA-Monate</strong> und bei Lizenz-SKUs den <strong>Stückpreis</strong>, damit hier etwas erscheint.</div>
                         </div>
                     @else
@@ -129,7 +129,7 @@
                         <table class="w-full text-sm">
                             <thead>
                                 <tr class="bg-[var(--am-bg)]">
-                                    <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Mitarbeiter</th>
+                                    <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Asset-Träger</th>
                                     <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Abteilung</th>
                                     <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Hardware</th>
                                     <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Lizenzen</th>
@@ -138,18 +138,18 @@
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-[color:var(--am-border)]">
-                                @php $maxTotal = $topEmployees->max('total'); @endphp
-                                @foreach($topEmployees as $row)
+                                @php $maxTotal = $topHolders->max('total'); @endphp
+                                @foreach($topHolders as $row)
                                     <tr class="hover:bg-[var(--am-bg)]">
                                         <td class="px-5 py-3">
-                                            <a href="{{ route('asset-manager.employees.show', $row['employee']) }}" wire:navigate class="flex items-center gap-2 hover:text-[var(--am-accent)]">
+                                            <a href="{{ route('asset-manager.holders.show', $row['holder']) }}" wire:navigate class="flex items-center gap-2 hover:text-[var(--am-accent)]">
                                                 <div class="w-7 h-7 rounded-full bg-[var(--am-accent-surface)] text-[var(--am-accent)] flex items-center justify-center text-[10px] font-semibold flex-shrink-0">
-                                                    {{ $row['employee']->initials() }}
+                                                    {{ $row['holder']->initials() }}
                                                 </div>
-                                                <span class="font-medium text-[var(--am-text)]">{{ $row['employee']->name }}</span>
+                                                <span class="font-medium text-[var(--am-text)]">{{ $row['holder']->name }}</span>
                                             </a>
                                         </td>
-                                        <td class="px-5 py-3 text-xs text-[var(--am-text-secondary)]">{{ $row['employee']->department ?? '—' }}</td>
+                                        <td class="px-5 py-3 text-xs text-[var(--am-text-secondary)]">{{ $row['holder']->department ?? '—' }}</td>
                                         <td class="px-5 py-3 text-right text-sm tabular-nums text-sky-700">{{ number_format($row['hardware'], 2, ',', '.') }} €</td>
                                         <td class="px-5 py-3 text-right text-sm tabular-nums text-emerald-700">{{ number_format($row['licenses'], 2, ',', '.') }} €</td>
                                         <td class="px-5 py-3 text-right text-sm font-semibold tabular-nums text-[var(--am-text)]">{{ number_format($row['total'], 2, ',', '.') }} €</td>
@@ -170,13 +170,13 @@
             {{-- ABTEILUNG --}}
             <section id="section-department" class="space-y-3 scroll-mt-4">
                 <h2 class="text-sm font-semibold text-[var(--am-text)]">Kosten pro Abteilung</h2>
-                @include('asset-manager::livewire.costs._aggregation-table', ['rows' => $byDepartment, 'emptyHint' => 'Pflege Abteilungen in den Mitarbeiter-Profilen, damit hier eine Aggregation entsteht.'])
+                @include('asset-manager::livewire.costs._aggregation-table', ['rows' => $byDepartment, 'emptyHint' => 'Pflege Abteilungen in den Asset-Träger-Profilen, damit hier eine Aggregation entsteht.'])
             </section>
 
             {{-- KOSTENSTELLE --}}
             <section id="section-costcenter" class="space-y-3 scroll-mt-4">
                 <h2 class="text-sm font-semibold text-[var(--am-text)]">Kosten pro Kostenstelle</h2>
-                @include('asset-manager::livewire.costs._aggregation-table', ['rows' => $byCostCenter, 'emptyHint' => 'Pflege Kostenstellen in den Mitarbeiter-Profilen für diese Aggregation.'])
+                @include('asset-manager::livewire.costs._aggregation-table', ['rows' => $byCostCenter, 'emptyHint' => 'Pflege Kostenstellen in den Asset-Träger-Profilen für diese Aggregation.'])
             </section>
 
             {{-- KATEGORIE --}}
@@ -276,7 +276,7 @@
                         </div>
                         <div class="text-2xl font-semibold text-red-700 tabular-nums">{{ $anomalies['inactive_employees']['count'] }}</div>
                         <div class="text-xs text-[var(--am-text-secondary)] mt-1">Items, {{ number_format($anomalies['inactive_employees']['monthly'], 2, ',', '.') }} € / Monat</div>
-                        <a href="{{ route('asset-manager.employees.index') }}" wire:navigate class="text-xs text-[var(--am-accent)] hover:underline mt-2 inline-block">→ Mitarbeiter prüfen</a>
+                        <a href="{{ route('asset-manager.holders.index') }}" wire:navigate class="text-xs text-[var(--am-accent)] hover:underline mt-2 inline-block">→ Asset-Träger prüfen</a>
                     </div>
                 </div>
             </section>

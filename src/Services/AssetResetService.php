@@ -14,7 +14,7 @@ use Platform\AssetManager\Models\AssetDeviceEvent;
 use Platform\AssetManager\Models\AssetDeviceModel;
 use Platform\AssetManager\Models\AssetDeviceSource;
 use Platform\AssetManager\Models\AssetDeviceSyncLog;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetHandover;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetLicenseSku;
@@ -24,7 +24,7 @@ use Platform\AssetManager\Models\AssetVendor;
 
 /**
  * Setzt ein Team vollständig auf null zurück: löscht **alle fachlichen Einträge** (Inventar, Geräte,
- * Mitarbeiter, Zuordnungen, Ausgaben, Kostenzeilen, Lizenzen, Historie und team-eigene Stammdaten).
+ * Asset-Träger, Zuordnungen, Ausgaben, Kostenzeilen, Lizenzen, Historie und team-eigene Stammdaten).
  *
  * Bewusst **nicht** angefasst (die „Anbindung" bleibt, damit Intune/Azure nicht neu eingerichtet werden muss):
  *   - asset_tenants, asset_connector_configs, asset_tenant_selections — die Intune-/Azure-Anbindung
@@ -90,7 +90,7 @@ class AssetResetService
             $licenseSkus  = AssetLicenseSku::withoutTenantScope()->where('team_id', $teamId)->delete();
 
             // 6) Asset-Träger (ADR 0017).
-            $holders = AssetEmployee::withoutTenantScope()->where('team_id', $teamId)->delete();
+            $holders = AssetHolder::withoutTenantScope()->where('team_id', $teamId)->delete();
 
             // 7) Team-eigene Stammdaten (untereinander nur nullOnDelete-FKs → Reihenfolge unkritisch).
             $deviceModels = AssetDeviceModel::where('team_id', $teamId)->delete();

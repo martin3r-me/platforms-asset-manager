@@ -21,7 +21,7 @@ use Platform\AssetManager\Models\AssetAssignment;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceEvent;
 use Platform\AssetManager\Models\AssetDeviceSource;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetTenant;
 use Platform\AssetManager\Services\IntuneGraphService;
 use Platform\Core\Models\Team;
@@ -197,11 +197,11 @@ class SerialIdentityTest extends TestCase
         SyncIntuneDevicesJob::dispatchSync($connector->id);
 
         $device = AssetDevice::where('tenant_id', $tenant->id)->where('serial_number', 'SN-ASG-1')->firstOrFail();
-        $empA   = AssetEmployee::where('tenant_id', $tenant->id)->where('user_principal_name', 'a@example.test')->firstOrFail();
+        $empA   = AssetHolder::where('tenant_id', $tenant->id)->where('user_principal_name', 'a@example.test')->firstOrFail();
 
         $open = AssetAssignment::where('assignable_type', 'device')->where('assignable_id', $device->id)->whereNull('returned_at')->get();
         $this->assertCount(1, $open, 'Eine offene Geräte-Zuordnung nach Erstsync.');
-        $this->assertSame($empA->id, $open->first()->employee_id);
+        $this->assertSame($empA->id, $open->first()->holder_id);
         $this->assertSame('intune', $open->first()->source);
 
         // Folgesync: gleiche Serial, NEUE intune_id (Re-Enrollment) + neuer Nutzer B.
@@ -211,15 +211,15 @@ class SerialIdentityTest extends TestCase
         ]]);
         SyncIntuneDevicesJob::dispatchSync($connector->id);
 
-        $empB = AssetEmployee::where('tenant_id', $tenant->id)->where('user_principal_name', 'b@example.test')->firstOrFail();
+        $empB = AssetHolder::where('tenant_id', $tenant->id)->where('user_principal_name', 'b@example.test')->firstOrFail();
 
         // A geschlossen, B offen — auf derselben Geräte-Zeile.
         $this->assertNotNull(
-            AssetAssignment::where('assignable_id', $device->id)->where('employee_id', $empA->id)->value('returned_at'),
+            AssetAssignment::where('assignable_id', $device->id)->where('holder_id', $empA->id)->value('returned_at'),
             'A-Zuordnung wurde beim Nutzerwechsel geschlossen.'
         );
         $openNow = AssetAssignment::where('assignable_type', 'device')->where('assignable_id', $device->id)->whereNull('returned_at')->get();
         $this->assertCount(1, $openNow, 'Genau eine offene Zuordnung (B).');
-        $this->assertSame($empB->id, $openNow->first()->employee_id);
+        $this->assertSame($empB->id, $openNow->first()->holder_id);
     }
 }

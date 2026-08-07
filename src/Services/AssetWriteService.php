@@ -5,7 +5,7 @@ namespace Platform\AssetManager\Services;
 use Platform\AssetManager\Models\AssetAssignment;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceEvent;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetItem;
 
 /**
@@ -22,7 +22,7 @@ use Platform\AssetManager\Models\AssetItem;
 class AssetWriteService
 {
     /**
-     * Legt ein manuelles Asset an (+ erste Zuordnung, falls ein Mitarbeiter gesetzt ist).
+     * Legt ein manuelles Asset an (+ erste Zuordnung, falls ein Asset-Träger gesetzt ist).
      * Quelle: vormals Livewire\Assets\Create::save(). Gate/Validierung liegen beim Aufrufer.
      *
      * @param array{
@@ -35,7 +35,7 @@ class AssetWriteService
     {
         $assigneeId = $data['assigneeId'] ?? null;
 
-        // Mitarbeiter gesetzt → Status auf „assigned" forcieren + Zuordnungs-Zeitpunkt setzen.
+        // Asset-Träger gesetzt → Status auf „assigned" forcieren + Zuordnungs-Zeitpunkt setzen.
         $status     = $assigneeId ? 'assigned' : ($data['status'] ?? 'in_stock');
         $assignedAt = $assigneeId ? now()      : null;
 
@@ -62,7 +62,7 @@ class AssetWriteService
                 'asset_item_id'   => $item->id,
                 'assignable_type' => AssetAssignment::SUBJECT_ITEM,
                 'assignable_id'   => $item->id,
-                'employee_id'     => $assigneeId,
+                'holder_id'     => $assigneeId,
                 'assigned_at'     => now(),
                 'source'          => AssetAssignment::SOURCE_MANUAL,
             ]);
@@ -114,19 +114,19 @@ class AssetWriteService
     }
 
     /**
-     * Manuelles Asset einem Mitarbeiter zuordnen (oder ins Lager zurück bei $employee=null).
+     * Manuelles Asset einem Asset-Träger zuordnen (oder ins Lager zurück bei $holder=null).
      * Schließt die offene Zuordnung und schreibt Historie — wie {@see AssetItem::assignTo()}, aber
-     * mit optional wählbarem Zeitraum (Gültig ab/bis, E7). $employee MUSS vom Caller team-geprüft sein.
+     * mit optional wählbarem Zeitraum (Gültig ab/bis, E7). $holder MUSS vom Caller team-geprüft sein.
      */
-    public function assignItem(AssetItem $item, ?AssetEmployee $employee, ?string $validFrom = null, ?string $validUntil = null): void
+    public function assignItem(AssetItem $item, ?AssetHolder $holder, ?string $validFrom = null, ?string $validUntil = null): void
     {
         // Vorherige offene Zuordnung schließen (Rückgabe = jetzt).
         $item->assignments()->whereNull('returned_at')->update(['returned_at' => now(), 'updated_at' => now()]);
 
-        if ($employee) {
+        if ($holder) {
             $assignedAt = $validFrom ?: now();
             $item->update([
-                'assignee_id' => $employee->id,
+                'assignee_id' => $holder->id,
                 'assigned_at' => $assignedAt,
                 'status'      => 'assigned',
             ]);
@@ -134,7 +134,7 @@ class AssetWriteService
                 'asset_item_id'   => $item->id,
                 'assignable_type' => AssetAssignment::SUBJECT_ITEM,
                 'assignable_id'   => $item->id,
-                'employee_id'     => $employee->id,
+                'holder_id'     => $holder->id,
                 'assigned_at'     => $assignedAt,
                 'returned_at'     => $validUntil ?: null,
                 'source'          => AssetAssignment::SOURCE_MANUAL,

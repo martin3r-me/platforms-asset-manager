@@ -35,7 +35,7 @@ die Package-Factories findet:
 
 1. **PSR-4-Mapping** in `composer.json` des Moduls:
    `"Platform\\AssetManager\\Database\\Factories\\": "database/factories/"`.
-2. Jedes der sechs Kern-Modelle (`AssetEmployee`, `AssetDevice`, `AssetCostLine`, `AssetCostType`,
+2. Jedes der sechs Kern-Modelle (`AssetHolder`, `AssetDevice`, `AssetCostLine`, `AssetCostType`,
    `AssetCostCenter`, `AssetTenant`) bindet `HasFactory` ein und hat einen `newFactory()`-Resolver,
    der die zugehörige `…Factory` zurückgibt (statt Laravels Default-Namens-Auflösung
    `Database\Factories\<Model>Factory`, die für ein Package nicht greift).

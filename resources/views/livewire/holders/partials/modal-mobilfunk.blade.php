@@ -1,4 +1,4 @@
-{{-- Mobilfunk-Stammdaten am Mitarbeiter bearbeiten (ADR 0014). Rufnummern kommen aus Entra, außer manuell übersteuert. --}}
+{{-- Mobilfunk-Stammdaten am Asset-Träger bearbeiten (ADR 0014). Rufnummern kommen aus Entra, außer manuell übersteuert. --}}
 <x-ui-modal model="showMobilfunk" size="lg">
     <x-slot name="header">Mobilfunk bearbeiten</x-slot>
 

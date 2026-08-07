@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Platform\AssetManager\Models\AssetCategory;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetItem;
 
 class Show extends Component
@@ -58,7 +58,7 @@ class Show extends Component
             'serialNumber'       => 'nullable|string|max:255',
             // Assignee MUSS zum Team des Items gehören (sonst danglende cross-team FK +
             // Fremd-Namens-Leak über die ungescopte belongsTo-Relation). Vorbild: Assets/Create.php.
-            'assigneeId'         => ['nullable', 'integer', Rule::exists('asset_employees', 'id')->where('team_id', $this->item->team_id)],
+            'assigneeId'         => ['nullable', 'integer', Rule::exists('asset_holders', 'id')->where('team_id', $this->item->team_id)],
             'status'             => 'required|in:in_stock,assigned,retired,lost',
             'categoryId'         => 'required|exists:asset_categories,id',
             'purchaseDate'       => 'nullable|date',
@@ -92,10 +92,10 @@ class Show extends Component
 
         // Bei Assignee-Wechsel: Historie schreiben
         if ($this->assigneeId !== $this->item->assignee_id) {
-            $employee = $this->assigneeId
-                ? AssetEmployee::where('team_id', $this->item->team_id)->find($this->assigneeId)
+            $holder = $this->assigneeId
+                ? AssetHolder::where('team_id', $this->item->team_id)->find($this->assigneeId)
                 : null;
-            $this->item->assignTo($employee);
+            $this->item->assignTo($holder);
             // assignTo hat schon gespeichert — wir holen das Item frisch
             $this->item->refresh();
             // Restliche Felder noch updaten
@@ -129,7 +129,7 @@ class Show extends Component
         $teamId = $this->item->team_id;
 
         $activities = $this->item->assignments()
-            ->with('employee')
+            ->with('holder')
             ->orderByDesc('assigned_at')
             ->limit(10)
             ->get();
@@ -137,7 +137,7 @@ class Show extends Component
         return view('asset-manager::livewire.assets.show', [
             'item'       => $this->item,
             'categories' => AssetCategory::orderBy('sort_order')->get(),
-            'employees'  => AssetEmployee::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get(),
+            'holders'  => AssetHolder::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get(),
             'activities' => $activities,
         ])->layout('platform::layouts.app');
     }

@@ -6,7 +6,7 @@
     <x-slot name="actionbar">
         <x-asset-manager-page-actionbar :breadcrumbs="[
             ['label' => 'Asset Manager', 'href' => route('asset-manager.dashboard'), 'icon' => 'cube'],
-            ['label' => 'Mitarbeiter', 'icon' => 'users'],
+            ['label' => 'Asset-Träger', 'icon' => 'users'],
         ]">
             <x-slot name="actions">
             </x-slot>
@@ -91,13 +91,13 @@
         </x-ui-page-sidebar>
     </x-slot>
 
-    {{-- RECHTS: Zusammenfassungs-Panel zum gewählten Mitarbeiter --}}
+    {{-- RECHTS: Zusammenfassungs-Panel zum gewählten Asset-Träger --}}
     <x-slot name="activity">
-        <x-ui-page-sidebar title="Mitarbeiter" icon="heroicon-o-user" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
+        <x-ui-page-sidebar title="Asset-Träger" icon="heroicon-o-user" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
             <div class="p-4 space-y-3 bg-[var(--am-bg)]">
-                @if($selectedEmployee)
+                @if($selectedHolder)
                     <div class="flex items-center justify-between pb-2 border-b border-[color:var(--am-border)]">
-                        <span class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">Mitarbeiter</span>
+                        <span class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">Asset-Träger</span>
                         <button wire:click="clearSelection" class="text-[10px] text-[var(--am-text-muted)] hover:text-red-500">
                             @svg('heroicon-o-x-mark', 'w-3 h-3 inline -mt-0.5')
                             Schließen
@@ -108,16 +108,16 @@
                     <section class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-3">
                         <div class="flex items-center gap-3">
                             <div class="w-10 h-10 rounded-full bg-[var(--am-accent-surface)] text-[var(--am-accent)] flex items-center justify-center text-xs font-semibold flex-shrink-0">
-                                {{ $selectedEmployee->initials() }}
+                                {{ $selectedHolder->initials() }}
                             </div>
                             <div class="min-w-0 flex-1">
-                                <div class="text-sm font-semibold text-[var(--am-text)] truncate">{{ $selectedEmployee->name }}</div>
-                                <div class="text-[10px] text-[var(--am-text-muted)] truncate">{{ $selectedEmployee->user_principal_name ?: '—' }}</div>
+                                <div class="text-sm font-semibold text-[var(--am-text)] truncate">{{ $selectedHolder->name }}</div>
+                                <div class="text-[10px] text-[var(--am-text-muted)] truncate">{{ $selectedHolder->user_principal_name ?: '—' }}</div>
                             </div>
                         </div>
-                        @if($selectedEmployee->department || $selectedEmployee->job_title)
+                        @if($selectedHolder->department || $selectedHolder->job_title)
                             <div class="mt-2 text-[10px] text-[var(--am-text-muted)]">
-                                {{ $selectedEmployee->job_title }}@if($selectedEmployee->department && $selectedEmployee->job_title) · @endif{{ $selectedEmployee->department }}
+                                {{ $selectedHolder->job_title }}@if($selectedHolder->department && $selectedHolder->job_title) · @endif{{ $selectedHolder->department }}
                             </div>
                         @endif
                     </section>
@@ -127,18 +127,18 @@
                         <dl class="divide-y divide-[color:var(--am-border)] text-[11px]">
                             <div class="flex items-baseline justify-between gap-2 py-1.5 px-3">
                                 <dt class="text-[var(--am-text-muted)] flex-shrink-0">Abteilung</dt>
-                                <dd class="text-[var(--am-text-secondary)] m-0 truncate max-w-[60%] text-right">{{ $selectedEmployee->department ?: '—' }}</dd>
+                                <dd class="text-[var(--am-text-secondary)] m-0 truncate max-w-[60%] text-right">{{ $selectedHolder->department ?: '—' }}</dd>
                             </div>
                             <div class="flex items-baseline justify-between gap-2 py-1.5 px-3">
                                 <dt class="text-[var(--am-text-muted)] flex-shrink-0">Kostenstelle</dt>
-                                <dd class="text-[var(--am-text-secondary)] m-0 truncate max-w-[60%] text-right">{{ $selectedEmployee->cost_center ?: '—' }}</dd>
+                                <dd class="text-[var(--am-text-secondary)] m-0 truncate max-w-[60%] text-right">{{ $selectedHolder->cost_center ?: '—' }}</dd>
                             </div>
                             <div class="flex items-baseline justify-between gap-2 py-1.5 px-3">
                                 <dt class="text-[var(--am-text-muted)] flex-shrink-0">Quelle</dt>
                                 <dd class="m-0 text-right">
-                                    @if($selectedEmployee->source === 'graph')
+                                    @if($selectedHolder->source === 'graph')
                                         <x-asset-manager-badge color="violet" size="xs">Graph</x-asset-manager-badge>
-                                    @elseif($selectedEmployee->source === 'manual')
+                                    @elseif($selectedHolder->source === 'manual')
                                         <x-asset-manager-badge color="amber" size="xs">Manuell</x-asset-manager-badge>
                                     @else
                                         <x-asset-manager-badge color="gray" size="xs">Abgeleitet</x-asset-manager-badge>
@@ -148,7 +148,7 @@
                             <div class="flex items-baseline justify-between gap-2 py-1.5 px-3">
                                 <dt class="text-[var(--am-text-muted)] flex-shrink-0">Status</dt>
                                 <dd class="m-0 text-right">
-                                    @if($selectedEmployee->is_active)
+                                    @if($selectedHolder->is_active)
                                         <x-asset-manager-badge color="emerald" size="xs">Aktiv</x-asset-manager-badge>
                                     @else
                                         <x-asset-manager-badge color="red" size="xs">Inaktiv</x-asset-manager-badge>
@@ -178,14 +178,14 @@
                         </div>
                     </div>
 
-                    <x-asset-manager-button variant="primary" size="md" href="{{ route('asset-manager.employees.show', $selectedEmployee) }}" wire:navigate class="w-full">
+                    <x-asset-manager-button variant="primary" size="md" href="{{ route('asset-manager.holders.show', $selectedHolder) }}" wire:navigate class="w-full">
                         @svg('heroicon-o-arrow-top-right-on-square', 'w-3.5 h-3.5')
                         Vollständiges Profil
                     </x-asset-manager-button>
                 @else
                     <div class="flex flex-col items-center justify-center py-8 text-center">
                         @svg('heroicon-o-cursor-arrow-rays', 'w-8 h-8 text-[var(--am-text-muted)] mb-3')
-                        <p class="text-[11px] text-[var(--am-text-muted)] mb-1">Wähle einen Mitarbeiter aus der Tabelle.</p>
+                        <p class="text-[11px] text-[var(--am-text-muted)] mb-1">Wähle einen Asset-Träger aus der Tabelle.</p>
                         <p class="text-[10px] text-[var(--am-text-secondary)]">Zeigt Zusammenfassung & Monatskosten.</p>
                     </div>
                 @endif
@@ -193,7 +193,7 @@
         </x-ui-page-sidebar>
     </x-slot>
 
-    {{-- Öffnet die kollabierte rechte Sidebar, wenn selectEmployee() 'open-activity' dispatcht --}}
+    {{-- Öffnet die kollabierte rechte Sidebar, wenn selectHolder() 'open-activity' dispatcht --}}
     <div x-data x-on:open-activity.window="$store.ui && $store.ui.mSet('activity', 'open', true)"></div>
 
     <div class="flex-1 flex flex-col min-h-0 min-w-0">
@@ -251,10 +251,10 @@
 
             {{-- Tabelle --}}
             <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm overflow-hidden">
-                @if($employees->isEmpty())
+                @if($holders->isEmpty())
                     <div class="flex flex-col items-center justify-center py-16 text-center">
                         @svg('heroicon-o-users', 'w-10 h-10 text-[var(--am-text-muted)] mb-3')
-                        <p class="text-sm text-[var(--am-text-secondary)]">Keine Mitarbeiter für diese Filter.</p>
+                        <p class="text-sm text-[var(--am-text-secondary)]">Keine Asset-Träger für diese Filter.</p>
                         <button wire:click="resetFilters" class="mt-2 text-xs text-[var(--am-accent)] hover:underline">Filter zurücksetzen</button>
                     </div>
                 @else
@@ -277,16 +277,16 @@
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-[color:var(--am-border)]">
-                                @foreach($employees as $emp)
+                                @foreach($holders as $emp)
                                     {{-- Klick auf die Zeile öffnet das Panel; Klicks aus dem Namens-Link (wire:navigate)
                                          werden ignoriert, damit der Name weiterhin direkt zum Profil navigiert. Kein
                                          stopPropagation am Link — das würde wire:navigate (document-delegiert) abwürgen. --}}
                                     <tr wire:key="emp-{{ $emp->id }}"
                                         x-data
-                                        @click="if (! $event.target.closest('a')) $wire.selectEmployee({{ $emp->id }})"
+                                        @click="if (! $event.target.closest('a')) $wire.selectHolder({{ $emp->id }})"
                                         class="cursor-pointer transition-colors {{ $selectedId === $emp->id ? 'bg-[var(--am-accent-surface)] shadow-[inset_3px_0_0_var(--am-accent)]' : 'hover:bg-[var(--am-bg)]' }}">
                                         <td class="px-5 py-3">
-                                            <a href="{{ route('asset-manager.employees.show', $emp) }}" wire:navigate class="flex items-center gap-2">
+                                            <a href="{{ route('asset-manager.holders.show', $emp) }}" wire:navigate class="flex items-center gap-2">
                                                 <div class="w-7 h-7 rounded-full bg-[var(--am-accent-surface)] text-[var(--am-accent)] flex items-center justify-center text-[10px] font-semibold flex-shrink-0">
                                                     {{ $emp->initials() }}
                                                 </div>
@@ -315,9 +315,9 @@
                             </tbody>
                         </table>
                     </div>
-                    @if($employees->hasPages())
+                    @if($holders->hasPages())
                         <div class="px-5 py-3 border-t border-[color:var(--am-border)]">
-                            {{ $employees->links() }}
+                            {{ $holders->links() }}
                         </div>
                     @endif
                 @endif

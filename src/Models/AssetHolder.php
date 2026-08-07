@@ -8,16 +8,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Platform\AssetManager\Concerns\TenantScopable;
 
-class AssetEmployee extends Model
+class AssetHolder extends Model
 {
     use HasFactory;
     use TenantScopable;
 
-    protected $table = 'asset_employees';
+    protected $table = 'asset_holders';
 
     protected static function newFactory(): \Illuminate\Database\Eloquent\Factories\Factory
     {
-        return \Platform\AssetManager\Database\Factories\AssetEmployeeFactory::new();
+        return \Platform\AssetManager\Database\Factories\AssetHolderFactory::new();
     }
 
     protected $fillable = [
@@ -56,7 +56,7 @@ class AssetEmployee extends Model
         return $this->belongsTo(\Platform\Core\Models\Team::class);
     }
 
-    /** Tenant (Kundenkontext), zu dem dieser Mitarbeiter gehört. */
+    /** Tenant (Kundenkontext), zu dem dieser Asset-Träger gehört. */
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(AssetTenant::class, 'tenant_id');
@@ -75,10 +75,10 @@ class AssetEmployee extends Model
     /** Zuordnungs-Verlauf dieser Person über Items UND Geräte (Frage 6 / 2b). */
     public function assignments(): HasMany
     {
-        return $this->hasMany(AssetAssignment::class, 'employee_id')->orderByDesc('assigned_at');
+        return $this->hasMany(AssetAssignment::class, 'holder_id')->orderByDesc('assigned_at');
     }
 
-    /** True wenn Funktionskonto (kein echter Mitarbeiter). */
+    /** True wenn Funktionskonto (kein echter Asset-Träger). */
     public function isFunctionAccount(): bool
     {
         return $this->account_type === 'function';

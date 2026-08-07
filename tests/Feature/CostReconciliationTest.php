@@ -19,7 +19,7 @@ use Platform\AssetManager\Models\AssetCategory;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetCostType;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetTenant;
 use Platform\AssetManager\Services\CostAggregationService;
@@ -47,7 +47,7 @@ class CostReconciliationTest extends TestCase
         $lineType = AssetCostType::factory()->create(['team_id' => $team->id]);                 // cost_line
         $afaType  = AssetCostType::factory()->hardwareAfa()->create(['team_id' => $team->id]);  // hardware_afa
 
-        $employee = AssetEmployee::factory()->create([
+        $holder = AssetHolder::factory()->create([
             'team_id'        => $team->id,
             'tenant_id'      => $tenant->id,
             'cost_center_id' => $center->id,
@@ -63,7 +63,7 @@ class CostReconciliationTest extends TestCase
             'active'         => true,
         ]);
 
-        // 2) Hardware-AfA-Item, einem Mitarbeiter zugewiesen: 1200 / 24 Monate = 50,00/Monat.
+        // 2) Hardware-AfA-Item, einem Asset-Träger zugewiesen: 1200 / 24 Monate = 50,00/Monat.
         // category_id ist NOT NULL (FK auf asset_categories) — die Migration seedet Default-Kategorien,
         // daher existiert hier mindestens eine. Kein AssetItem-Factory verlangt → direkt create().
         $category = AssetCategory::firstOrCreate(['key' => 'laptop'], ['name' => 'Laptop']);
@@ -73,7 +73,7 @@ class CostReconciliationTest extends TestCase
             'category_id'         => $category->id,
             'source'              => 'manual',
             'name'                => 'Test-Laptop',
-            'assignee_id'         => $employee->id,
+            'assignee_id'         => $holder->id,
             'status'              => 'assigned',
             'purchase_price'      => 1200.00,
             'depreciation_months' => 24,

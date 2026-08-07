@@ -1,10 +1,10 @@
 <?php
 
-namespace Platform\AssetManager\Tools\Employees;
+namespace Platform\AssetManager\Tools\Holders;
 
 use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetCostCenter;
-use Platform\AssetManager\Models\AssetEmployee;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Services\CostBootstrapService;
 use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
@@ -15,7 +15,7 @@ use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 
 /**
- * Bulk-Umzug der Kostenstelle für viele Mitarbeiter in einem Call.
+ * Bulk-Umzug der Kostenstelle für viele Asset-Träger in einem Call.
  *
  * Setzt IMMER beide Felder konsistent — den String `cost_center` (Code) UND die FK `cost_center_id`.
  * Das ist Pflicht: der MA-Kostenreport gruppiert über den Code-String, der Kostenstelle×Kostenart-Pivot
@@ -31,14 +31,14 @@ class BulkAssignCostCenterTool implements ToolContract, ToolMetadataContract
 
     public function getName(): string
     {
-        return 'asset-manager.employees.cost-center.bulk.PUT';
+        return 'asset-manager.holders.cost-center.bulk.PUT';
     }
 
     public function getDescription(): string
     {
-        return 'PUT /asset-manager/employees/cost-center/bulk - Weist vielen Mitarbeitern eine '
+        return 'PUT /asset-manager/holders/cost-center/bulk - Weist vielen Asset-Trägern eine '
             . 'Kostenstelle zu. Zwei Modi: (1) cost_center_code + employee_ids[] und/oder upns[] '
-            . '(gleiche Kostenstelle für alle); (2) assignments[] mit {employee_id|upn, cost_center_code} '
+            . '(gleiche Kostenstelle für alle); (2) assignments[] mit {holder_id|upn, cost_center_code} '
             . '(individuell). Setzt Code + cost_center_id konsistent. dry_run=true liefert nur eine '
             . 'Vorschau (kein Schreibvorgang). create_missing=true legt fehlende Kostenstellen an, '
             . 'sonst werden unbekannte Codes pro Zeile als Fehler gemeldet.';
@@ -49,8 +49,8 @@ class BulkAssignCostCenterTool implements ToolContract, ToolMetadataContract
         return [
             'type'       => 'object',
             'properties' => array_merge([
-                'cost_center_code' => ['type' => 'string', 'description' => 'Modus 1: Kostenstellen-Code für alle genannten Mitarbeiter (z.B. "2599").'],
-                'employee_ids'     => ['type' => 'array', 'description' => 'Modus 1: Mitarbeiter-IDs.', 'items' => ['type' => 'integer']],
+                'cost_center_code' => ['type' => 'string', 'description' => 'Modus 1: Kostenstellen-Code für alle genannten Asset-Träger (z.B. "2599").'],
+                'employee_ids'     => ['type' => 'array', 'description' => 'Modus 1: Asset-Träger-IDs.', 'items' => ['type' => 'integer']],
                 'upns'             => ['type' => 'array', 'description' => 'Modus 1: User Principal Names.', 'items' => ['type' => 'string']],
                 'assignments'      => [
                     'type'        => 'array',
@@ -58,9 +58,9 @@ class BulkAssignCostCenterTool implements ToolContract, ToolMetadataContract
                     'items'       => [
                         'type'       => 'object',
                         'properties' => [
-                            'employee_id'      => ['type' => 'integer', 'description' => 'Mitarbeiter-ID (alternativ zu upn).'],
-                            'upn'              => ['type' => 'string', 'description' => 'UPN (alternativ zu employee_id).'],
-                            'cost_center_code' => ['type' => 'string', 'description' => 'Kostenstellen-Code für diesen Mitarbeiter.'],
+                            'holder_id'      => ['type' => 'integer', 'description' => 'Asset-Träger-ID (alternativ zu upn).'],
+                            'upn'              => ['type' => 'string', 'description' => 'UPN (alternativ zu holder_id).'],
+                            'cost_center_code' => ['type' => 'string', 'description' => 'Kostenstellen-Code für diesen Asset-Träger.'],
                         ],
                         'required' => ['cost_center_code'],
                     ],
@@ -102,7 +102,7 @@ class BulkAssignCostCenterTool implements ToolContract, ToolMetadataContract
             if (!empty($arguments['assignments']) && is_array($arguments['assignments'])) {
                 foreach ($arguments['assignments'] as $a) {
                     $code = trim((string) ($a['cost_center_code'] ?? ''));
-                    $work[] = ['id' => $a['employee_id'] ?? null, 'upn' => $a['upn'] ?? null, 'code' => $code];
+                    $work[] = ['id' => $a['holder_id'] ?? null, 'upn' => $a['upn'] ?? null, 'code' => $code];
                 }
             } else {
                 $code = trim((string) ($arguments['cost_center_code'] ?? ''));
@@ -118,14 +118,14 @@ class BulkAssignCostCenterTool implements ToolContract, ToolMetadataContract
             }
 
             if (empty($work)) {
-                return ToolResult::error('VALIDATION_ERROR', 'Keine Mitarbeiter angegeben.');
+                return ToolResult::error('VALIDATION_ERROR', 'Keine Asset-Träger angegeben.');
             }
 
-            // Mitarbeiter vorab laden (zwei Queries statt N)
+            // Asset-Träger vorab laden (zwei Queries statt N)
             $ids  = array_values(array_filter(array_column($work, 'id')));
             $upns = array_values(array_filter(array_column($work, 'upn')));
-            $byId  = $ids ? AssetEmployee::where('team_id', $teamId)->whereIn('id', $ids)->get()->keyBy('id') : collect();
-            $byUpn = $upns ? AssetEmployee::where('team_id', $teamId)->whereIn('user_principal_name', $upns)->get()->keyBy('user_principal_name') : collect();
+            $byId  = $ids ? AssetHolder::where('team_id', $teamId)->whereIn('id', $ids)->get()->keyBy('id') : collect();
+            $byUpn = $upns ? AssetHolder::where('team_id', $teamId)->whereIn('user_principal_name', $upns)->get()->keyBy('user_principal_name') : collect();
 
             $centerCache  = []; // code => AssetCostCenter|false(=nicht gefunden)
             $createdCodes = [];
@@ -163,19 +163,19 @@ class BulkAssignCostCenterTool implements ToolContract, ToolMetadataContract
 
                 if (!$emp) {
                     $errors++;
-                    $results[] = ['ref' => $ref, 'status' => 'not_found', 'message' => 'Mitarbeiter nicht im Team gefunden.'];
+                    $results[] = ['ref' => $ref, 'status' => 'not_found', 'message' => 'Asset-Träger nicht im Team gefunden.'];
                     continue;
                 }
                 if ($code === '') {
                     $errors++;
-                    $results[] = ['ref' => $ref, 'employee' => $emp->name, 'status' => 'error', 'message' => 'Leerer cost_center_code.'];
+                    $results[] = ['ref' => $ref, 'holder' => $emp->name, 'status' => 'error', 'message' => 'Leerer cost_center_code.'];
                     continue;
                 }
 
                 $center = $resolveCenter($code);
                 if ($center === false) {
                     $errors++;
-                    $results[] = ['ref' => $ref, 'employee' => $emp->name, 'status' => 'error', 'message' => "Kostenstelle '{$code}' existiert nicht (create_missing=false)."];
+                    $results[] = ['ref' => $ref, 'holder' => $emp->name, 'status' => 'error', 'message' => "Kostenstelle '{$code}' existiert nicht (create_missing=false)."];
                     continue;
                 }
 
@@ -185,19 +185,19 @@ class BulkAssignCostCenterTool implements ToolContract, ToolMetadataContract
 
                 if (!$wouldCreate && $emp->cost_center_id === $center->id && (string) $emp->cost_center === (string) $center->code) {
                     $unchanged++;
-                    $results[] = ['ref' => $ref, 'employee' => $emp->name, 'status' => 'unchanged', 'from' => $from, 'to' => $toLabel];
+                    $results[] = ['ref' => $ref, 'holder' => $emp->name, 'status' => 'unchanged', 'from' => $from, 'to' => $toLabel];
                     continue;
                 }
 
                 if ($dryRun) {
-                    $results[] = ['ref' => $ref, 'employee' => $emp->name, 'status' => 'would_update', 'from' => $from, 'to' => $toLabel];
+                    $results[] = ['ref' => $ref, 'holder' => $emp->name, 'status' => 'would_update', 'from' => $from, 'to' => $toLabel];
                     $updated++;
                     continue;
                 }
 
                 if (isset($touched[$emp->id])) {
                     $skipped++;
-                    $results[] = ['ref' => $ref, 'employee' => $emp->name, 'status' => 'skipped', 'message' => 'Mitarbeiter mehrfach genannt — nur erste Zuweisung angewendet.'];
+                    $results[] = ['ref' => $ref, 'holder' => $emp->name, 'status' => 'skipped', 'message' => 'Asset-Träger mehrfach genannt — nur erste Zuweisung angewendet.'];
                     continue;
                 }
 
@@ -206,7 +206,7 @@ class BulkAssignCostCenterTool implements ToolContract, ToolMetadataContract
                 $emp->save();
                 $touched[$emp->id] = true;
                 $updated++;
-                $results[] = ['ref' => $ref, 'employee' => $emp->name, 'status' => 'updated', 'from' => $from, 'to' => $center->label ?? $code];
+                $results[] = ['ref' => $ref, 'holder' => $emp->name, 'status' => 'updated', 'from' => $from, 'to' => $center->label ?? $code];
             }
 
             return ToolResult::success([
@@ -221,8 +221,8 @@ class BulkAssignCostCenterTool implements ToolContract, ToolMetadataContract
                 'created_centers'  => array_keys($createdCodes),
                 'results'          => $results,
                 'message'          => $dryRun
-                    ? "Vorschau: {$updated} Mitarbeiter würden geändert, {$errors} Fehler. Kein Schreibvorgang."
-                    : "{$updated} Mitarbeiter aktualisiert, {$errors} Fehler.",
+                    ? "Vorschau: {$updated} Asset-Träger würden geändert, {$errors} Fehler. Kein Schreibvorgang."
+                    : "{$updated} Asset-Träger aktualisiert, {$errors} Fehler.",
             ]);
         } catch (\Throwable $e) {
             return ToolResult::error('EXECUTION_ERROR', 'Fehler beim Bulk-Update der Kostenstellen: ' . $e->getMessage());
@@ -235,7 +235,7 @@ class BulkAssignCostCenterTool implements ToolContract, ToolMetadataContract
             'read_only'             => false,
             'risk_level'            => 'write',
             'confirmation_required' => true,
-            'tags'                  => ['asset-manager', 'employees', 'cost-center', 'bulk'],
+            'tags'                  => ['asset-manager', 'holders', 'cost-center', 'bulk'],
         ];
     }
 }

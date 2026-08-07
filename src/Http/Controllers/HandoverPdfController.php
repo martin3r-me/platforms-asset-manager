@@ -24,12 +24,12 @@ class HandoverPdfController
 
         $this->assertTenantBoundary($handover);
 
-        $handover->load(['employee', 'lines']);
+        $handover->load(['holder', 'lines']);
 
         $html = view('asset-manager::pdf.handover', ['handover' => $handover])->render();
 
-        $recipient = $handover->employee?->user_principal_name
-            ?? $handover->employee?->display_name
+        $recipient = $handover->holder?->user_principal_name
+            ?? $handover->holder?->display_name
             ?? 'Empfaenger';
         $recipientSlug = preg_replace('/[^A-Za-z0-9]+/', '-', (string) $recipient);
 
