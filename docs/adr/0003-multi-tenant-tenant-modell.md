@@ -1,5 +1,15 @@
 # Multi-Tenant: Tenant als eigenes Modell mit `tenant_id`-Anker
 
+> ⚠️ **In Teilen abgelöst durch [ADR 0016](0016-tenant-als-zugriffsgrenze.md)** (2026-08-07).
+> Nicht mehr gültig sind: „aktiver Tenant = Arbeitsfilter, keine Zugriffsgrenze" (Show-Seiten liefern
+> jetzt **404** bei fremdem Tenant), „UPN-basierte Queries brauchen keinen Tenant-Filter" (sind jetzt
+> explizit gescoped) und „das Kostenmodell bleibt aus dem Multi-Tenant-Scope ausgeklammert" (ist jetzt
+> **tenant-gebunden**, `tenant_id` NOT NULL; `asset_companies` ist im Kostenstellen-Baum aufgegangen).
+> Die Auslagerung des Kostenmodells in ein eigenes Modul ist verworfen
+> ([ADR 0015](0015-kundenkostenstellen-bleiben-im-asset-manager.md)).
+> **Unverändert gültig** bleiben: Tenant-Modell und `tenant_id`-Anker, die Trennung Tenant/Connector,
+> das Consent-Modell und das On-Delete-Verhalten. ADR 0016 enthält eine Gegenüberstellung im Detail.
+
 Kontext: Der Asset Manager soll Inventar je **Kundenkontext** getrennt verwalten. Ein Team (z. B. BHG-IT) betreut mehrere Kunden — teils mit eigenem M365/Intune, teils ganz ohne Microsoft-Anbindung.
 
 Entscheidung: Wir führen ein eigenes **Tenant**-Modell (`asset_tenants`) als verwalteten Kundenkontext ein. Jedes Inventar-Objekt (Geräte, Lizenzen, Mitarbeiter, manuelle Assets) referenziert über `tenant_id` **genau einen** Tenant (Pflicht, keine Mehrfach-Zugehörigkeit). Die Microsoft-Anbindung ist ein **optionaler** Connector (0..1 je Tenant; bestehendes `asset_connector_configs` wird vom Team an den Tenant umgehängt).
