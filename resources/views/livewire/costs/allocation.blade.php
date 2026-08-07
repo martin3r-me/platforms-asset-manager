@@ -30,6 +30,8 @@
     <div class="flex-1 flex flex-col min-h-0 min-w-0">
         <div class="flex-1 overflow-y-auto p-6 space-y-8">
 
+            <x-asset-manager-all-tenants-notice :active="$showsAllTenants ?? false" />
+
             <section class="space-y-3">
                 <div class="flex items-baseline justify-between">
                     <h2 class="text-sm font-semibold text-[var(--am-text-secondary)]">

@@ -12,6 +12,8 @@
     <x-ui-page-container>
         <div class="space-y-6">
 
+            <x-asset-manager-all-tenants-notice :active="$showsAllTenants ?? false" />
+
             {{-- Kopf --}}
             <div class="flex items-start justify-between gap-4">
                 <div>

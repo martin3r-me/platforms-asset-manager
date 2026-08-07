@@ -3,25 +3,26 @@
 namespace Platform\AssetManager\Http\Controllers;
 
 use Barryvdh\DomPDF\Facade\Pdf;
+use Platform\AssetManager\Concerns\GuardsTenantBoundary;
 use Platform\AssetManager\Models\AssetHandover;
 
 /**
  * Übergabeprotokoll als PDF — on-the-fly aus signature_data + device_snapshot (kein gespeichertes File).
- * Owner/Admin ist nicht nötig (Lesen erlaubt), aber strikt team-scoped: ein Protokoll eines fremden
- * Teams wird mit 403 abgewiesen (Muster IssuePdfController / kanal-unabhängige Team-Grenze).
+ * Owner/Admin ist nicht nötig (Lesen erlaubt), aber strikt gescoped: ein Protokoll eines fremden
+ * **Teams** wird mit 403 abgewiesen, eines fremden **Tenants** mit 404 (ADR 0016). Ein Export ist
+ * genau der Pfad, auf dem ein Fremd-Datensatz das Haus verlassen würde.
  */
 class HandoverPdfController
 {
+    use GuardsTenantBoundary;
+
     public function __invoke(AssetHandover $handover)
     {
         if (! auth()->check()) {
             abort(401, 'Nicht authentifiziert');
         }
 
-        $teamId = auth()->user()->currentTeam?->id;
-        if (! $teamId || $handover->team_id !== $teamId) {
-            abort(403, 'Zugriff verweigert');
-        }
+        $this->assertTenantBoundary($handover);
 
         $handover->load(['employee', 'lines']);
 

@@ -3,11 +3,42 @@
          eingebettet → genau eine zuverlässige Injektionsstelle. Siehe components/theme.blade.php. --}}
     <x-asset-manager-theme />
 
-    @php $controllingEnabled = $controllingEnabled ?? false; @endphp
+    @php
+        $controllingEnabled = $controllingEnabled ?? false;
+        $showTenantSwitcher = $showTenantSwitcher ?? false;
+        $allowsAllTenants   = $allowsAllTenants ?? false;
+        $tenantOptions      = $tenantOptions ?? collect();
+    @endphp
 
     <div x-show="!collapsed" class="p-3 text-sm italic uppercase text-[var(--am-text-muted)] border-b border-[color:var(--am-border)] mb-2">
         Asset Manager
     </div>
+
+    {{-- GLOBALER TENANT-UMSCHALTER (docs/adr/0016).
+         Hier, weil der Core die Sidebar auf JEDER Modulseite einbettet — vorher steckte der Selektor
+         in 10 Actionbars und fehlte auf Kosten-, Stammdaten- und Detailseiten.
+         Sichtbar ab 2 Tenants; bei genau einem filtert alles still auf diesen. --}}
+    @if($showTenantSwitcher)
+        <div x-show="!collapsed" class="px-3 pb-3 mb-2 border-b border-[color:var(--am-border)]">
+            <label class="block">
+                <span class="flex items-center gap-1 mb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">
+                    @svg('heroicon-o-building-office-2', 'w-3.5 h-3.5')
+                    Tenant
+                </span>
+                <x-asset-manager-select size="sm" wire:model.live="selectedTenant" class="w-full">
+                    @foreach($tenantOptions as $tenant)
+                        <option value="{{ $tenant->id }}">{{ $tenant->name }}</option>
+                    @endforeach
+                    {{-- „Alle Tenants" nur auf Dashboard/Auswertungen: dort weisen die Zahlen den Tenant
+                         je Zeile aus. Auf Listen/Detailseiten wäre eine gemischte Ansicht nicht
+                         zuordenbar, deshalb steht die Option dort nicht zur Wahl. --}}
+                    @if($allowsAllTenants)
+                        <option value="all">Alle Tenants</option>
+                    @endif
+                </x-asset-manager-select>
+            </label>
+        </div>
+    @endif
 
     <x-ui-sidebar-list label="Übersicht">
         <x-asset-manager-nav-item :href="route('asset-manager.dashboard')" :active="request()->routeIs('asset-manager.dashboard')" icon="heroicon-o-home" label="Dashboard" />

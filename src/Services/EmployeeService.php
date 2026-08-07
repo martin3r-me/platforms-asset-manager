@@ -25,7 +25,11 @@ class EmployeeService
         ?string $displayName = null,
         string $source = 'derived'
     ): AssetEmployee {
-        $employee = AssetEmployee::firstOrNew([
+        // withoutTenantScope() ist hier PFLICHT, nicht Kosmetik: der Tenant kommt als Parameter, und
+        // der Global Scope würde zusätzlich auf den *aktiven* Tenant filtern. Weichen beide ab (Job
+        // ohne gesetzten Kontext, Aufruf aus einer anderen Sicht), findet firstOrNew den bestehenden
+        // Träger nicht und legt einen zweiten an — direkt in den (tenant_id, upn)-Unique-Index.
+        $employee = AssetEmployee::withoutTenantScope()->firstOrNew([
             'tenant_id'           => $tenantId,
             'user_principal_name' => $upn,
         ]);
@@ -151,7 +155,7 @@ class EmployeeService
         DB::transaction(function () use ($employee, $teamId, $tenantId, $oldUpn, $pseudoUpn, $pseudoName) {
             if ($oldUpn) {
                 // Verknüpfte Geräte (per UPN) PII maskieren — UPN auf den Pseudonym setzen (Link bleibt).
-                AssetDevice::where('team_id', $teamId)
+                AssetDevice::withoutTenantScope()->where('team_id', $teamId)
                     ->where('tenant_id', $tenantId)
                     ->where('user_principal_name', $oldUpn)
                     ->update([
@@ -161,7 +165,7 @@ class EmployeeService
                     ]);
 
                 // Verknüpfte Lizenz-Zuweisungen ebenso (tragen dieselbe Personen-PII).
-                AssetUserLicense::where('team_id', $teamId)
+                AssetUserLicense::withoutTenantScope()->where('team_id', $teamId)
                     ->where('tenant_id', $tenantId)
                     ->where('user_principal_name', $oldUpn)
                     ->update([
@@ -211,7 +215,7 @@ class EmployeeService
     {
         // Bestehende Employees des Tenants EINMAL vorladen — statt je UPN ein exists() PLUS ein
         // firstOrNew (~2 Queries je UPN in einer Schleife, die nach jedem Sync läuft).
-        $existing = AssetEmployee::where('tenant_id', $tenantId)
+        $existing = AssetEmployee::withoutTenantScope()->where('tenant_id', $tenantId)
             ->whereNotNull('user_principal_name')
             ->get(['id', 'user_principal_name', 'display_name'])
             ->keyBy('user_principal_name');
@@ -230,12 +234,12 @@ class EmployeeService
         };
 
         $collect(
-            AssetDevice::where('tenant_id', $tenantId)->whereNotNull('user_principal_name')
+            AssetDevice::withoutTenantScope()->where('tenant_id', $tenantId)->whereNotNull('user_principal_name')
                 ->select('user_principal_name', 'user_display_name')->distinct()->get(),
             'user_display_name'
         );
         $collect(
-            AssetUserLicense::where('tenant_id', $tenantId)->whereNotNull('user_principal_name')
+            AssetUserLicense::withoutTenantScope()->where('tenant_id', $tenantId)->whereNotNull('user_principal_name')
                 ->select('user_principal_name', 'display_name')->distinct()->get(),
             'display_name'
         );

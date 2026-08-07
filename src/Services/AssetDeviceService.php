@@ -31,6 +31,11 @@ class AssetDeviceService
 
     /**
      * Tenant-genaue Connector-Sicht: je Connector Status + jeweils letzter Geräte-/Lizenz-Sync-Lauf.
+     *
+     * Läuft ausdrücklich **über alle Tenants** des Teams — das ist der Sinn der Methode (Betriebs-
+     * Übersicht der Anbindungen). Die Log-Queries steigen daher aus dem Global Scope aus: mit ihm
+     * wäre je Connector der Log des *aktiven* Tenants abgefragt worden, sodass alle übrigen Connectoren
+     * „noch nie synchronisiert" gezeigt hätten.
      */
     public function getConnectorsStatus(int $teamId): array
     {
@@ -38,8 +43,10 @@ class AssetDeviceService
             ->where('team_id', $teamId)
             ->get()
             ->map(function (AssetConnectorConfig $c) {
-                $deviceLog  = AssetDeviceSyncLog::where('tenant_id', $c->tenant_id)->orderByDesc('started_at')->first();
-                $licenseLog = AssetLicenseSyncLog::where('tenant_id', $c->tenant_id)->orderByDesc('started_at')->first();
+                $deviceLog  = AssetDeviceSyncLog::withoutTenantScope()
+                    ->where('tenant_id', $c->tenant_id)->orderByDesc('started_at')->first();
+                $licenseLog = AssetLicenseSyncLog::withoutTenantScope()
+                    ->where('tenant_id', $c->tenant_id)->orderByDesc('started_at')->first();
 
                 return [
                     'connector_id'      => $c->id,

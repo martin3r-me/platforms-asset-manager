@@ -9,6 +9,7 @@ use Platform\AssetManager\Models\AssetUserLicense;
 use Platform\AssetManager\Concerns\RunsTeamSync;
 use Platform\AssetManager\Services\EmployeeService;
 use Platform\AssetManager\Services\IntuneGraphService;
+use Platform\AssetManager\Services\TenantContext;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -85,6 +86,12 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
 
         $this->teamId   = $config->team_id;
         $this->tenantId = $config->tenant_id;
+
+        // Tenant-Grenze im Job (ADR 0016): der Sync arbeitet ausdrücklich IM Tenant dieses Connectors.
+        // clearOverride() zuerst, damit in einem langlebigen Queue-Worker kein Override eines
+        // vorherigen Jobs haftet — genau der Fehler, den man erst an falschen Daten bemerkt.
+        TenantContext::clearOverride();
+        TenantContext::forceTenant($this->tenantId);
 
         $startedAt = now();
         $log = AssetLicenseSyncLog::create([

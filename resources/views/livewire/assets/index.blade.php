@@ -9,7 +9,6 @@
             ['label' => 'Assets', 'icon' => 'cube-transparent'],
         ]">
             <x-slot name="actions">
-                @include('asset-manager::livewire.partials.tenant-selector')
                 {{-- Schreib-Controls nur Owner/Admin (E1/ADR 0004) — Backend: AssetItemPolicy::create. --}}
                 @can('asset-manager.manage')
                     <x-asset-manager-button variant="ghost" size="sm" wire:click="$toggle('showBulkCreate')">

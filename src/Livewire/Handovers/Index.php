@@ -9,11 +9,11 @@ use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
-use Platform\AssetManager\Concerns\ScopesToTenant;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceEvent;
 use Platform\AssetManager\Models\AssetEmployee;
 use Platform\AssetManager\Models\AssetHandover;
+use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Models\AssetHandoverLine;
 
 /**
@@ -25,7 +25,6 @@ class Index extends Component
 {
     use ResolvesCurrentTeam;
     use WithPagination;
-    use ScopesToTenant;
 
     public string $search       = '';
     public string $filterStatus = ''; // ''|open|partially_returned|returned
@@ -85,7 +84,7 @@ class Index extends Component
 
         // Gerät vorbefüllen (Geräte-Shortcut): Empfänger = aktueller Intune-Assignee.
         if ($deviceId) {
-            $device = AssetDevice::where('team_id', $teamId)->forTenant($this->selectedTenantId)->find($deviceId);
+            $device = AssetDevice::where('team_id', $teamId)->find($deviceId);
             if ($device) {
                 $this->fLines = [$this->emptyLine($device->id)];
                 if (! $empId && $device->user_principal_name) {
@@ -230,6 +229,10 @@ class Index extends Component
             } else {
                 $header['created_by_user_id'] = Auth::id();
                 $header['status']             = AssetHandover::STATUS_OPEN;
+                // tenant_id ist NOT NULL (ADR 0016). Der Tenant des Empfängers oben ist die genauere
+                // Angabe und hat Vorrang — der aktive Tenant greift nur, falls der Träger keinen trägt
+                // (Altbestand vor der Schema-Welle).
+                $header['tenant_id'] ??= TenantContext::resolveForWrite($teamId, (int) Auth::id());
                 $handover = AssetHandover::create($header);
             }
 
@@ -374,7 +377,6 @@ class Index extends Component
         $teamId = $this->teamId();
 
         $handovers = AssetHandover::where('team_id', $teamId)
-            ->forTenant($this->selectedTenantId)
             ->with(['employee', 'lines'])
             ->when($this->filterStatus, fn ($q) => $q->where('status', $this->filterStatus))
             ->when($this->search, function ($q) {
@@ -393,7 +395,6 @@ class Index extends Component
 
         // Geräte des aktiven Tenants + Set der aktuell ausgegebenen (offene Zeile).
         $devices = AssetDevice::where('team_id', $teamId)
-            ->forTenant($this->selectedTenantId)
             ->orderBy('device_name')
             ->get(['id', 'device_name', 'serial_number', 'model', 'user_principal_name', 'tenant_id']);
 
@@ -405,7 +406,6 @@ class Index extends Component
             ->all();
 
         $employees = AssetEmployee::where('team_id', $teamId)
-            ->forTenant($this->selectedTenantId)
             ->orderByRaw('COALESCE(display_name, user_principal_name)')
             ->get(['id', 'display_name', 'user_principal_name']);
 

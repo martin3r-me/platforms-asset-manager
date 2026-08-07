@@ -5,19 +5,17 @@ namespace Platform\AssetManager\Livewire\Devices;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
-use Platform\AssetManager\Concerns\ScopesToTenant;
 use Platform\AssetManager\Models\AssetDevice;
 
 /**
  * Tenant-reine Geräte-Status-Sicht (M4): Lifecycle-Status auf einen Blick — Stat-Kacheln je Status
  * (in_use/spare/repair/defect/retired/lost + „ohne Status") plus eine filterbare Geräteliste.
  * Read-only; Statuswechsel laufen weiter über Devices/Show bzw. die Bulk-Aktion in Devices/Index.
- * Über den Tenant-Selektor (Concerns\ScopesToTenant) tenant-rein gefiltert.
+ * Tenant-rein über den Global Scope (docs/adr/0016) — der Umschalter sitzt in der Modul-Sidebar.
  */
 class Status extends Component
 {
     use WithPagination;
-    use ScopesToTenant;
 
     /** Aktiver Status-Filter: '' = alle · 'none' = ohne Lifecycle · sonst ein LIFECYCLE_STATUSES-Wert. */
     public string $status  = '';
@@ -44,7 +42,7 @@ class Status extends Component
         $teamId = (int) Auth::user()->currentTeam->id;
 
         // Eine frische, tenant-gefilterte Basis-Query je Aufruf (Counts laufen unabhängig vom Listen-Filter).
-        $base = fn () => AssetDevice::where('team_id', $teamId)->forTenant($this->selectedTenantId);
+        $base = fn () => AssetDevice::where('team_id', $teamId);
 
         $counts = ['all' => $base()->count()];
         foreach (AssetDevice::LIFECYCLE_STATUSES as $s) {

@@ -24,7 +24,13 @@
                 <div class="flex items-start justify-between gap-6">
                     <div class="min-w-0">
                         <p class="text-xs text-[var(--am-text-secondary)]">
-                            Blendet die Kosten-Schicht ein bzw. aus: Auswertungen (Kostenaufteilung, Kostenpositionen, Kosten je Mitarbeiter, Geräte nach Modell), Stammdaten und den Kosten-Import. Bei deaktiviertem Controlling bleibt das Geräte-/Asset-Inventar voll funktionsfähig; vorhandene Kostendaten bleiben erhalten.
+                            Blendet die Kosten-Schicht ein bzw. aus: Auswertungen (Kostenaufteilung, Kostenpositionen, Kosten je Asset-Träger, Geräte nach Modell), Stammdaten und den Kosten-Import. Bei deaktiviertem Controlling bleibt das Geräte-/Asset-Inventar voll funktionsfähig; vorhandene Kostendaten bleiben erhalten.
+                        </p>
+                        {{-- Der Schalter gilt je Tenant (ADR 0016) — ohne diesen Hinweis wäre nicht
+                             erkennbar, für welchen Kundenkontext gerade geschaltet wird. --}}
+                        <p class="mt-2 text-xs text-[var(--am-text-muted)]">
+                            Gilt für den Tenant <strong class="text-[var(--am-text-secondary)]">{{ $tenantName }}</strong>.
+                            Andere Tenants dieses Teams sind davon unberührt.
                         </p>
                         <p class="mt-3 inline-flex items-center gap-1.5 text-xs font-medium {{ $controllingEnabled ? 'text-emerald-700' : 'text-[var(--am-text-muted)]' }}">
                             <span class="w-1.5 h-1.5 rounded-full {{ $controllingEnabled ? 'bg-emerald-500' : 'bg-gray-400' }}"></span>
@@ -57,10 +63,12 @@
                     <div class="min-w-0">
                         <p class="text-xs text-[var(--am-text-secondary)]">
                             Setzt das Modul für dieses Team komplett auf null: löscht <strong>alle</strong> Einträge
-                            (Inventar &amp; Geräte, Mitarbeiter, Zuordnungen, Ausgaben, Kostenzeilen, Lizenzen, Verlauf
+                            (Inventar &amp; Geräte, Asset-Träger, Zuordnungen, Ausgaben, Kostenzeilen, Lizenzen, Verlauf
                             und selbst gepflegte Stammdaten). <strong>Erhalten bleiben</strong> die Intune-Anbindung
                             und die Controlling-Einstellung — die Azure-Verbindung muss also nicht neu eingerichtet
                             werden, und der nächste Sync holt die Geräte automatisch zurück.
+                            <br><strong class="text-red-700">Betrifft ALLE Tenants dieses Teams</strong>, nicht nur den
+                            gerade gewählten — der Umschalter in der Seitenleiste schränkt diese Aktion nicht ein.
                         </p>
                         <p class="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-red-600">
                             @svg('heroicon-o-exclamation-triangle', 'w-4 h-4')

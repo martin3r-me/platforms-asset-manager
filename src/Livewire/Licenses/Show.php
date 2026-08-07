@@ -5,12 +5,14 @@ namespace Platform\AssetManager\Livewire\Licenses;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Illuminate\Support\Facades\Auth;
+use Platform\AssetManager\Concerns\GuardsTenantBoundary;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetLicenseSyncLog;
 use Platform\AssetManager\Models\AssetUserLicense;
 
 class Show extends Component
 {
+    use GuardsTenantBoundary;
     use WithPagination;
 
     public AssetLicenseSku $sku;
@@ -18,7 +20,8 @@ class Show extends Component
 
     public function mount(AssetLicenseSku $sku): void
     {
-        abort_unless($sku->team_id === Auth::user()->currentTeam->id, 403);
+        // Team → 403, fremder Tenant → 404 (ADR 0016).
+        $this->assertTenantBoundary($sku);
         $this->sku = $sku;
     }
 

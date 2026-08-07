@@ -51,7 +51,9 @@ class ControllingContext
 
     public function setEnabled(int $teamId, bool $enabled, ?int $tenantId = null): void
     {
-        $tenantId ??= TenantContext::defaultTenantId($teamId);
+        // MUSS denselben Tenant treffen wie enabledFor(): sonst liest die Seite den aktiven Tenant,
+        // schreibt aber den Default — der Schalter würde scheinbar nicht reagieren.
+        $tenantId ??= TenantContext::scopeTenantId() ?? TenantContext::defaultTenantId($teamId);
 
         AssetTeamSetting::withoutTenantScope()->updateOrCreate(
             ['team_id' => $teamId, 'tenant_id' => $tenantId],

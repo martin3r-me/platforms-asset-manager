@@ -9,7 +9,6 @@
             ['label' => 'Mitarbeiter', 'icon' => 'users'],
         ]">
             <x-slot name="actions">
-                @include('asset-manager::livewire.partials.tenant-selector')
             </x-slot>
         </x-asset-manager-page-actionbar>
     </x-slot>

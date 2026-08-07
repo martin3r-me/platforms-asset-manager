@@ -4,7 +4,6 @@ namespace Platform\AssetManager\Livewire\Compliance;
 
 use Livewire\Component;
 use Illuminate\Support\Facades\Auth;
-use Platform\AssetManager\Concerns\ScopesToTenant;
 use Platform\AssetManager\Livewire\Devices\Index as DevicesIndex;
 use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Models\AssetDevice;
@@ -16,12 +15,11 @@ use Platform\AssetManager\Models\AssetDevice;
  */
 class Index extends Component
 {
-    use ScopesToTenant;
 
     public function render()
     {
         $teamId = Auth::user()->currentTeam->id;
-        $scope  = fn () => AssetDevice::where('team_id', $teamId)->forTenant($this->selectedTenantId);
+        $scope  = fn () => AssetDevice::where('team_id', $teamId);
 
         $total = $scope()->count();
 

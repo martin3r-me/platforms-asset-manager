@@ -8,6 +8,7 @@ use Illuminate\Validation\Rule;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\AssetManager\Concerns\AuthorizesTeamRole;
+use Platform\AssetManager\Concerns\GuardsTenantBoundary;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Models\AssetCategory;
 use Platform\AssetManager\Models\AssetCostCenter;
@@ -38,6 +39,7 @@ class Show extends Component
 {
     use ResolvesCurrentTeam;
     use AuthorizesTeamRole;
+    use GuardsTenantBoundary;
 
     public string $type;
     public int    $id;
@@ -110,12 +112,18 @@ class Show extends Component
 
         $teamId = $this->teamId();
 
+        // Der Global Scope (ADR 0016) schränkt beide Queries bereits auf den aktiven Tenant ein → ein
+        // Datensatz eines fremden Tenants läuft in findOrFail und damit in 404. assertTenantBoundary()
+        // schreibt die Grenze zusätzlich explizit fest, damit sie nicht daran hängt, dass hier ein
+        // gescopetes Modell verwendet wird.
         if ($type === 'manual') {
             $this->item = AssetItem::with(['category', 'assignee'])
                 ->where('team_id', $teamId)
                 ->findOrFail($id);
+            $this->assertTenantBoundary($this->item);
         } elseif ($type === 'intune') {
             $this->device = AssetDevice::where('team_id', $teamId)->findOrFail($id);
+            $this->assertTenantBoundary($this->device);
         } else {
             abort(404);
         }

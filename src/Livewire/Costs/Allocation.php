@@ -4,12 +4,18 @@ namespace Platform\AssetManager\Livewire\Costs;
 
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Platform\AssetManager\Concerns\ReportsAcrossTenants;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Services\CostAggregationService;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
+/**
+ * Kostenaufteilung (Pivot Kostenstellen-Baum × Kostenart). **Auswertungs-Sicht**: befolgt die
+ * „Alle Tenants"-Präferenz ({@see ReportsAcrossTenants}), sonst der aktive Tenant (docs/adr/0016).
+ */
 class Allocation extends Component
 {
+    use ReportsAcrossTenants;
     use ResolvesCurrentTeam;
 
     public string $period = 'monthly'; // monthly|quarterly
@@ -25,7 +31,8 @@ class Allocation extends Component
 
     public function exportCsv(CostAggregationService $service)
     {
-        $pivot  = $service->costCenterByType($this->teamId(), $this->period);
+        // Export im selben Scope wie die Ansicht (ADR 0016).
+        $pivot  = $service->costCenterByType($this->teamId(), $this->period, $this->reportTenantId());
         $period = $this->period;
 
         return new StreamedResponse(function () use ($pivot, $period) {
@@ -78,11 +85,13 @@ class Allocation extends Component
     {
         $teamId = $this->teamId();
 
-        return view('asset-manager::livewire.costs.allocation', [
-            'pivot'      => $service->costCenterByType($teamId, $this->period),
-            'byCostType' => $service->byCostType($teamId),
-            'byVendor'   => $service->byVendor($teamId),
-            'byCompany'  => $service->byCompany($teamId),
-        ])->layout('platform::layouts.app');
+        return $this->inReportScope(fn () => view('asset-manager::livewire.costs.allocation', [
+            'pivot'           => $service->costCenterByType($teamId, $this->period, $this->reportTenantId()),
+            'showsAllTenants' => $this->showsAllTenants(),
+            'byCostType'      => $service->byCostType($teamId),
+            'byVendor'        => $service->byVendor($teamId),
+            // Früher „je Gesellschaft" — jetzt je oberster Kostenstellen-Ebene (docs/adr/0016).
+            'byCostCenterRoot' => $service->byCostCenterRoot($teamId, $this->reportTenantId()),
+        ])->layout('platform::layouts.app'));
     }
 }

@@ -48,6 +48,36 @@ class AssetHandoverLine extends Model
         'returned_at'     => 'date',
     ];
 
+    /**
+     * `tenant_id` vom Protokoll-Kopf erben, wenn nicht ausdrücklich gesetzt.
+     *
+     * Die Positionen werden über `$handover->lines()->create([...])` angelegt, also ohne eigenes
+     * `team_id`/`tenant_id` im Aufruf — und die Spalte ist seit docs/adr/0016 NOT NULL. Eine Position
+     * gehört zwangsläufig zum Tenant ihres Kopfes; die Ableitung hier ist die einzig richtige Wahl und
+     * erspart es, jeden Aufrufer daran zu erinnern.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (self $line): void {
+            if ($line->tenant_id !== null || ! $line->handover_id) {
+                return;
+            }
+
+            $tenantId = AssetHandover::withoutTenantScope()
+                ->whereKey($line->handover_id)
+                ->value('tenant_id');
+
+            if ($tenantId === null && $line->asset_device_id) {
+                // Altbestand: Kopf ohne Tenant → Tenant des ausgegebenen Geräts.
+                $tenantId = AssetDevice::withoutTenantScope()
+                    ->whereKey($line->asset_device_id)
+                    ->value('tenant_id');
+            }
+
+            $line->tenant_id = $tenantId !== null ? (int) $tenantId : null;
+        });
+    }
+
     public function handover(): BelongsTo
     {
         return $this->belongsTo(AssetHandover::class, 'handover_id');

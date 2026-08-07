@@ -100,6 +100,10 @@ class AssetManagerServiceProvider extends ServiceProvider
         Blade::component('asset-manager::components.detail-row', 'asset-manager-detail-row');
         Blade::component('asset-manager::components.tabs', 'asset-manager-tabs');
 
+        // Hinweis in Auswertungs-Sichten, wenn „Alle Tenants" aktiv ist (docs/adr/0016) — sonst ist
+        // einer Kostenzahl nicht anzusehen, ob sie einen Kunden oder alle zusammen meint.
+        Blade::component('asset-manager::components.all-tenants-notice', 'asset-manager-all-tenants-notice');
+
         $this->registerLivewireComponents();
 
         $this->registerTools();

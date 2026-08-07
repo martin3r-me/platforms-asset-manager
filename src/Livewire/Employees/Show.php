@@ -5,6 +5,7 @@ namespace Platform\AssetManager\Livewire\Employees;
 use Livewire\Component;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
+use Platform\AssetManager\Concerns\GuardsTenantBoundary;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetDevice;
@@ -19,6 +20,8 @@ use Platform\AssetManager\Services\EmployeeService;
 
 class Show extends Component
 {
+    use GuardsTenantBoundary;
+
     public AssetEmployee $employee;
 
     public string  $displayName = '';
@@ -43,7 +46,8 @@ class Show extends Component
 
     public function mount(AssetEmployee $employee): void
     {
-        abort_unless($employee->team_id === Auth::user()->currentTeam->id, 403);
+        // Team → 403, fremder Tenant → 404 (ADR 0016).
+        $this->assertTenantBoundary($employee);
         $this->employee    = $employee;
         $this->displayName = $employee->display_name ?? '';
         $this->email       = $employee->email ?? '';
@@ -101,7 +105,7 @@ class Show extends Component
     public function anonymize(EmployeeService $service): void
     {
         Gate::authorize('asset-manager.manage');
-        abort_unless($this->employee->team_id === Auth::user()->currentTeam->id, 403);
+        $this->assertTenantBoundary($this->employee);
 
         $service->anonymize($this->employee);
 

@@ -8,7 +8,7 @@ use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
-use Platform\AssetManager\Concerns\ScopesToTenant;
+use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Models\AssetCategory;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetEmployee;
@@ -27,7 +27,6 @@ class Index extends Component
 {
     use ResolvesCurrentTeam;
     use WithPagination;
-    use ScopesToTenant;
 
     public string $search           = '';
     public string $filterType       = '';   // '' | 'manual' | 'intune'
@@ -185,7 +184,7 @@ class Index extends Component
     {
         $teamId = $this->teamId();
 
-        $rows     = $inventory->rows($teamId, $this->selectedTenantId);
+        $rows     = $inventory->rows($teamId, TenantContext::scopeTenantId());
         $filtered = $inventory->filter(
             $rows,
             $this->search,
@@ -200,7 +199,7 @@ class Index extends Component
 
         return view('asset-manager::livewire.inventory.index', [
             'items'         => $items,
-            'counts'        => $inventory->counts($teamId, $this->selectedTenantId),
+            'counts'        => $inventory->counts($teamId, TenantContext::scopeTenantId()),
             'totalFiltered' => $sorted->count(),
             'categories'    => AssetCategory::orderBy('sort_order')->get(),
             'employees'     => AssetEmployee::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get(),

@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Livewire;
 
 use Livewire\Component;
+use Platform\AssetManager\Concerns\ReportsAcrossTenants;
 use Illuminate\Support\Facades\Auth;
 use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Models\AssetDevice;
@@ -12,9 +13,24 @@ use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetLicenseSyncLog;
 
+/**
+ * Modul-Dashboard. Eine **Auswertungs-Sicht**: befolgt die „Alle Tenants"-Präferenz
+ * ({@see ReportsAcrossTenants}), zeigt sonst den aktiven Tenant.
+ *
+ * Vor docs/adr/0016 war das Dashboard immer team-weit. Jetzt ist der Default die engere Sicht und
+ * „alle Kunden" ein ausdrücklicher Umschalter-Wert — die Kacheln zeigen also standardmäßig den
+ * Kunden, in dem man gerade arbeitet.
+ */
 class Dashboard extends Component
 {
+    use ReportsAcrossTenants;
+
     public function render()
+    {
+        return $this->inReportScope(fn () => $this->buildView());
+    }
+
+    private function buildView()
     {
         $user   = Auth::user();
         $team   = $user->currentTeam;
@@ -92,6 +108,8 @@ class Dashboard extends Component
 
         return view('asset-manager::livewire.dashboard', [
             'controllingEnabled' => app(\Platform\AssetManager\Services\ControllingContext::class)->enabledFor($team->id),
+            // Für den Hinweis „Zahlen über alle Kunden" in der Ansicht.
+            'showsAllTenants' => $this->showsAllTenants(),
             'config'          => $config,
             'stats'           => $stats,
             'complianceQuote' => $complianceQuote,

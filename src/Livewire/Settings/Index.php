@@ -7,7 +7,9 @@ use Illuminate\Support\Facades\Gate;
 use Livewire\Component;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Services\AssetResetService;
+use Platform\AssetManager\Models\AssetTenant;
 use Platform\AssetManager\Services\ControllingContext;
+use Platform\AssetManager\Services\TenantContext;
 
 /**
  * Modul-Einstellungen je Team (ADR 0008). Controlling-Schalter + Gefahrenzone (Team-Reset).
@@ -65,20 +67,40 @@ class Index extends Component
     {
         Gate::authorize('asset-manager.manage');
 
-        $new = !$this->controllingEnabled;
-        app(ControllingContext::class)->setEnabled($this->teamId(), $new);
+        $new      = !$this->controllingEnabled;
+        $tenantId = TenantContext::resolveForWrite($this->teamId(), (int) Auth::id());
+
+        // Der Schalter gilt seit ADR 0016 je Tenant — ausdruecklich uebergeben, damit Anzeige und
+        // Schreibziel garantiert derselbe Kundenkontext sind.
+        app(ControllingContext::class)->setEnabled($this->teamId(), $new, $tenantId);
         $this->controllingEnabled = $new;
 
+        $tenantName = $this->activeTenantName();
+
         session()->flash('status', $new
-            ? 'Controlling aktiviert — Auswertungen, Stammdaten und Kosten-Import sind nun sichtbar.'
-            : 'Controlling deaktiviert — die Kosten-Schicht ist ausgeblendet. Vorhandene Daten bleiben erhalten.');
+            ? "Controlling fuer {$tenantName} aktiviert — Auswertungen, Stammdaten und Kosten-Import sind nun sichtbar."
+            : "Controlling fuer {$tenantName} deaktiviert — die Kosten-Schicht ist ausgeblendet. Vorhandene Daten bleiben erhalten.");
+    }
+
+    /** Name des aktiven Tenants — der Controlling-Schalter gilt nur fuer ihn (ADR 0016). */
+    protected function activeTenantName(): string
+    {
+        $tenantId = TenantContext::scopeTenantId();
+
+        if ($tenantId === null) {
+            return $this->teamName();
+        }
+
+        return (string) (AssetTenant::query()->whereKey($tenantId)->value('name') ?? $this->teamName());
     }
 
     public function render()
     {
         return view('asset-manager::livewire.settings.index', [
-            'canManage' => Gate::allows('asset-manager.manage'),
-            'teamName'  => $this->teamName(),
+            'canManage'  => Gate::allows('asset-manager.manage'),
+            'teamName'   => $this->teamName(),
+            // Damit auf der Seite steht, WELCHER Kundenkontext gerade geschaltet wird.
+            'tenantName' => $this->activeTenantName(),
         ])->layout('platform::layouts.app');
     }
 }

@@ -9,7 +9,6 @@
             ['label' => 'Geräteausgaben', 'icon' => 'clipboard-document-check'],
         ]">
             <x-slot name="actions">
-                @include('asset-manager::livewire.partials.tenant-selector')
                 {{-- Anlegen nur Owner/Admin (ADR 0004) — Backend: save() Gate asset-manager.manage. --}}
                 @can('asset-manager.manage')
                     <x-asset-manager-button variant="primary" size="md" wire:click="newHandover">

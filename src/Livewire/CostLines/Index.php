@@ -13,6 +13,7 @@ use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetVendor;
 use Platform\AssetManager\Services\CostBootstrapService;
+use Platform\AssetManager\Services\TenantContext;
 
 class Index extends Component
 {
@@ -125,15 +126,17 @@ class Index extends Component
 
         $teamId = $this->teamId();
 
-        // FK-Refs team-scopen: eine Fremd-Team-Kostenart/-Kreditor wird als Validierungsfehler (422)
-        // abgelehnt, nicht still übernommen — sonst danglende cross-team FK + fremde Namen in der Liste
-        // + verfälschte Kostenzuordnung. Vorbild: CreateCostLineTool / Assets/Create.php.
+        $tenantId = TenantContext::resolveForWrite($teamId, (int) Auth::id());
+
+        // FK-Refs TENANT-scopen: Kostenarten und Kreditoren sind seit ADR 0016 tenant-gebunden, eine
+        // Fremd-Referenz wird als Validierungsfehler (422) abgelehnt statt still übernommen — sonst
+        // grenzüberschreitender FK + fremde Namen in der Liste + verfälschte Kostenzuordnung.
         $this->validate([
-            'fCostType'  => ['required', 'integer', Rule::exists('asset_cost_types', 'id')->where('team_id', $teamId)],
+            'fCostType'  => ['required', 'integer', Rule::exists('asset_cost_types', 'id')->where('tenant_id', $tenantId)],
             'fLabel'     => 'required|string|max:255',
             'fAmount'    => 'required|numeric',
             'fFrequency' => 'required|in:monthly,quarterly,yearly,once',
-            'fVendor'    => ['nullable', 'integer', Rule::exists('asset_vendors', 'id')->where('team_id', $teamId)],
+            'fVendor'    => ['nullable', 'integer', Rule::exists('asset_vendors', 'id')->where('tenant_id', $tenantId)],
         ]);
 
         // Team-aufgelöste Instanzen laden und deren IDs persistieren (nie die rohe Request-ID).
@@ -145,7 +148,7 @@ class Index extends Component
         $vendor = $this->fVendor
             ? AssetVendor::where('team_id', $teamId)->find($this->fVendor)
             : null;
-        $center = $bootstrap->resolveCostCenter($teamId, $this->fCostCenter ?: null);
+        $center = $bootstrap->resolveCostCenter($teamId, $this->fCostCenter ?: null, $tenantId);
 
         // Betrag 0 ablehnen; negativ nur bei allow_negative-Kostenart (Gutschrift) — verhindert stilles
         // Netting durch Tippfehler-Minusbeträge. Inline-Fehler, Editor bleibt offen.
@@ -159,6 +162,7 @@ class Index extends Component
 
         $data = [
             'team_id'           => $teamId,
+            'tenant_id'         => $tenantId,
             'cost_type_id'      => $type->id,
             'vendor_id'         => $vendor?->id ?: $type->vendor_default_id,
             'cost_center_id'    => $center?->id,

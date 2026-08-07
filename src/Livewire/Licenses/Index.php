@@ -6,7 +6,6 @@ use Livewire\Component;
 use Livewire\WithPagination;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
-use Platform\AssetManager\Concerns\ScopesToTenant;
 use Platform\AssetManager\Jobs\SyncLicensesJob;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetLicenseSku;
@@ -17,7 +16,6 @@ use Platform\AssetManager\Models\AssetConnectorConfig;
 class Index extends Component
 {
     use WithPagination;
-    use ScopesToTenant;
 
     public string  $search        = '';
     public string  $sortField     = 'display_name';
@@ -71,7 +69,7 @@ class Index extends Component
 
         $team = Auth::user()->currentTeam;
 
-        AssetLicenseSku::where('team_id', $team->id)->forTenant($this->selectedTenantId)
+        AssetLicenseSku::where('team_id', $team->id)
             ->where('id', $skuId)
             ->update(['unit_price' => $price !== null && $price !== '' ? (float) str_replace(',', '.', $price) : null]);
 
@@ -82,7 +80,7 @@ class Index extends Component
     {
         $team = Auth::user()->currentTeam;
 
-        $this->selectedSkuId = AssetLicenseSku::where('team_id', $team->id)->forTenant($this->selectedTenantId)
+        $this->selectedSkuId = AssetLicenseSku::where('team_id', $team->id)
             ->whereKey($skuId)
             ->exists()
             ? $skuId
@@ -97,7 +95,7 @@ class Index extends Component
     public function render()
     {
         $team  = Auth::user()->currentTeam;
-        $query = AssetLicenseSku::where('team_id', $team->id)->forTenant($this->selectedTenantId);
+        $query = AssetLicenseSku::where('team_id', $team->id);
 
         if ($this->search) {
             $query->where(function ($q) {
@@ -131,13 +129,13 @@ class Index extends Component
 
         $skus = $query->paginate($this->perPage);
 
-        $allSkus          = AssetLicenseSku::where('team_id', $team->id)->forTenant($this->selectedTenantId)->get();
+        $allSkus          = AssetLicenseSku::where('team_id', $team->id)->get();
         $totalMonthlyCost = $allSkus->sum(fn($s) => $s->monthlyCost());
         $unusedLicenses   = $allSkus->where('available_units', '>', 0)->count();
         // Kostenrelevante Lücke: genutzte SKUs ohne hinterlegten Preis → fehlen in der Kostenrechnung.
         $unpricedCount    = $allSkus->filter(fn($s) => $s->unit_price === null && (int) $s->consumed_units > 0)->count();
 
-        $lastLog  = AssetLicenseSyncLog::where('team_id', $team->id)->forTenant($this->selectedTenantId)
+        $lastLog  = AssetLicenseSyncLog::where('team_id', $team->id)
             ->orderBy('started_at', 'desc')
             ->first();
 
@@ -149,11 +147,11 @@ class Index extends Component
         $assignments = collect();
 
         if ($this->selectedSkuId) {
-            $selectedSku = AssetLicenseSku::where('team_id', $team->id)->forTenant($this->selectedTenantId)
+            $selectedSku = AssetLicenseSku::where('team_id', $team->id)
                 ->find($this->selectedSkuId);
 
             if ($selectedSku) {
-                $assignments = AssetUserLicense::where('team_id', $team->id)->forTenant($this->selectedTenantId)
+                $assignments = AssetUserLicense::where('team_id', $team->id)
                     ->where('sku_id', $selectedSku->sku_id)
                     ->orderBy('display_name')
                     ->limit(200)

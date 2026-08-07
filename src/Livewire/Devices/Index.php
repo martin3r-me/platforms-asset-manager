@@ -7,7 +7,6 @@ use Livewire\WithPagination;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Concerns\AuthorizesTeamRole;
-use Platform\AssetManager\Concerns\ScopesToTenant;
 use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetDevice;
@@ -22,7 +21,6 @@ class Index extends Component
 {
     use WithPagination;
     use AuthorizesTeamRole;
-    use ScopesToTenant;
 
     public string $preset           = 'all'; // all|no_user|inactive|noncompliant|issues|expiring
     public string $search           = '';
@@ -146,7 +144,7 @@ class Index extends Component
     public function selectEmployeeByUpn(string $upn): void
     {
         $team     = Auth::user()->currentTeam;
-        $employee = AssetEmployee::where('team_id', $team->id)->forTenant($this->selectedTenantId)
+        $employee = AssetEmployee::where('team_id', $team->id)
             ->where('user_principal_name', $upn)
             ->first();
 
@@ -204,7 +202,7 @@ class Index extends Component
         $cc = AssetCostCenter::where('team_id', $teamId)->find($this->bulkCostCenter);
         if (! $cc) return;
 
-        $devices = AssetDevice::where('team_id', $teamId)->forTenant($this->selectedTenantId)->whereIn('id', $this->selected)->get();
+        $devices = AssetDevice::where('team_id', $teamId)->whereIn('id', $this->selected)->get();
         foreach ($devices as $device) {
             $device->update(['cost_center_id' => $cc->id]);
         }
@@ -222,7 +220,7 @@ class Index extends Component
         if (empty($this->selected) || ! in_array($this->bulkLifecycle, AssetDevice::LIFECYCLE_STATUSES, true)) return;
 
         $teamId  = Auth::user()->currentTeam->id;
-        $devices = AssetDevice::where('team_id', $teamId)->forTenant($this->selectedTenantId)->whereIn('id', $this->selected)->get();
+        $devices = AssetDevice::where('team_id', $teamId)->whereIn('id', $this->selected)->get();
         foreach ($devices as $device) {
             $oldStatus = $device->lifecycle_status;
             if ($oldStatus === $this->bulkLifecycle) {
@@ -250,7 +248,7 @@ class Index extends Component
     protected function filteredQuery()
     {
         $team  = Auth::user()->currentTeam;
-        $query = AssetDevice::where('team_id', $team->id)->forTenant($this->selectedTenantId);
+        $query = AssetDevice::where('team_id', $team->id);
 
         if ($this->search) {
             $query->where(function ($q) {
@@ -372,21 +370,21 @@ class Index extends Component
             ->paginate($this->perPage);
 
         $stats = [
-            'total'        => AssetDevice::where('team_id', $team->id)->forTenant($this->selectedTenantId)->count(),
-            'compliant'    => AssetDevice::where('team_id', $team->id)->forTenant($this->selectedTenantId)->where('compliance_state', 'compliant')->count(),
-            'noncompliant' => AssetDevice::where('team_id', $team->id)->forTenant($this->selectedTenantId)->where('compliance_state', 'noncompliant')->count(),
-            'unknown'      => AssetDevice::where('team_id', $team->id)->forTenant($this->selectedTenantId)->whereIn('compliance_state', ['unknown', 'error', 'conflict'])->count(),
+            'total'        => AssetDevice::where('team_id', $team->id)->count(),
+            'compliant'    => AssetDevice::where('team_id', $team->id)->where('compliance_state', 'compliant')->count(),
+            'noncompliant' => AssetDevice::where('team_id', $team->id)->where('compliance_state', 'noncompliant')->count(),
+            'unknown'      => AssetDevice::where('team_id', $team->id)->whereIn('compliance_state', ['unknown', 'error', 'conflict'])->count(),
         ];
 
         // Zähler für die Schnellfilter-Chips (immer team-weit, nicht durch Suche/Filter eingeschränkt) —
         // aus DERSELBEN Preset-Map wie applyPreset() (M10: kein Drift zwischen Filter und Zähler).
         $presetCounts = ['all' => $stats['total']];
         foreach ($this->presetScopes() as $key => $scope) {
-            $base = AssetDevice::where('team_id', $team->id)->forTenant($this->selectedTenantId);
+            $base = AssetDevice::where('team_id', $team->id);
             $presetCounts[$key] = $scope($base)->count();
         }
 
-        $osList = AssetDevice::where('team_id', $team->id)->forTenant($this->selectedTenantId)
+        $osList = AssetDevice::where('team_id', $team->id)
             ->select('operating_system')
             ->distinct()
             ->orderBy('operating_system')
@@ -395,23 +393,23 @@ class Index extends Component
             ->values();
 
         $config  = AssetConnectorConfig::where('team_id', $team->id)->first();
-        $lastLog = AssetDeviceSyncLog::where('team_id', $team->id)->forTenant($this->selectedTenantId)
+        $lastLog = AssetDeviceSyncLog::where('team_id', $team->id)
             ->orderBy('started_at', 'desc')
             ->first();
 
-        $activities = AssetDeviceSyncLog::where('team_id', $team->id)->forTenant($this->selectedTenantId)
+        $activities = AssetDeviceSyncLog::where('team_id', $team->id)
             ->orderByDesc('started_at')
             ->limit(10)
             ->get();
 
         // Verteilungen für Bottom-Panel
-        $osBreakdown = AssetDevice::where('team_id', $team->id)->forTenant($this->selectedTenantId)
+        $osBreakdown = AssetDevice::where('team_id', $team->id)
             ->selectRaw('COALESCE(operating_system, "Unbekannt") as os, count(*) as count')
             ->groupBy('os')
             ->orderByDesc('count')
             ->get();
 
-        $complianceBreakdown = AssetDevice::where('team_id', $team->id)->forTenant($this->selectedTenantId)
+        $complianceBreakdown = AssetDevice::where('team_id', $team->id)
             ->selectRaw('compliance_state, count(*) as count')
             ->groupBy('compliance_state')
             ->orderByDesc('count')
@@ -435,19 +433,19 @@ class Index extends Component
         $employeeLicenses = collect();
 
         if ($this->detailType === 'device' && $this->detailId) {
-            $selectedDevice = AssetDevice::where('team_id', $team->id)->forTenant($this->selectedTenantId)
+            $selectedDevice = AssetDevice::where('team_id', $team->id)
                 ->where('id', $this->detailId)
                 ->first();
         } elseif ($this->detailType === 'employee' && $this->detailId) {
-            $selectedEmployee = AssetEmployee::where('team_id', $team->id)->forTenant($this->selectedTenantId)
+            $selectedEmployee = AssetEmployee::where('team_id', $team->id)
                 ->where('id', $this->detailId)
                 ->first();
 
             if ($selectedEmployee) {
-                $employeeDevices = AssetDevice::where('team_id', $team->id)->forTenant($this->selectedTenantId)
+                $employeeDevices = AssetDevice::where('team_id', $team->id)
                     ->where('user_principal_name', $selectedEmployee->user_principal_name)
                     ->get();
-                $employeeLicenses = AssetUserLicense::where('team_id', $team->id)->forTenant($this->selectedTenantId)
+                $employeeLicenses = AssetUserLicense::where('team_id', $team->id)
                     ->where('user_principal_name', $selectedEmployee->user_principal_name)
                     ->get();
             }
