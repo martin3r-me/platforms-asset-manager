@@ -98,31 +98,6 @@
     </x-slot>
 
     {{-- RECHTS: Kosten-Übersicht --}}
-    <x-slot name="activity">
-        <x-ui-page-sidebar title="Kosten" icon="heroicon-o-banknotes" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
-            <div class="p-4 space-y-3 bg-[var(--am-bg)]">
-                <div class="p-3 rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm">
-                    <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Gesamt pro Monat</div>
-                    <div class="text-2xl font-semibold text-[var(--am-text)] tabular-nums">{{ number_format($totalCost, 2, ',', '.') }} €</div>
-                </div>
-                <div class="p-3 rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm space-y-1.5">
-                    <div class="flex items-center justify-between text-[11px]">
-                        <span class="text-[var(--am-text-muted)]">Hardware (AfA)</span>
-                        <span class="font-medium text-[var(--am-text-secondary)] tabular-nums">{{ number_format($hardwareCost, 2, ',', '.') }} €</span>
-                    </div>
-                    <div class="flex items-center justify-between text-[11px]">
-                        <span class="text-[var(--am-text-muted)]">Geräte (Intune)</span>
-                        <span class="font-medium text-[var(--am-text-secondary)] tabular-nums">{{ number_format($deviceCost, 2, ',', '.') }} €</span>
-                    </div>
-                    <div class="flex items-center justify-between text-[11px]">
-                        <span class="text-[var(--am-text-muted)]">Lizenzen</span>
-                        <span class="font-medium text-[var(--am-text-secondary)] tabular-nums">{{ number_format($licenseCost, 2, ',', '.') }} €</span>
-                    </div>
-                </div>
-            </div>
-        </x-ui-page-sidebar>
-    </x-slot>
-
     {{-- HAUPT-CONTENT --}}
     <div class="flex-1 flex flex-col min-h-0 min-w-0">
         <div class="flex-1 overflow-y-auto p-6 space-y-5">
@@ -155,6 +130,28 @@
                 <x-asset-manager-stat-card label="Lizenzen" :value="$licenses->count()" icon="heroicon-o-key" accent="violet" />
                 <x-asset-manager-stat-card label="pro Monat" :value="number_format($totalCost, 2, ',', '.') . ' €'" icon="heroicon-o-banknotes" accent="navy" value-class="text-[var(--am-accent)]" />
             </div>
+
+            {{-- Kostenaufschlüsselung. Stand bis S8 in einer rechten Sidebar, die per Default
+                 zugeklappt war — die Kachel „pro Monat" oben nannte damit eine Summe, deren
+                 Herkunft erst nach einem Klick sichtbar wurde. --}}
+            @if($totalCost > 0)
+                <x-asset-manager-panel title="Kosten pro Monat">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                            <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">Hardware (AfA)</div>
+                            <div class="mt-1 text-lg font-semibold text-[var(--am-text)] tabular-nums">{{ number_format($hardwareCost, 2, ',', '.') }} €</div>
+                        </div>
+                        <div>
+                            <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">Geräte (Intune)</div>
+                            <div class="mt-1 text-lg font-semibold text-[var(--am-text)] tabular-nums">{{ number_format($deviceCost, 2, ',', '.') }} €</div>
+                        </div>
+                        <div>
+                            <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">Lizenzen</div>
+                            <div class="mt-1 text-lg font-semibold text-[var(--am-text)] tabular-nums">{{ number_format($licenseCost, 2, ',', '.') }} €</div>
+                        </div>
+                    </div>
+                </x-asset-manager-panel>
+            @endif
 
             {{-- Geräte aus Intune --}}
             @if($devices->count() > 0)

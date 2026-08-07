@@ -83,34 +83,6 @@
     </x-slot>
 
     {{-- RECHTS: Schnellaktionen --}}
-    <x-slot name="activity">
-        <x-ui-page-sidebar title="Aktionen" icon="heroicon-o-bolt" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
-            <div class="p-4 space-y-3 bg-[var(--am-bg)]">
-                @can('asset-manager.manage')
-                    <x-asset-manager-button variant="primary" size="md" class="w-full"
-                                 href="{{ route('asset-manager.assets.create') }}" wire:navigate>
-                        @svg('heroicon-o-plus', 'w-4 h-4')
-                        Neues Asset anlegen
-                    </x-asset-manager-button>
-                    <x-asset-manager-button variant="secondary" size="md" class="w-full" wire:click="$toggle('showBulkCreate')">
-                        @svg('heroicon-o-square-3-stack-3d', 'w-4 h-4')
-                        Mehrere identische anlegen
-                    </x-asset-manager-button>
-                @endcan
-                <x-asset-manager-button variant="secondary" size="md" class="w-full"
-                             href="{{ route('asset-manager.holders.index') }}" wire:navigate>
-                    @svg('heroicon-o-users', 'w-4 h-4')
-                    Zu den Asset-Trägern
-                </x-asset-manager-button>
-                <x-asset-manager-button variant="secondary" size="md" class="w-full"
-                             href="{{ route('asset-manager.devices.index') }}" wire:navigate>
-                    @svg('heroicon-o-computer-desktop', 'w-4 h-4')
-                    Nur Intune-Geräte
-                </x-asset-manager-button>
-            </div>
-        </x-ui-page-sidebar>
-    </x-slot>
-
     <div class="flex-1 flex flex-col min-h-0 min-w-0">
         <div class="flex-1 overflow-y-auto p-6 space-y-5">
 

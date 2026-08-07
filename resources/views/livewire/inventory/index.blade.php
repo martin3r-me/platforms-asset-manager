@@ -105,64 +105,18 @@
     </x-slot>
 
     {{-- RECHTS: Kennzahlen + Schnellaktionen --}}
-    <x-slot name="activity">
-        <x-ui-page-sidebar title="Übersicht" icon="heroicon-o-chart-bar" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
-            <div class="p-4 space-y-4 bg-[var(--am-bg)]">
-
-                {{-- Quick-Stats (kompakt, flach) --}}
-                <section class="space-y-2">
-                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--am-text-muted)] px-1">Kennzahlen</h3>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div class="rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-3">
-                            <div class="text-xl font-semibold text-[var(--am-text)]">{{ $counts['total'] }}</div>
-                            <div class="text-[10px] text-[var(--am-text-muted)]">Hardware gesamt</div>
-                        </div>
-                        <div class="rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-3">
-                            <div class="text-xl font-semibold text-emerald-600">{{ $counts['assigned'] }}</div>
-                            <div class="text-[10px] text-[var(--am-text-muted)]">Zugewiesen</div>
-                        </div>
-                        <div class="rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-3">
-                            <div class="text-xl font-semibold text-[var(--am-text-secondary)]">{{ $counts['manual'] }}</div>
-                            <div class="text-[10px] text-[var(--am-text-muted)]">Manuelle Assets</div>
-                        </div>
-                        <div class="rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm p-3">
-                            <div class="text-xl font-semibold text-violet-600">{{ $counts['intune'] }}</div>
-                            <div class="text-[10px] text-[var(--am-text-muted)]">Intune-Geräte</div>
-                        </div>
-                    </div>
-                </section>
-
-                {{-- Schnellaktionen --}}
-                <section class="space-y-2">
-                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--am-text-muted)] px-1">Schnellaktionen</h3>
-                    @can('asset-manager.manage')
-                        <x-asset-manager-button variant="primary" size="md" class="w-full" wire:click="openCreate">
-                            @svg('heroicon-o-plus', 'w-4 h-4')
-                            Asset anlegen
-                        </x-asset-manager-button>
-                    @endcan
-                    <x-asset-manager-button variant="secondary" size="md" class="w-full"
-                                 href="{{ route('asset-manager.holders.index') }}" wire:navigate>
-                        @svg('heroicon-o-users', 'w-4 h-4')
-                        Zu den Asset-Trägern
-                    </x-asset-manager-button>
-                    <x-asset-manager-button variant="secondary" size="md" class="w-full"
-                                 href="{{ route('asset-manager.devices.index') }}" wire:navigate>
-                        @svg('heroicon-o-computer-desktop', 'w-4 h-4')
-                        Nur Intune-Geräte
-                    </x-asset-manager-button>
-                    <x-asset-manager-button variant="secondary" size="md" class="w-full"
-                                 href="{{ route('asset-manager.assets.index') }}" wire:navigate>
-                        @svg('heroicon-o-cube-transparent', 'w-4 h-4')
-                        Nur manuelle Assets
-                    </x-asset-manager-button>
-                </section>
-            </div>
-        </x-ui-page-sidebar>
-    </x-slot>
-
     <div class="flex-1 flex flex-col min-h-0 min-w-0">
         <div class="flex-1 overflow-y-auto p-6 space-y-5">
+
+        {{-- Kennzahlen. Standen bis S8 in einer rechten Sidebar, die per Default zugeklappt war —
+             also ausgerechnet die Zahlen, die den Einstieg geben sollen, sah man erst nach einem
+             Klick. Die Schnellaktionen von dort duplizierten die Actionbar und sind ersatzlos weg. --}}
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <x-asset-manager-stat-card label="Hardware gesamt" :value="$counts['total']" icon="heroicon-o-rectangle-group" accent="navy" />
+            <x-asset-manager-stat-card label="Zugeordnet" :value="$counts['assigned']" icon="heroicon-o-user" accent="emerald" value-class="text-emerald-600" />
+            <x-asset-manager-stat-card label="Manuelle Assets" :value="$counts['manual']" icon="heroicon-o-cube-transparent" :href="route('asset-manager.assets.index')" />
+            <x-asset-manager-stat-card label="Intune-Geräte" :value="$counts['intune']" icon="heroicon-o-computer-desktop" accent="violet" value-class="text-violet-600" :href="route('asset-manager.devices.index')" />
+        </div>
 
         @if($flash)
             <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200">

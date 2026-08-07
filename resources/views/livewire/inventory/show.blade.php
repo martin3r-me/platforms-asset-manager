@@ -33,6 +33,17 @@
                         </x-asset-manager-button>
                     @endif
                 @endif
+
+                {{-- Absprung zu den Geräteausgaben. Stand bis S8 in der rechten Sidebar; die übrigen
+                     Buttons dort waren reine Dubletten dieser Actionbar. „Zurück zum Inventar" ist
+                     ersatzlos weg — das leistet der Breadcrumb links. --}}
+                @if($subject->type === 'intune')
+                    <x-asset-manager-button variant="ghost" size="sm"
+                                 href="{{ route('asset-manager.handovers.index') }}" wire:navigate>
+                        @svg('heroicon-o-clipboard-document-check', 'w-3.5 h-3.5')
+                        Geräteausgaben
+                    </x-asset-manager-button>
+                @endif
             </x-slot>
         </x-asset-manager-page-actionbar>
     </x-slot>
@@ -103,53 +114,6 @@
     </x-slot>
 
     {{-- RECHTS: Aktionen (spiegelt die Actionbar als große Buttons) + Absprünge. --}}
-    <x-slot name="activity">
-        <x-ui-page-sidebar title="Aktionen" icon="heroicon-o-bolt" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
-            <div class="p-4 space-y-4 bg-[var(--am-bg)]">
-                @if($canManage)
-                    <section class="space-y-2">
-                        <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--am-text-muted)] px-1">Bearbeiten</h3>
-                        @if($subject->type === 'manual')
-                            <x-asset-manager-button variant="primary" size="md" class="w-full" wire:click="openAssign">
-                                @svg('heroicon-o-user-plus', 'w-4 h-4')
-                                Zuordnen
-                            </x-asset-manager-button>
-                            <x-asset-manager-button variant="secondary" size="md" class="w-full" wire:click="openEdit">
-                                @svg('heroicon-o-pencil-square', 'w-4 h-4')
-                                Bearbeiten
-                            </x-asset-manager-button>
-                            <x-asset-manager-button variant="danger" size="md" class="w-full" wire:click="openDelete">
-                                @svg('heroicon-o-trash', 'w-4 h-4')
-                                Löschen
-                            </x-asset-manager-button>
-                        @else
-                            <x-asset-manager-button variant="primary" size="md" class="w-full" wire:click="openDeviceEdit">
-                                @svg('heroicon-o-pencil-square', 'w-4 h-4')
-                                Lifecycle / Beschaffung bearbeiten
-                            </x-asset-manager-button>
-                        @endif
-                    </section>
-                @endif
-
-                <section class="space-y-2">
-                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--am-text-muted)] px-1">Absprünge</h3>
-                    @if($subject->type === 'intune')
-                        <x-asset-manager-button variant="secondary" size="md" class="w-full"
-                                     href="{{ route('asset-manager.handovers.index') }}" wire:navigate>
-                            @svg('heroicon-o-clipboard-document-check', 'w-4 h-4')
-                            Geräteausgaben
-                        </x-asset-manager-button>
-                    @endif
-                    <x-asset-manager-button variant="secondary" size="md" class="w-full"
-                                 href="{{ route('asset-manager.inventory.index') }}" wire:navigate>
-                        @svg('heroicon-o-rectangle-group', 'w-4 h-4')
-                        Zurück zum Inventar
-                    </x-asset-manager-button>
-                </section>
-            </div>
-        </x-ui-page-sidebar>
-    </x-slot>
-
     <div class="flex-1 flex flex-col min-h-0 min-w-0">
         <div class="flex-1 overflow-y-auto p-6 space-y-5">
 

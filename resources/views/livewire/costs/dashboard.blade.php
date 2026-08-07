@@ -42,41 +42,6 @@
     </x-slot>
 
     {{-- RECHTS: Anomalien --}}
-    <x-slot name="activity">
-        <x-ui-page-sidebar title="Anomalien" icon="heroicon-o-exclamation-triangle" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
-            <div class="p-4 space-y-3 bg-[var(--am-bg)]">
-
-                <div class="p-3 rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm">
-                    <div class="flex items-center gap-2 mb-1">
-                        @svg('heroicon-o-archive-box', 'w-4 h-4 text-sky-500')
-                        <h3 class="text-[11px] font-semibold text-[var(--am-text-secondary)]">Hardware im Lager</h3>
-                    </div>
-                    <div class="text-lg font-semibold text-sky-600 tabular-nums">{{ number_format($anomalies['pool']['value'], 2, ',', '.') }} €</div>
-                    <div class="text-[10px] text-[var(--am-text-muted)]">{{ $anomalies['pool']['count'] }} Items im Lager, Anschaffungswert gebunden</div>
-                </div>
-
-                <div class="p-3 rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm">
-                    <div class="flex items-center gap-2 mb-1">
-                        @svg('heroicon-o-currency-euro', 'w-4 h-4 text-emerald-500')
-                        <h3 class="text-[11px] font-semibold text-[var(--am-text-secondary)]">Ungenutzte Lizenzen</h3>
-                    </div>
-                    <div class="text-lg font-semibold text-emerald-600 tabular-nums">{{ number_format($anomalies['unused_licenses']['savings'], 2, ',', '.') }} €</div>
-                    <div class="text-[10px] text-[var(--am-text-muted)]">{{ $anomalies['unused_licenses']['units'] }} freie Lizenzen über {{ $anomalies['unused_licenses']['count'] }} SKUs — Einsparpotential / Monat</div>
-                </div>
-
-                <div class="p-3 rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm">
-                    <div class="flex items-center gap-2 mb-1">
-                        @svg('heroicon-o-user-minus', 'w-4 h-4 text-red-500')
-                        <h3 class="text-[11px] font-semibold text-[var(--am-text-secondary)]">Hardware bei Inaktiven</h3>
-                    </div>
-                    <div class="text-lg font-semibold text-red-600 tabular-nums">{{ $anomalies['inactive_employees']['count'] }}</div>
-                    <div class="text-[10px] text-[var(--am-text-muted)]">Items zugewiesen an inaktive Asset-Träger — {{ number_format($anomalies['inactive_employees']['monthly'], 2, ',', '.') }} € / Monat. Rückgabe einleiten.</div>
-                </div>
-
-            </div>
-        </x-ui-page-sidebar>
-    </x-slot>
-
     {{-- HAUPT-CONTENT --}}
     <div class="flex-1 flex flex-col min-h-0 min-w-0">
         <div class="flex-1 overflow-y-auto p-6 space-y-8">
