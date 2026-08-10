@@ -169,14 +169,18 @@ class AssetManagerServiceProvider extends ServiceProvider
             $registry->register(new \Platform\AssetManager\Tools\CostLines\ListCostLinesTool());
             $registry->register(new \Platform\AssetManager\Tools\CostLines\CreateCostLineTool());
             $registry->register(new \Platform\AssetManager\Tools\CostLines\UpdateCostLineTool());
+            $registry->register(new \Platform\AssetManager\Tools\CostLines\DeleteCostLineTool());
             $registry->register(new \Platform\AssetManager\Tools\CostLines\BulkReassignCostLineCenterTool());
 
             // Stammdaten
             $registry->register(new \Platform\AssetManager\Tools\MasterData\ListCostCentersTool());
             $registry->register(new \Platform\AssetManager\Tools\MasterData\CreateCostCenterTool());
+            $registry->register(new \Platform\AssetManager\Tools\MasterData\DeleteCostCenterTool());
             $registry->register(new \Platform\AssetManager\Tools\MasterData\ListCompaniesTool());
             $registry->register(new \Platform\AssetManager\Tools\MasterData\ListCostTypesTool());
+            $registry->register(new \Platform\AssetManager\Tools\MasterData\DeleteCostTypeTool());
             $registry->register(new \Platform\AssetManager\Tools\MasterData\ListVendorsTool());
+            $registry->register(new \Platform\AssetManager\Tools\MasterData\DeleteVendorTool());
 
             // Sync
             $registry->register(new \Platform\AssetManager\Tools\Sync\SyncStatusTool());

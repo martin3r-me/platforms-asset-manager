@@ -13,8 +13,8 @@ use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetVendor;
-use Platform\AssetManager\Services\CostAggregationService;
 use Platform\AssetManager\Services\CostBootstrapService;
+use Platform\AssetManager\Services\MasterDataDeletionService;
 use Platform\AssetManager\Services\TenantContext;
 
 /**
@@ -404,74 +404,33 @@ class Index extends Component
         };
     }
 
-    protected function deleteCostCenter(int $id): void
+    /**
+     * Die Löschregeln (Kinder rutschen hoch, Kostenart mit Kosten bleibt gesperrt) liegen im
+     * {@see MasterDataDeletionService} — dieselbe Wahrheit nutzen die MCP-Tools. Hier bleibt nur die
+     * UI-Reaktion: Meldung anzeigen und, falls die gelöschte Zeile im Editor stand, ihn schließen.
+     */
+    protected function applyDeletion(int $id, array $result): void
     {
-        $cc   = AssetCostCenter::where('team_id', $this->teamId())->findOrFail($id);
-        $code = $cc->code;
-
-        $childCount = AssetCostCenter::where('parent_id', $cc->id)->count();
-
-        // parent_id ist nullOnDelete → Kinder werden zu obersten Knoten statt mitgelöscht zu werden.
-        // Die übrigen FKs (Träger, Kostenpositionen) sind ebenfalls nullOnDelete → Zuordnungen werden
-        // entfernt, die Datensätze bleiben.
-        $cc->delete();
-
-        // Die hochgerutschten Kinder tragen noch die alte depth.
-        AssetCostCenter::whereNull('parent_id')->where('depth', '>', 0)->get()
-            ->each(fn (AssetCostCenter $node) => $node->recomputeDepth());
-
-        if ($this->selectedId === $id) {
+        if ($result['ok'] && $this->selectedId === $id) {
             $this->resetSelection();
         }
 
-        $this->flash = $childCount > 0
-            ? "Kostenstelle {$code} gelöscht — {$childCount} untergeordnete Kostenstelle(n) sind jetzt oberste Knoten, Zuordnungen wurden entfernt."
-            : "Kostenstelle {$code} gelöscht (Zuordnungen wurden entfernt).";
+        $this->flash = $result['message'];
     }
 
-    /** Löschen nur, wenn keine Positionen dranhängen — cost_type_id ist cascadeOnDelete (sonst stiller Datenverlust). */
+    protected function deleteCostCenter(int $id): void
+    {
+        $this->applyDeletion($id, app(MasterDataDeletionService::class)->deleteCostCenter($this->teamId(), $id));
+    }
+
     protected function deleteCostType(int $id): void
     {
-        $t = AssetCostType::where('team_id', $this->teamId())->withCount('costLines')->findOrFail($id);
-        if ($t->cost_lines_count > 0) {
-            $this->flash = "Kostenart {$t->name} hat {$t->cost_lines_count} Position(en) — erst dort umbuchen oder löschen, dann ist die Kostenart löschbar.";
-
-            return;
-        }
-
-        // Virtuelle Quellen (hardware_afa/ms_license/asset_device) haben NIE cost_lines (cost_lines_count=0),
-        // tragen ihre Kosten aber aus Inventar-AfA / bepreisten Lizenz-Zuweisungen / Geräten. Löschen würde
-        // diese Beträge still aus dem Pivot kippen → blockieren, solange die Kostenart aktiv Kosten trägt.
-        if (in_array($t->aggregation_source, [AssetCostType::SOURCE_HARDWARE_AFA, AssetCostType::SOURCE_MS_LICENSE, AssetCostType::SOURCE_ASSET_DEVICE], true)) {
-            $contributes = app(CostAggregationService::class)
-                ->normalizedLines($this->teamId())
-                ->contains(fn ($l) => (int) $l['cost_type_id'] === (int) $t->id && (float) $l['amount'] != 0.0);
-            if ($contributes) {
-                $this->flash = "Kostenart {$t->name} (Quelle: {$t->aggregation_source}) trägt aktuell Kosten aus Geräten/Inventar/Lizenzen — diese erst entkoppeln oder umbuchen, dann ist die Kostenart löschbar.";
-
-                return;
-            }
-        }
-
-        $name = $t->name;
-        $t->delete();
-        if ($this->selectedId === $id) {
-            $this->resetSelection();
-        }
-        $this->flash = "Kostenart {$name} gelöscht.";
+        $this->applyDeletion($id, app(MasterDataDeletionService::class)->deleteCostType($this->teamId(), $id));
     }
 
     protected function deleteVendor(int $id): void
     {
-        $v    = AssetVendor::where('team_id', $this->teamId())->findOrFail($id);
-        $name = $v->name;
-        // vendor_id (Kostenpositionen) und vendor_default_id (Kostenarten) sind nullOnDelete →
-        // Zuordnungen werden entfernt, Positionen/Kostenarten bleiben erhalten.
-        $v->delete();
-        if ($this->selectedId === $id) {
-            $this->resetSelection();
-        }
-        $this->flash = "Kreditor {$name} gelöscht (Zuordnungen wurden entfernt).";
+        $this->applyDeletion($id, app(MasterDataDeletionService::class)->deleteVendor($this->teamId(), $id));
     }
 
     // ---- Kostenarten-Extras ----------------------------------------------

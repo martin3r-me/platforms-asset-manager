@@ -13,6 +13,7 @@ use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetVendor;
 use Platform\AssetManager\Services\CostBootstrapService;
+use Platform\AssetManager\Services\MasterDataDeletionService;
 use Platform\AssetManager\Services\TenantContext;
 
 class Index extends Component
@@ -191,14 +192,15 @@ class Index extends Component
     {
         Gate::authorize('asset-manager.manage');
 
-        $line = AssetCostLine::where('team_id', $this->teamId())->findOrFail($id);
-        $line->delete();
+        // Über den Service, damit UI und MCP-Tool (asset-manager.cost-lines.DELETE) dasselbe tun.
+        $result = app(MasterDataDeletionService::class)->deleteCostLine($this->teamId(), $id);
+
         // Wird gerade diese Zeile im Editor-Modal bearbeitet → Modal schließen.
-        if ($this->editId === $id) {
+        if ($result['ok'] && $this->editId === $id) {
             $this->resetEditor();
             $this->showEditor = false;
         }
-        $this->flash = 'Kostenposition gelöscht.';
+        $this->flash = $result['message'];
     }
 
     public function toggleActive(int $id): void
