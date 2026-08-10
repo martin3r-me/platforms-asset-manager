@@ -11,6 +11,7 @@ use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Services\CostExcelImportService;
 use Platform\AssetManager\Services\CostResetService;
 use Platform\AssetManager\Services\TenantContext;
+use Platform\AssetManager\Services\VodafoneInvoiceImportService;
 
 class Import extends Component
 {
@@ -24,6 +25,12 @@ class Import extends Component
     public ?string $error = null;
     public bool $wasDryRun = true;
     public bool $running = false;
+
+    /** Zweiter, unabhängiger Upload: Vodafone-Rechnungsanalyse (ADR 0018). */
+    public $vodafoneFile;
+    public ?array $vodafoneResult = null;
+    public ?string $vodafoneError = null;
+    public bool $vodafoneWasDryRun = true;
 
     /** owner/admin im aktiven Team? (analog AssetDevicePolicy) */
     protected function canManage(): bool
@@ -101,6 +108,86 @@ class Import extends Component
 
             $this->error = str_contains($e->getMessage(), 'geöffnet werden')
                 ? 'Die Datei konnte nicht geöffnet werden — es wird eine echte .xlsx-Datei erwartet (kein altes .xls/CSV, nicht passwortgeschützt).'
+                : 'Der Import ist fehlgeschlagen. Bitte Datei und Format prüfen; Details stehen im Server-Log.';
+        } finally {
+            $this->running = false;
+        }
+    }
+
+    // ---- Vodafone-Rechnungsanalyse ---------------------------------------------------------
+
+    public function updatedVodafoneFile(): void
+    {
+        $this->vodafoneResult = null;
+        $this->vodafoneError  = null;
+        $this->validateVodafoneFile();
+    }
+
+    protected function validateVodafoneFile(): bool
+    {
+        $this->resetErrorBag('vodafoneFile');
+
+        if (! $this->vodafoneFile) {
+            $this->addError('vodafoneFile', 'Bitte eine Datei wählen.');
+            return false;
+        }
+        if ($this->vodafoneFile->getSize() > 20 * 1024 * 1024) {
+            $this->addError('vodafoneFile', 'Datei zu groß (max. 20 MB).');
+            return false;
+        }
+        if (strtolower($this->vodafoneFile->getClientOriginalExtension() ?? '') !== 'xlsx') {
+            $this->addError('vodafoneFile', 'Bitte den Portal-Export als .xlsx hochladen.');
+            return false;
+        }
+
+        return true;
+    }
+
+    public function previewVodafone(VodafoneInvoiceImportService $service): void
+    {
+        $this->runVodafone($service, true);
+    }
+
+    public function runVodafoneImport(VodafoneInvoiceImportService $service): void
+    {
+        $this->runVodafone($service, false);
+    }
+
+    protected function runVodafone(VodafoneInvoiceImportService $service, bool $dryRun): void
+    {
+        // Gleiche Grenze wie beim Excel-Import (ADR 0004): der Lauf löscht die abgelösten
+        // Excel-Mobilfunkzeilen hart und schreibt Kostenpositionen — Owner/Admin.
+        abort_unless($this->canManage(), 403);
+
+        $this->vodafoneError  = null;
+        $this->vodafoneResult = null;
+
+        if (! $this->validateVodafoneFile()) {
+            return;
+        }
+
+        $this->running          = true;
+        $this->vodafoneWasDryRun = $dryRun;
+
+        try {
+            $this->vodafoneResult = $service->import(
+                $this->teamId(),
+                $this->vodafoneFile->getRealPath(),
+                'vodafone-upload',
+                $dryRun,
+                $this->activeTenantId(),
+            );
+        } catch (\Throwable $e) {
+            Log::error('AssetManager: Vodafone-Import fehlgeschlagen', [
+                'team_id' => $this->teamId(),
+                'dry_run' => $dryRun,
+                'error'   => $e->getMessage(),
+            ]);
+
+            // Die Meldungen des Services sind bewusst fachlich formuliert (fehlendes Blatt, fehlende
+            // Kostenart) — die darf der Nutzer sehen, sie sagen ihm, was zu tun ist.
+            $this->vodafoneError = $e instanceof \RuntimeException
+                ? $e->getMessage()
                 : 'Der Import ist fehlgeschlagen. Bitte Datei und Format prüfen; Details stehen im Server-Log.';
         } finally {
             $this->running = false;

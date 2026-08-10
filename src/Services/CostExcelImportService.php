@@ -11,6 +11,7 @@ use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetVendor;
+use Platform\AssetManager\Support\XlsxReader;
 
 /**
  * Importiert die Kostenaufteilungs-Excel (Kostenaufteilung_IT.xlsx) als Ist-Stand-Bootstrap.
@@ -45,7 +46,8 @@ class CostExcelImportService
     protected ?int    $sheetRow   = null;
 
     public function __construct(
-        protected CostBootstrapService $bootstrap
+        protected CostBootstrapService $bootstrap,
+        protected XlsxReader $xlsx = new XlsxReader(),
     ) {}
 
     /**
@@ -131,7 +133,10 @@ class CostExcelImportService
             'I' => 'lap_dock',
             'J' => 'versicherung',
             'K' => 'o365_backup',
-            'L' => 'mobilfunk',
+            // 'L' => 'mobilfunk' — ENTFERNT 2026-08-10. Mobilfunk kommt jetzt aus der Vodafone-
+            // Rechnungsanalyse ({@see VodafoneInvoiceImportService}), die je Rufnummer abrechnet und
+            // monatlich schwankende Beträge liefert. Bliebe die Spalte hier, stünden beide Quellen
+            // nebeneinander und Mobilfunk zählte im Pivot doppelt (ADR 0001).
             'M' => 'brevo',
             'N' => 'optisigns',
             'O' => 'firstinvision',
@@ -500,130 +505,23 @@ class CostExcelImportService
     }
 
     /**
-     * Liest die Arbeitsmappe in ['normname' => [zeilennr => ['A'=>wert, 'B'=>wert, …]]] (1-basiert).
-     *
-     * Eigener schlanker Reader (ZipArchive + SimpleXML): liest immer den GECACHTEN Zellwert (<v>),
-     * also auch das Ergebnis von Formeln — keine Dependency, kein ext-gd.
+     * Liest die Arbeitsmappe in ['normname' => [zeilennr => ['A'=>wert, 'B'=>wert, ...]]] (1-basiert).
+     * Der Parser liegt seit 2026-08-10 in {@see XlsxReader} — dieselbe Klasse nutzt der
+     * Vodafone-Rechnungsimport.
      */
     protected function readWorkbook(string $path): array
     {
-        $zip = new \ZipArchive();
-        if ($zip->open($path) !== true) {
-            throw new \RuntimeException('Excel-Datei konnte nicht geöffnet werden.');
-        }
-
-        // Shared Strings
-        $shared = [];
-        if (($ss = $zip->getFromName('xl/sharedStrings.xml')) !== false) {
-            $xml = simplexml_load_string($ss);
-            if ($xml !== false) {
-                foreach ($xml->si as $si) {
-                    $shared[] = $this->siText($si);
-                }
-            }
-        }
-
-        // Relationship-Map (r:id → Target)
-        $relMap = [];
-        if (($relsXml = $zip->getFromName('xl/_rels/workbook.xml.rels')) !== false) {
-            $rels = simplexml_load_string($relsXml);
-            if ($rels !== false) {
-                foreach ($rels->Relationship as $rel) {
-                    $relMap[(string) $rel['Id']] = (string) $rel['Target'];
-                }
-            }
-        }
-
-        $sheets = [];
-        $wb = simplexml_load_string($zip->getFromName('xl/workbook.xml') ?: '');
-        if ($wb !== false && isset($wb->sheets)) {
-            foreach ($wb->sheets->sheet as $sheet) {
-                $name = (string) $sheet['name'];
-                $rid  = '';
-                foreach ($sheet->attributes('http://schemas.openxmlformats.org/officeDocument/2006/relationships') as $k => $v) {
-                    if ($k === 'id') $rid = (string) $v;
-                }
-                $target = $relMap[$rid] ?? null;
-                if (!$target) continue;
-                if (!str_starts_with($target, 'xl/')) {
-                    $target = 'xl/' . ltrim($target, '/');
-                }
-                $data = $zip->getFromName($target);
-                if ($data === false) continue;
-                $sheets[$this->normName($name)] = $this->parseSheet($data, $shared);
-            }
-        }
-        $zip->close();
-
-        return $sheets;
-    }
-
-    /** Text aus <si> (inkl. Rich-Text-Runs <r><t>). */
-    protected function siText(\SimpleXMLElement $si): string
-    {
-        $text = '';
-        if (isset($si->t)) $text .= (string) $si->t;
-        foreach ($si->r as $r) {
-            if (isset($r->t)) $text .= (string) $r->t;
-        }
-        return $text;
-    }
-
-    /** Eine Worksheet-XML → [zeilennr => ['A'=>wert, …]] mit gecachten Werten. */
-    protected function parseSheet(string $xml, array $shared): array
-    {
-        $sx = simplexml_load_string($xml);
-        $rows = [];
-        if ($sx === false || !isset($sx->sheetData)) return $rows;
-
-        foreach ($sx->sheetData->row as $row) {
-            $rn    = (int) $row['r'];
-            $assoc = [];
-            foreach ($row->c as $c) {
-                $ref = (string) $c['r'];
-                if (!preg_match('/^([A-Z]+)/', $ref, $m)) continue;
-                $col = $m[1];
-                $t   = (string) $c['t'];
-                $val = null;
-
-                if ($t === 's') {
-                    $val = isset($c->v) ? ($shared[(int) $c->v] ?? null) : null;
-                } elseif ($t === 'inlineStr') {
-                    $val = isset($c->is) ? $this->siText($c->is) : null;
-                } elseif (isset($c->v)) {
-                    // numerisch / boolean / gecachtes Formelergebnis (t='' | 'n' | 'str' | 'b')
-                    $raw = (string) $c->v;
-                    $val = is_numeric($raw) ? $raw + 0 : $raw;
-                }
-
-                if ($val !== null && $val !== '') {
-                    $assoc[$col] = $val;
-                }
-            }
-            if ($assoc) $rows[$rn] = $assoc;
-        }
-        return $rows;
+        return $this->xlsx->read($path);
     }
 
     protected function findSheet(array $sheets, array $candidates): ?array
     {
-        foreach ($candidates as $c) {
-            $key = $this->normName($c);
-            if (isset($sheets[$key])) return $sheets[$key];
-        }
-        // Teilstring-Suche als Fallback
-        foreach ($sheets as $key => $rows) {
-            foreach ($candidates as $c) {
-                if (Str::contains($key, $this->normName($c))) return $rows;
-            }
-        }
-        return null;
+        return $this->xlsx->findSheet($sheets, $candidates);
     }
 
     protected function normName(?string $s): string
     {
-        $s = mb_strtolower(trim((string) $s));
-        return str_replace(['ä', 'ö', 'ü', 'ß', ' ', '.'], ['a', 'o', 'u', 'ss', '', ''], $s);
+        return $this->xlsx->normName($s);
     }
 
     /** Kostenstellen-Code als String normalisieren (z.B. 2599.0 → "2599", "EFP" bleibt). */
