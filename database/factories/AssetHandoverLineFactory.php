@@ -14,7 +14,10 @@ class AssetHandoverLineFactory extends Factory
 
     public function definition(): array
     {
+        // tenant_id ist seit S1 Pflicht (2026_08_07_000004) — die Zeile erbt ihn sonst erst über den
+        // Migrations-Backfill vom Kopf. Platzhalter 1, vom Test zu überschreiben.
         return [
+            'tenant_id'           => 1,
             'handover_id'         => null,
             'asset_device_id'     => null,
             'accessories'         => [],

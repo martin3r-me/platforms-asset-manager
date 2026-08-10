@@ -64,7 +64,11 @@ class CostExcelImportService
         $this->dryRun        = $dryRun;
         $this->stats          = [];
         $this->writtenHashes  = [];
-        $this->importTenantId = null;
+        // ACHTUNG: hier stand bis 2026-08-10 ein `$this->importTenantId = null;`. Das war korrekt,
+        // solange importTenantId ein Memo-Cache war, den upsertItem() per `??=` selbst füllte
+        // (34ee6b2). Seit ADR 0016 wird der Tenant oben verbindlich festgelegt und nirgends mehr
+        // nachgefüllt — die Reset-Zeile überschrieb ihn also mit null, und seit S1 tenant_id NOT NULL
+        // ist, lief jeder Import in eine Constraint-Verletzung. Nicht wieder einführen.
 
         $sheets = $this->readWorkbook($path);
 
@@ -429,8 +433,13 @@ class CostExcelImportService
             return;
         }
 
+        // tenant_id AUSDRÜCKLICH mitfiltern, obwohl der Global Scope hier ohnehin greift: das ist ein
+        // forceDelete über die Import-Zeilen eines ganzen Teams. Verlässt es sich allein auf den
+        // Umgebungs-Scope, löscht ein einziger fehlender forceTenant() die Kostendaten aller Kunden
+        // des Teams. Der Ziel-Tenant steht in import() fest — also auch hier hinschreiben.
         AssetCostLine::withTrashed()
             ->where('team_id', $this->teamId)
+            ->where('tenant_id', $this->importTenantId)
             ->where('source', 'excel_import')
             ->whereNotIn('import_hash', array_values(array_unique($this->writtenHashes)))
             ->forceDelete();

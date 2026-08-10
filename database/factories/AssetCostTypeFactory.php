@@ -14,8 +14,11 @@ class AssetCostTypeFactory extends Factory
 
     public function definition(): array
     {
+        // team_id/tenant_id sind die Skopierungs-Achsen — vom Test gesetzt. Platzhalter 1, damit
+        // ::factory()->make() ohne Overrides nicht an NOT-NULL scheitert (tenant_id seit S1 Pflicht).
         return [
             'team_id'            => 1,
+            'tenant_id'          => 1,
             'key'                => $this->faker->unique()->slug(2),
             'name'               => $this->faker->words(2, true),
             'sort_order'         => 100,

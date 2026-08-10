@@ -16,8 +16,11 @@ class AssetCostLineFactory extends Factory
     {
         // monthly_amount NICHT setzen — wird vom saving-Hook (computeMonthlyAmount) aus amount/fx_rate/frequency
         // abgeleitet. cost_type_id vom Test setzen (->for(AssetCostType, 'costType') oder ['cost_type_id'=>…]).
+        // team_id/tenant_id sind die Skopierungs-Achsen — vom Test gesetzt. Platzhalter 1, damit
+        // ::factory()->make() ohne Overrides nicht an NOT-NULL scheitert (tenant_id seit S1 Pflicht).
         return [
             'team_id'             => 1,
+            'tenant_id'           => 1,
             'cost_type_id'        => 1,
             'vendor_id'           => null,
             'cost_center_id'      => null,

@@ -24,9 +24,9 @@ ausführbar** — nur in der eingebundenen App (z. B. `demo.bhgdigital.de`) nach
 | Datei | Deckt ab |
 |---|---|
 | `CostLineScopingTest` | M2 Cross-Team-FK-Ablehnung (Kostenart/Kreditor fremdes Team) + M3 Member-vs-Owner-Gating |
-| `ExcelImportIdempotencyTest` | `import_hash`-Stabilität, Prune verwaister Zeilen + Empty-Set-Guard, `CostResetService` |
+| `ExcelImportIdempotencyTest` | **End-to-End** über `CostExcelImportService::import()` mit im Test erzeugter `.xlsx` (Tenant-Stempel auf allen Schreibpfaden, Doppellauf ohne Dubletten, Ziel-Tenant ≠ Default, Baum-Auflösung der Kostenstellen-Codes) **plus** die Formel-Invarianten (`import_hash`-Stabilität, Prune + Empty-Set-Guard, `CostResetService`) |
 | `GraphReconcileDeleteTest` | M4 Reconcile-Soft-Delete, Empty-Keyset-Guard, Tenant-Scope, withTrashed-Restore mit Kosten-Override |
-| `CostReconciliationTest` | Invariante `totalMonthly()['total'] === costCenterByType()['grandTotal']` |
+| `CostReconciliationTest` | Invariante `totalMonthly()['total'] === costCenterByType()['grandTotal']` — flach **und** auf einem dreistufigen Kostenstellen-Baum (S5): kein Doppelzählen im `grandTotal`/`colTotals`, Rollup je Knoten, Auffangzeilen (ohne/unbekannte Kostenstelle), Tenant-Isolation zweier Kostenstrukturen |
 
 ### Factory-Autoloading
 
@@ -59,7 +59,15 @@ Namespace `Platform\AssetManager\Tests\Feature`.
 - **TeamFactory-Pflichtfelder:** Die Tests legen Teams über `Team::factory()` an. Verlangt die
   Host-`TeamFactory` Pflichtfelder (z. B. `user_id`), in den `makeTeam()`/`Team::factory()`-Aufrufen
   ergänzen.
-- **Echte .xlsx-Fixture:** `ExcelImportIdempotencyTest` testet die Importer-Idempotenz auf
-  Hash-/Prune-Ebene (die der Service garantiert), nicht end-to-end über `CostExcelImportService::import()`.
-  Liegt eine valide Fixture vor, lässt sich der Importer zweimal laufen lassen und der Zeilenstand
-  stabil prüfen (siehe `TODO(host)` im Datei-Docblock).
+- **Echte .xlsx-Fixture:** erledigt. `ExcelImportIdempotencyTest::writeXlsx()` baut die Mappe im Test
+  über `ZipArchive` — der Reader ist selbst geschrieben, wir kontrollieren also beide Seiten. Braucht
+  `ext-zip`/`ext-simplexml` (im `composer.json` deklariert).
+
+### Warum der End-to-End-Import wichtig ist
+
+Solange der Importer im Test nie lief, blieb unbemerkt, dass er seit S1 (`tenant_id NOT NULL`) in
+eine Constraint-Verletzung lief: `import()` setzte den Ziel-Tenant und überschrieb ihn sechs Zeilen
+später wieder mit `null` — ein Überbleibsel aus der Zeit, als das Feld ein Memo-Cache war. Die
+Formel-Invarianten waren dabei durchgehend grün, weil sie die Hash-Berechnung **nachbauen**, statt
+den Service zu rufen. Neue Tests für diesen Bereich sollten deshalb immer mindestens einen Pfad
+haben, der `import()` wirklich ausführt.
