@@ -25,7 +25,7 @@ class AssetCostTypeFactory extends Factory
             'vendor_default_id'  => null,
             'system_default'     => null,
             'frequency_default'  => 'monthly',
-            'is_per_employee'    => false,
+            'allocation_level'   => AssetCostType::LEVEL_COST_CENTER,
             // Default-Quelle: manuelle Kostenposition (cost_line). Doppelzählungs-Invariante:
             // genau EINE aggregation_source je Kostenart (ADR 0001).
             'aggregation_source' => AssetCostType::SOURCE_COST_LINE,

@@ -111,7 +111,7 @@ class CostBootstrapService
                     'vendor_default_id'  => $type['vendor'] ? ($vendorIds[$type['vendor']] ?? null) : null,
                     'system_default'     => $type['system'],
                     'frequency_default'  => $type['frequency'],
-                    'is_per_employee'    => $type['per_employee'],
+                    'allocation_level'   => $type['level'],
                     'aggregation_source' => $type['aggregation_source'],
                     'allow_negative'     => $type['allow_negative'],
                 ]

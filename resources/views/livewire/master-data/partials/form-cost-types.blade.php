@@ -42,9 +42,20 @@
         </x-asset-manager-select>
         @error('form.aggregation_source')<span class="text-[10px] text-red-600">{{ $message }}</span>@enderror
     </div>
-    <label class="flex items-center gap-2 text-sm text-[var(--am-text-secondary)]">
-        <input type="checkbox" wire:model="form.is_per_employee" class="rounded"> pro Asset-Träger
-    </label>
+    {{-- Bezugsebene statt des früheren Häkchens „pro Asset-Träger": sie wird in der
+         Plausibilitätsprüfung ausgewertet, ist also keine Beschriftung mehr. --}}
+    <div>
+        <label class="block text-xs text-[var(--am-text-muted)] mb-1">Bezugsebene</label>
+        <x-asset-manager-select size="sm" wire:model="form.allocation_level">
+            <option value="cost_center">Kostenstelle — gehört keiner Person (Internet, Drucker, BPEvent, Team-Abos)</option>
+            <option value="person">Person — gehört einem Asset-Träger (Mobilfunk, Lap+Dock, Lizenz je Seat)</option>
+        </x-asset-manager-select>
+        @error('form.allocation_level')<span class="text-[10px] text-red-600">{{ $message }}</span>@enderror
+        <p class="text-[10px] text-[var(--am-text-muted)] mt-1">
+            Bestimmt, welche Zuordnung eine Kostenposition dieser Art braucht. Die Plausibilitätsprüfung
+            im Kosten-Dashboard meldet Positionen, die nicht dazu passen.
+        </p>
+    </div>
 
     @include('asset-manager::livewire.master-data.partials.form-actions', [
         'id'      => $selectedId,

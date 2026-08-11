@@ -20,8 +20,8 @@ use Platform\AssetManager\Support\CostBootstrap;
  *  - „Lap+Dock" stand vollständig auf monatlich statt quartalsweise, rund 2.950 €/Monat zu hoch
  *
  * Alle drei sind erkennbar, ohne die Fachdomäne zu kennen: sie widersprechen dem, was im Datenmodell
- * schon steht (`is_per_employee`, der Kostenstellen-Baum, die Frequenz der übrigen Zeilen derselben
- * Kostenart). Genau das prüft dieser Service.
+ * schon steht (`allocation_level` der Kostenart, der Kostenstellen-Baum, die Frequenz der übrigen
+ * Zeilen derselben Kostenart). Genau das prüft dieser Service.
  *
  * **Bewusst nur lesend und heuristisch.** Jeder Befund ist ein Hinweis mit Begründung und
  * Beispielzeilen, keine automatische Korrektur — die Beträge sind echtes Geld, und eine Heuristik,
@@ -49,6 +49,7 @@ class CostPlausibilityService
 
         $findings = array_values(array_filter([
             $this->perPersonWithoutHolder($lines),
+            $this->costCenterLevelWithHolder($lines),
             $this->costOnInactiveHolders($teamId, $lines),
             $this->suspiciousCostCenters($teamId, $lines),
             $this->undividedBlocks($lines),
@@ -72,23 +73,48 @@ class CostPlausibilityService
     // ---- Prüfungen -------------------------------------------------------------------------
 
     /**
-     * Kostenart ist personenbezogen (`is_per_employee`), die Position hat aber keinen Träger.
+     * Bezugsebene ist `person`, die Position hat aber keinen Träger.
      *
-     * Das ist die schärfste Regel, weil sie nichts rät: die Kostenart selbst sagt, dass sie je Person
-     * anfällt. Eine solche Position ohne Träger ist entweder ein Sammelposten, der aufgeteilt gehört,
-     * oder ein Seat, den niemand nutzt und den trotzdem jemand bezahlt.
+     * Die schärfste Regel, weil sie nichts rät: die Kostenart selbst legt die Ebene fest. Eine solche
+     * Position ohne Träger ist entweder ein Sammelposten, der aufgeteilt gehört, oder ein Seat, den
+     * niemand nutzt und den trotzdem jemand bezahlt.
      */
     protected function perPersonWithoutHolder($lines): ?array
     {
-        $hits = $lines->filter(fn ($l) => $l->assignee_id === null && (bool) $l->costType?->is_per_employee);
+        $hits = $lines->filter(fn ($l) => $l->assignee_id === null && (bool) $l->costType?->isPerPerson());
 
         return $this->finding(
             $hits,
             key: 'per_person_without_holder',
             severity: 'high',
-            title: 'Personenbezogene Kostenart ohne Asset-Träger',
-            explanation: 'Diese Kostenarten fallen laut Stammsatz je Person an, die Position hängt aber an niemandem. '
+            title: 'Bezugsebene Person, aber kein Asset-Träger zugeordnet',
+            explanation: 'Diese Kostenart fällt laut Stammsatz je Person an, die Position hängt aber an niemandem. '
                 . 'Typischerweise ein nicht aufgeteilter Sammelposten oder ein Seat, den niemand mehr nutzt.',
+        );
+    }
+
+    /**
+     * Die Gegenrichtung: Bezugsebene ist `cost_center`, die Position hängt trotzdem an einer Person.
+     *
+     * Das ist der Fall, der ohne die Ebene gar nicht auffiel. Kosten, die einer Kostenstelle
+     * zugeschlüsselt sind (Internet, Drucker, BPEvent, team-weite Abos), gehören keinem Menschen —
+     * hängt dort ein Träger dran, erscheinen die Beträge in „Kosten je Asset-Träger" und verzerren
+     * genau die Auswertung, für die diese Sicht gemacht ist.
+     */
+    protected function costCenterLevelWithHolder($lines): ?array
+    {
+        $hits = $lines->filter(
+            fn ($l) => $l->assignee_id !== null && $l->costType !== null && ! $l->costType->isPerPerson(),
+        );
+
+        return $this->finding(
+            $hits,
+            key: 'cost_center_level_with_holder',
+            severity: 'medium',
+            title: 'Bezugsebene Kostenstelle, aber einer Person zugeordnet',
+            explanation: 'Diese Kostenart wird nur einer Kostenstelle zugeschlüsselt und gehört keiner Person. '
+                . 'Die Zuordnung an einen Asset-Träger lässt die Kosten in der Auswertung je Person auftauchen, '
+                . 'wo sie nicht hingehören — entweder ist die Zuordnung zu löschen oder die Bezugsebene falsch gesetzt.',
         );
     }
 

@@ -36,6 +36,26 @@ class AssetCostType extends Model
         self::SOURCE_ASSET_DEVICE,
     ];
 
+    /**
+     * Bezugsebene: an WAS hängen die Kosten dieser Kostenart?
+     *
+     * `person` — die Position gehört einem Asset-Träger (Mobilfunk, Lap+Dock, Lizenz je Seat).
+     * `cost_center` — die Position gehört nur einer Kostenstelle, eine Person gibt es nicht
+     *                 (BPEvent, HGK, necta, Internet, Drucker, team-weite Abos wie ChatGPT).
+     *
+     * Ersetzt das frühere `is_per_employee` — ein Häkchen, das nichts erzwang und im Bestand
+     * entsprechend falsch gesetzt war. Die Ebene ist die Grundlage der Plausibilitätsprüfung:
+     * `person` ohne Träger und `cost_center` MIT Träger sind beides Fehler.
+     */
+    public const LEVEL_PERSON      = 'person';
+    public const LEVEL_COST_CENTER = 'cost_center';
+
+    /** @var list<string> */
+    public const LEVELS = [
+        self::LEVEL_PERSON,
+        self::LEVEL_COST_CENTER,
+    ];
+
     protected $table = 'asset_cost_types';
 
     protected $fillable = [
@@ -47,15 +67,35 @@ class AssetCostType extends Model
         'vendor_default_id',
         'system_default',
         'frequency_default',
-        'is_per_employee',
+        'allocation_level',
         'aggregation_source',
         'allow_negative',
     ];
 
     protected $casts = [
-        'is_per_employee' => 'boolean',
-        'allow_negative'  => 'boolean',
+        'allow_negative' => 'boolean',
     ];
+
+    /** Bezugsebene ist Person? Ersetzt die frühere Spalte `is_per_employee` als abgeleiteter Wert. */
+    public function isPerPerson(): bool
+    {
+        return $this->allocation_level === self::LEVEL_PERSON;
+    }
+
+    /**
+     * Rückwärtskompatibler Zugriff: `$type->is_per_employee` liefert weiter einen Boolean, damit
+     * bestehende MCP-Antworten und Views ihr Feld behalten. Schreiben geht nur noch über
+     * `allocation_level` — sonst gäbe es wieder zwei Wahrheiten.
+     */
+    public function getIsPerEmployeeAttribute(): bool
+    {
+        return $this->isPerPerson();
+    }
+
+    public function levelLabel(): string
+    {
+        return $this->isPerPerson() ? 'Person' : 'Kostenstelle';
+    }
 
     public function team(): BelongsTo
     {

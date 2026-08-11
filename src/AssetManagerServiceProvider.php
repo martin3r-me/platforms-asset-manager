@@ -179,6 +179,7 @@ class AssetManagerServiceProvider extends ServiceProvider
             $registry->register(new \Platform\AssetManager\Tools\MasterData\DeleteCostCenterTool());
             $registry->register(new \Platform\AssetManager\Tools\MasterData\ListCompaniesTool());
             $registry->register(new \Platform\AssetManager\Tools\MasterData\ListCostTypesTool());
+            $registry->register(new \Platform\AssetManager\Tools\MasterData\UpdateCostTypeTool());
             $registry->register(new \Platform\AssetManager\Tools\MasterData\DeleteCostTypeTool());
             $registry->register(new \Platform\AssetManager\Tools\MasterData\ListVendorsTool());
             $registry->register(new \Platform\AssetManager\Tools\MasterData\DeleteVendorTool());

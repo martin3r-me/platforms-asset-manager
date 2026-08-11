@@ -29,7 +29,7 @@ class ListCostTypesTool implements ToolContract, ToolMetadataContract
     {
         return 'GET /asset-manager/cost-types - Listet die Kostenarten des Teams (id, key, name, '
             . 'aggregation_source [cost_line|hardware_afa|ms_license|asset_device], frequency_default, '
-            . 'is_per_employee). Manuelle Kostenpositionen sind nur für cost_line-Kostenarten zulässig.';
+            . 'allocation_level: person|cost_center — an was die Kosten haengen; is_per_employee ist der davon abgeleitete Boolean). Manuelle Kostenpositionen sind nur für cost_line-Kostenarten zulässig.';
     }
 
     public function getSchema(): array
@@ -71,7 +71,8 @@ class ListCostTypesTool implements ToolContract, ToolMetadataContract
                     'name'               => $t->name,
                     'aggregation_source' => $t->aggregation_source,
                     'frequency_default'  => $t->frequency_default,
-                    'is_per_employee'    => (bool) $t->is_per_employee,
+                    'allocation_level'   => $t->allocation_level,
+                    'is_per_employee'    => (bool) $t->is_per_employee, // abgeleitet, rueckwaertskompatibel
                     'vendor_default'     => $t->vendorDefault?->name,
                 ])->values()->all();
 
