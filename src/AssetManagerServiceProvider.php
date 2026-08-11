@@ -164,6 +164,7 @@ class AssetManagerServiceProvider extends ServiceProvider
             $registry->register(new \Platform\AssetManager\Tools\Costs\TopEmployeesByCostTool());
             $registry->register(new \Platform\AssetManager\Tools\Costs\CostAllocationTool());
             $registry->register(new \Platform\AssetManager\Tools\Costs\CostAnomaliesTool());
+            $registry->register(new \Platform\AssetManager\Tools\Costs\CostPlausibilityTool());
 
             // Kostenpositionen
             $registry->register(new \Platform\AssetManager\Tools\CostLines\ListCostLinesTool());

@@ -28,6 +28,7 @@
                     ['key' => 'costcenter', 'label' => 'Kostenstelle',        'icon' => 'heroicon-o-clipboard-document-list'],
                     ['key' => 'category',   'label' => 'Hardware-Kategorien', 'icon' => 'heroicon-o-cube-transparent'],
                     ['key' => 'licenses',   'label' => 'Lizenz-SKUs',         'icon' => 'heroicon-o-key'],
+                    ['key' => 'plausibility', 'label' => 'Plausibilität',     'icon' => 'heroicon-o-shield-check'],
                     ['key' => 'anomalies',  'label' => 'Anomalien',           'icon' => 'heroicon-o-exclamation-triangle'],
                 ] as $item)
                     <button @click="document.getElementById('section-{{ $item['key'] }}')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); section = '{{ $item['key'] }}'"
@@ -210,6 +211,83 @@
             </section>
 
             {{-- ANOMALIEN-INLINE --}}
+            {{-- Datenqualität VOR den Anomalien: die Zahlen oben sind korrekt gerechnet, können aber
+                 auf falschen Zeilen beruhen. Wer das weiß, liest den Rest anders. --}}
+            <section id="section-plausibility" class="space-y-3 scroll-mt-4">
+                <div class="flex items-baseline gap-2">
+                    <h2 class="text-sm font-semibold text-[var(--am-text)]">Plausibilität der Kostenpositionen</h2>
+                    <span class="text-[11px] text-[var(--am-text-muted)]">{{ $plausibility['checked'] }} Positionen geprüft</span>
+                </div>
+
+                @if(empty($plausibility['findings']))
+                    <div class="rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-700">
+                        @svg('heroicon-o-check-circle', 'w-4 h-4 inline')
+                        Keine Auffälligkeiten — alle Positionen haben einen Träger, wo die Kostenart einen verlangt,
+                        die Frequenzen sind je Kostenart einheitlich, und es liegen keine Beträge auf fragwürdigen Kostenstellen.
+                    </div>
+                @else
+                    <div class="rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5 text-[11px] text-amber-800">
+                        {{ count($plausibility['findings']) }} Auffälligkeit(en) betreffen zusammen
+                        <strong class="tabular-nums">{{ number_format($plausibility['total_monthly_flagged'], 2, ',', '.') }} € / Monat</strong>.
+                        Das sind <em>Hinweise</em>, keine Fehler — jeder Punkt braucht einen Blick, bevor er korrigiert wird.
+                    </div>
+
+                    <div class="space-y-3">
+                        @foreach($plausibility['findings'] as $f)
+                            @php $tone = $f['severity'] === 'high' ? 'red' : 'amber'; @endphp
+                            <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm overflow-hidden"
+                                 x-data="{ open: false }">
+                                <button @click="open = !open" class="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[var(--am-bg)]">
+                                    <x-asset-manager-badge :color="$tone" size="xs" dot>{{ $f['count'] }}</x-asset-manager-badge>
+                                    <span class="flex-1 min-w-0">
+                                        <span class="block text-sm font-medium text-[var(--am-text)]">{{ $f['title'] }}</span>
+                                        <span class="block text-[11px] text-[var(--am-text-secondary)]">{{ $f['explanation'] }}</span>
+                                    </span>
+                                    <span class="text-sm font-semibold tabular-nums text-[var(--am-text)] whitespace-nowrap">
+                                        {{ number_format($f['monthly'], 2, ',', '.') }} €
+                                    </span>
+                                    <span x-show="!open">@svg('heroicon-o-chevron-down', 'w-4 h-4 text-[var(--am-text-muted)]')</span>
+                                    <span x-show="open" x-cloak>@svg('heroicon-o-chevron-up', 'w-4 h-4 text-[var(--am-text-muted)]')</span>
+                                </button>
+
+                                <div x-show="open" x-cloak class="border-t border-[color:var(--am-border)] overflow-x-auto">
+                                    <table class="w-full text-[11px]">
+                                        <thead>
+                                            <tr class="bg-[var(--am-bg)] text-[var(--am-text-muted)] uppercase tracking-wider">
+                                                <th class="text-left px-4 py-2">Position</th>
+                                                <th class="text-left px-4 py-2">Kostenart</th>
+                                                <th class="text-left px-4 py-2">KSt</th>
+                                                <th class="text-left px-4 py-2">Träger</th>
+                                                <th class="text-left px-4 py-2">Hinweis</th>
+                                                <th class="text-right px-4 py-2">€/Monat</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-[color:var(--am-border)]">
+                                            @foreach($f['examples'] as $ex)
+                                                <tr>
+                                                    <td class="px-4 py-1.5 text-[var(--am-text)]">{{ $ex['label'] ?? '—' }}</td>
+                                                    <td class="px-4 py-1.5 text-[var(--am-text-secondary)]">{{ $ex['cost_type'] ?? '—' }}</td>
+                                                    <td class="px-4 py-1.5 text-[var(--am-text-secondary)]">{{ $ex['cost_center'] ?? '—' }}</td>
+                                                    <td class="px-4 py-1.5 text-[var(--am-text-secondary)]">{{ $ex['holder'] ?? '—' }}</td>
+                                                    <td class="px-4 py-1.5 text-[var(--am-text-muted)]">{{ $ex['hint'] ?? '' }}</td>
+                                                    <td class="px-4 py-1.5 text-right tabular-nums text-[var(--am-text)]">{{ number_format($ex['monthly'] ?? 0, 2, ',', '.') }}</td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                    @if($f['count'] > count($f['examples']))
+                                        <div class="px-4 py-2 text-[10px] text-[var(--am-text-muted)] border-t border-[color:var(--am-border)]">
+                                            {{ $f['count'] - count($f['examples']) }} weitere nicht angezeigt — die vollständige Liste liefert
+                                            das MCP-Tool <code>asset-manager.costs.plausibility.GET</code>.
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            </section>
+
             <section id="section-anomalies" class="space-y-3 scroll-mt-4">
                 <h2 class="text-sm font-semibold text-[var(--am-text)]">Anomalien & Einsparpotentiale</h2>
 

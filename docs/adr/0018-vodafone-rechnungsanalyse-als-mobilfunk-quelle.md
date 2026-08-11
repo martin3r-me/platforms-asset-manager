@@ -86,10 +86,12 @@ zeigt es rot **über** den Zahlen — unvollständige Zahlen sollen nicht wie vo
 - **Der Abrechnungszeitraum ist kein Kalendermonat** (im Beispiel 15.06.–14.07.). Die Beträge zählen
   trotzdem als `frequency=monthly` — ein Mobilfunkvertrag ist eine Monatsleistung, und eine
   taggenaue Abgrenzung brächte im Controlling keinen Erkenntnisgewinn.
-- **Nur der Mobilfunk-Teil.** `VF Lizenz RC`, `VF Lizenz RC Rabatt` und `MobileIron` stammen zwar
-  ebenfalls von Vodafone, stehen aber nicht auf diesem Rechnungskonto und bleiben vorerst aus der
-  Excel. Zeigt ein späterer Export sie mit, gehören sie in denselben Importer — sonst hätten wir
-  Vodafone wieder aus zwei Quellen.
+- **Nur der Mobilfunk-Teil — und das ist keine Übergangslösung.** `VF Lizenz RC` und
+  `VF Lizenz RC Rabatt` sind **Vodafone RingCentral**, also Cloud-Telefonie-Lizenzen (UCaaS) — ein
+  anderes Produkt auf einem anderen Rechnungskonto, das mit der Mobilfunkrechnung nichts zu tun hat.
+  Sie gehören **nicht** in diesen Importer. `MobileIron` ist MDM-Lizenzierung als Sammelposten und
+  bleibt ebenfalls außen vor. Die Modellierung von RingCentral ist eine eigene Frage: die Kosten
+  stehen bereits als `cost_line` je Person, aber eine Lizenz-/Seat-Sicht wie bei M365 fehlt.
 
 Verweise: [ADR 0001](0001-cost-lines-modell.md), [ADR 0014](0014-mobilfunk-ohne-eigene-vertrags-entitaet.md),
 [ADR 0016](0016-tenant-als-zugriffsgrenze.md).

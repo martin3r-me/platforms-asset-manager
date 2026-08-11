@@ -5,6 +5,7 @@ namespace Platform\AssetManager\Livewire\Costs;
 use Livewire\Component;
 use Illuminate\Support\Facades\Auth;
 use Platform\AssetManager\Services\CostAggregationService;
+use Platform\AssetManager\Services\CostPlausibilityService;
 use Platform\AssetManager\Concerns\ReportsAcrossTenants;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -44,11 +45,14 @@ class Dashboard extends Component
         ]);
     }
 
-    public function render(CostAggregationService $service)
+    public function render(CostAggregationService $service, CostPlausibilityService $plausibility)
     {
         $teamId = Auth::user()->currentTeam->id;
 
         return $this->inReportScope(fn () => view('asset-manager::livewire.costs.dashboard', [
+            // Datenqualität der Kostenpositionen — bewusst NEBEN den Zahlen, nicht darin: die Beträge
+            // unten sind korrekt gerechnet, aber sie können auf falschen Zeilen beruhen.
+            'plausibility'    => $plausibility->check($teamId),
             'totals'          => $service->totalMonthly($teamId),
             'topHolders'    => $service->topHolders($teamId, 10),
             'byDepartment'    => $service->byDepartment($teamId),
