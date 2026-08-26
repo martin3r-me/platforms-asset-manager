@@ -27,6 +27,10 @@ class Index extends Component
     public ?int   $filterCenter   = null;
     public ?int   $filterVendor   = null;
     public string $filterActive   = '';  // ''|'1'|'0'
+    public string $filterSource   = '';  // ''|manual|excel_import|graph
+    public string $filterFreq     = '';  // ''|monthly|quarterly|yearly|once
+    public string $filterHolder   = '';  // ''|with|without
+    public string $filterValidity = '';  // ''|current|future|expired|unlimited
     public int    $perPage        = 25;
     public string $sortField      = 'monthly_amount';
     public string $sortDirection  = 'desc';
@@ -49,6 +53,10 @@ class Index extends Component
         'filterCenter' => ['except' => null],
         'filterVendor' => ['except' => null],
         'filterActive' => ['except' => ''],
+        'filterSource' => ['except' => ''],
+        'filterFreq'   => ['except' => ''],
+        'filterHolder' => ['except' => ''],
+        'filterValidity' => ['except' => ''],
         'sortField'    => ['except' => 'monthly_amount'],
         'sortDirection'=> ['except' => 'desc'],
     ];
@@ -58,6 +66,10 @@ class Index extends Component
     public function updatingFilterCenter(): void { $this->resetPage(); }
     public function updatingFilterVendor(): void { $this->resetPage(); }
     public function updatingFilterActive(): void { $this->resetPage(); }
+    public function updatingFilterSource(): void { $this->resetPage(); }
+    public function updatingFilterFreq(): void   { $this->resetPage(); }
+    public function updatingFilterHolder(): void { $this->resetPage(); }
+    public function updatingFilterValidity(): void { $this->resetPage(); }
 
     /** Spaltensortierung umschalten: gleiches Feld → Richtung kippen, sonst aufsteigend. */
     public function sortBy(string $field): void
@@ -86,6 +98,10 @@ class Index extends Component
             'vendor' => $query
                 ->leftJoin('asset_vendors', 'asset_vendors.id', '=', 'asset_cost_lines.vendor_id')
                 ->orderBy('asset_vendors.name', $dir),
+            'assignee' => $query
+                ->leftJoin('asset_holders', 'asset_holders.id', '=', 'asset_cost_lines.assignee_id')
+                ->orderBy('asset_holders.display_name', $dir),
+            'valid_from' => $query->orderBy('asset_cost_lines.valid_from', $dir),
             'label'     => $query->orderBy('asset_cost_lines.label', $dir),
             'amount'    => $query->orderBy('asset_cost_lines.amount', $dir),
             'frequency' => $query->orderBy('asset_cost_lines.frequency', $dir),
@@ -96,7 +112,10 @@ class Index extends Component
     /** Filter zurücksetzen (linke Sidebar). */
     public function resetFilters(): void
     {
-        $this->reset(['search', 'filterType', 'filterCenter', 'filterVendor', 'filterActive']);
+        $this->reset([
+            'search', 'filterType', 'filterCenter', 'filterVendor', 'filterActive',
+            'filterSource', 'filterFreq', 'filterHolder', 'filterValidity',
+        ]);
         $this->resetPage();
     }
 
@@ -256,6 +275,29 @@ class Index extends Component
         if ($this->filterCenter)        $q->where('asset_cost_lines.cost_center_id', $this->filterCenter);
         if ($this->filterVendor)        $q->where('asset_cost_lines.vendor_id', $this->filterVendor);
         if ($this->filterActive !== '') $q->where('asset_cost_lines.active', $this->filterActive === '1');
+        if ($this->filterSource !== '') $q->where('asset_cost_lines.source', $this->filterSource);
+        if ($this->filterFreq !== '')   $q->where('asset_cost_lines.frequency', $this->filterFreq);
+
+        match ($this->filterHolder) {
+            'with'    => $q->whereNotNull('asset_cost_lines.assignee_id'),
+            'without' => $q->whereNull('asset_cost_lines.assignee_id'),
+            default   => null,
+        };
+
+        // Gueltigkeit: NULL heisst unbegrenzt (siehe AssetCostLine::validOn()). Der Fall
+        // "abgelaufen"/"zukuenftig" ist der eigentliche Grund fuer diesen Filter — beides ist in
+        // der Liste sonst unsichtbar und faellt trotzdem aus der Kostenaufteilung heraus.
+        $today = now()->toDateString();
+        match ($this->filterValidity) {
+            'current'   => $q->validOn($today),
+            'future'    => $q->whereNotNull('asset_cost_lines.valid_from')
+                             ->whereDate('asset_cost_lines.valid_from', '>', $today),
+            'expired'   => $q->whereNotNull('asset_cost_lines.valid_to')
+                             ->whereDate('asset_cost_lines.valid_to', '<', $today),
+            'unlimited' => $q->whereNull('asset_cost_lines.valid_from')
+                             ->whereNull('asset_cost_lines.valid_to'),
+            default     => null,
+        };
 
         return $q;
     }
@@ -267,7 +309,11 @@ class Index extends Component
             || $this->filterType !== null
             || $this->filterCenter !== null
             || $this->filterVendor !== null
-            || $this->filterActive !== '';
+            || $this->filterActive !== ''
+            || $this->filterSource !== ''
+            || $this->filterFreq !== ''
+            || $this->filterHolder !== ''
+            || $this->filterValidity !== '';
     }
 
     public function render()

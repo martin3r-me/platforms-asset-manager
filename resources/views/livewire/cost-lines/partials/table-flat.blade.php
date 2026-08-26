@@ -5,13 +5,15 @@
 --}}
 @php
     $sortCols = [
-        'label'          => ['Bezeichnung', 'left'],
-        'cost_type'      => ['Kostenart',   'left'],
-        'cost_center'    => ['KSt',         'left'],
-        'vendor'         => ['Kreditor',    'left'],
-        'amount'         => ['Betrag',      'right'],
-        'frequency'      => ['Frequenz',    'left'],
-        'monthly_amount' => ['€/Monat',     'right'],
+        'label'          => ['Bezeichnung',  'left'],
+        'cost_type'      => ['Kostenart',    'left'],
+        'cost_center'    => ['KSt',          'left'],
+        'assignee'       => ['Träger',       'left'],
+        'vendor'         => ['Kreditor',     'left'],
+        'amount'         => ['Betrag',       'right'],
+        'frequency'      => ['Frequenz',     'left'],
+        'monthly_amount' => ['€/Monat',      'right'],
+        'valid_from'     => ['Gültigkeit',   'left'],
     ];
 @endphp
 

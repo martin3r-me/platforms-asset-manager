@@ -31,6 +31,43 @@
         </x-asset-manager-select>
     </x-asset-manager-filter-section>
 
+    <x-asset-manager-filter-section title="Asset-Träger">
+        <x-asset-manager-select size="sm" wire:model.live="filterHolder">
+            <option value="">Alle</option>
+            <option value="with">Mit Träger</option>
+            <option value="without">Ohne Träger</option>
+        </x-asset-manager-select>
+    </x-asset-manager-filter-section>
+
+    <x-asset-manager-filter-section title="Frequenz">
+        <x-asset-manager-select size="sm" wire:model.live="filterFreq">
+            <option value="">Alle</option>
+            <option value="monthly">Monatlich</option>
+            <option value="quarterly">Quartal</option>
+            <option value="yearly">Jährlich</option>
+            <option value="once">Einmalig</option>
+        </x-asset-manager-select>
+    </x-asset-manager-filter-section>
+
+    <x-asset-manager-filter-section title="Gültigkeit">
+        <x-asset-manager-select size="sm" wire:model.live="filterValidity">
+            <option value="">Alle</option>
+            <option value="current">Aktuell gültig</option>
+            <option value="future">Erst zukünftig</option>
+            <option value="expired">Abgelaufen</option>
+            <option value="unlimited">Unbefristet</option>
+        </x-asset-manager-select>
+    </x-asset-manager-filter-section>
+
+    <x-asset-manager-filter-section title="Herkunft">
+        <x-asset-manager-select size="sm" wire:model.live="filterSource">
+            <option value="">Alle</option>
+            <option value="manual">Manuell erfasst</option>
+            <option value="excel_import">Excel-Import</option>
+            <option value="graph">Graph-Sync</option>
+        </x-asset-manager-select>
+    </x-asset-manager-filter-section>
+
     <x-asset-manager-filter-section title="Status">
         <x-asset-manager-select size="sm" wire:model.live="filterActive">
             <option value="">Alle</option>
