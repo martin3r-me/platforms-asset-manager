@@ -9,6 +9,20 @@
             ['label' => 'Kostenpositionen', 'icon' => 'banknotes'],
         ]">
             <x-slot name="actions">
+                {{-- Gruppiert | Liste. Bewusst serverseitig ueber $view im $queryString statt
+                     <x-asset-manager-tabs> (das braucht einen Alpine-Eltern-Scope): der Zustand
+                     soll deep-linkbar sein. Muster: costs/allocation.blade.php --}}
+                <div class="inline-flex rounded-lg bg-[var(--am-bg)] border border-[color:var(--am-border)] p-0.5">
+                    <button type="button" wire:click="setView('grouped')"
+                            class="px-3 py-1.5 text-xs font-medium rounded-md transition-colors {{ $view === 'grouped' ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)] shadow-sm' : 'text-[var(--am-text-secondary)] hover:text-[var(--am-text)]' }}">
+                        Gruppiert
+                    </button>
+                    <button type="button" wire:click="setView('flat')"
+                            class="px-3 py-1.5 text-xs font-medium rounded-md transition-colors {{ $view === 'flat' ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)] shadow-sm' : 'text-[var(--am-text-secondary)] hover:text-[var(--am-text)]' }}">
+                        Liste
+                    </button>
+                </div>
+
                 {{-- Querverweise: die Seite stand bisher ohne einen einzigen Absprung zu Pivot,
                      Import oder Stammdaten da, obwohl das die Nachbarschritte derselben Arbeit sind. --}}
                 <x-asset-manager-button variant="ghost" size="sm" :href="route('asset-manager.costs.allocation')" wire:navigate>
@@ -56,20 +70,39 @@
 
             @include('asset-manager::livewire.cost-lines.partials.kpis')
 
-            {{-- Schlanke Meta-Zeile: Treffer + Seitengröße (Filter sind in der linken Sidebar). --}}
+            {{-- Schlanke Meta-Zeile: Treffer + Gruppierungsachse bzw. Seitengröße. --}}
             <div class="flex items-center justify-between gap-2 px-1">
-                <div class="text-xs text-[var(--am-text-secondary)]">{{ $totalFiltered }} Positionen</div>
+                <div class="text-xs text-[var(--am-text-secondary)]">
+                    {{ number_format($totalFiltered, 0, ',', '.') }} Positionen
+                    @if($view === 'grouped')
+                        in {{ $groups->count() }} {{ $groups->count() === 1 ? 'Gruppe' : 'Gruppen' }}
+                    @endif
+                </div>
+
                 <div class="flex items-center gap-1.5 text-xs text-[var(--am-text-secondary)]">
-                    <span>Pro Seite</span>
-                    <select wire:model.live="perPage" class="px-2 py-1 text-xs rounded-md bg-[var(--am-surface)] border border-[color:var(--am-border-strong)] text-[var(--am-text)] cursor-pointer focus:outline-none focus:border-[color:var(--am-accent)] focus:shadow-[var(--am-focus)]">
-                        <option value="25">25</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                    </select>
+                    @if($view === 'grouped')
+                        <span>Gruppieren nach</span>
+                        <select wire:model.live="groupBy" class="px-2 py-1 text-xs rounded-md bg-[var(--am-surface)] border border-[color:var(--am-border-strong)] text-[var(--am-text)] cursor-pointer focus:outline-none focus:border-[color:var(--am-accent)] focus:shadow-[var(--am-focus)]">
+                            @foreach($axes as $key => $label)
+                                <option value="{{ $key }}">{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    @else
+                        <span>Pro Seite</span>
+                        <select wire:model.live="perPage" class="px-2 py-1 text-xs rounded-md bg-[var(--am-surface)] border border-[color:var(--am-border-strong)] text-[var(--am-text)] cursor-pointer focus:outline-none focus:border-[color:var(--am-accent)] focus:shadow-[var(--am-focus)]">
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    @endif
                 </div>
             </div>
 
-            @include('asset-manager::livewire.cost-lines.partials.table-flat')
+            @if($view === 'grouped')
+                @include('asset-manager::livewire.cost-lines.partials.table-grouped')
+            @else
+                @include('asset-manager::livewire.cost-lines.partials.table-flat')
+            @endif
         </div>
     </div>
 

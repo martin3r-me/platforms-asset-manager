@@ -24,6 +24,40 @@ class Index extends Component
     use ResolvesCurrentTeam;
     use WithPagination;
 
+    /**
+     * Gruppierungsachsen. Eine Stelle, an der eine weitere Achse dazukommt.
+     *
+     * Die Gruppierung laeuft per GROUP BY auf asset_cost_lines und NICHT ueber
+     * AssetCostType::withCount()/withSum(): fuer cost_center_id IS NULL gibt es keine
+     * Dimensionszeile, an die man ein withSum haengen koennte - die Gruppe "Ohne Kostenstelle"
+     * waere damit prinzipiell nicht darstellbar. Sie ist aber real (der Pivot weist sie als
+     * `unassigned` aus). Gruppierung ist eine Eigenschaft der ZEILEN, nicht der Dimension.
+     */
+    protected const AXES = [
+        'cost_type'   => 'Kostenart',
+        'cost_center' => 'Kostenstelle',
+        'vendor'      => 'Kreditor',
+        'frequency'   => 'Frequenz',
+    ];
+
+    protected const AXIS_COLUMNS = [
+        'cost_type'   => 'asset_cost_lines.cost_type_id',
+        'cost_center' => 'asset_cost_lines.cost_center_id',
+        'vendor'      => 'asset_cost_lines.vendor_id',
+        'frequency'   => 'asset_cost_lines.frequency',
+    ];
+
+    /** Schutz fuer ein kuenftiges Team mit sehr vielen Kostenstellen - real sind es ~25 Gruppen. */
+    protected const MAX_GROUPS = 200;
+
+    /** Detailzeilen je aufgeklappter Gruppe; darueber der Absprung in die flache Ansicht. */
+    protected const GROUP_DETAIL_LIMIT = 50;
+
+    public string  $view      = 'grouped';    // grouped|flat
+    public string  $groupBy   = 'cost_type';
+    public ?string $openGroup = null;         // Achsen-Key der EINEN offenen Gruppe ('none' = ohne Zuordnung)
+    public string  $groupSort = 'amount';     // amount|count|label
+
     public string $search        = '';
     public ?int   $filterType     = null;
     public ?int   $filterCenter   = null;
@@ -54,6 +88,10 @@ class Index extends Component
     protected ?array $plausibilityCache = null;
 
     protected $queryString = [
+        'view'         => ['except' => 'grouped'],
+        'groupBy'      => ['except' => 'cost_type'],
+        'openGroup'    => ['except' => null],
+        'groupSort'    => ['except' => 'amount'],
         'search'       => ['except' => ''],
         'filterType'   => ['except' => null],
         'filterCenter' => ['except' => null],
@@ -124,6 +162,7 @@ class Index extends Component
             'search', 'filterType', 'filterCenter', 'filterVendor', 'filterActive',
             'filterSource', 'filterFreq', 'filterHolder', 'filterValidity', 'filterFlagged',
         ]);
+        $this->openGroup = null;
         $this->resetPage();
     }
 
@@ -334,6 +373,236 @@ class Index extends Component
             || $this->filterFlagged !== '';
     }
 
+    public function setView(string $view): void
+    {
+        $this->view = $view === 'flat' ? 'flat' : 'grouped';
+        $this->resetPage();
+    }
+
+    /** Achse wechseln. Die offene Gruppe gehoert zur alten Achse und wird verworfen. */
+    public function setGroupBy(string $axis): void
+    {
+        if (! isset(self::AXES[$axis])) {
+            return;
+        }
+
+        $this->groupBy   = $axis;
+        $this->openGroup = null;
+        $this->resetPage();
+    }
+
+    public function sortGroupsBy(string $key): void
+    {
+        $this->groupSort = in_array($key, ['amount', 'count', 'label'], true) ? $key : 'amount';
+    }
+
+    /**
+     * Genau EINE Gruppe ist gleichzeitig offen.
+     *
+     * Damit ist die Ansicht deep-linkbar (?groupBy=cost_type&openGroup=70 ist "zeig mir
+     * Mobilfunk" - die Voraussetzung fuer Abspruenge IN diese Seite) und die Renderkosten
+     * bleiben konstant bei genau einer Detail-Query, unabhaengig vom Klickverhalten.
+     */
+    public function toggleGroup(string $key): void
+    {
+        $this->openGroup = $this->openGroup === $key ? null : $key;
+    }
+
+    /** Gruppe gefiltert in der flachen Ansicht oeffnen (Fussnote "Alle anzeigen"). */
+    public function drillDown(string $key): void
+    {
+        match ($this->groupBy) {
+            'cost_center' => $this->filterCenter = $key === 'none' ? null : (int) $key,
+            'vendor'      => $this->filterVendor = $key === 'none' ? null : (int) $key,
+            'frequency'   => $this->filterFreq   = $key,
+            default       => $this->filterType   = $key === 'none' ? null : (int) $key,
+        };
+
+        // "Ohne Zuordnung" laesst sich mit den vorhandenen Filtern nicht abbilden (sie kennen nur
+        // "eine bestimmte ID" und "alle"). Statt still die ganze Liste zu zeigen bleibt die
+        // Gruppe aufgeklappt und die Ansicht gruppiert.
+        if ($key === 'none' && $this->groupBy !== 'frequency') {
+            $this->openGroup = 'none';
+            return;
+        }
+
+        $this->view      = 'flat';
+        $this->openGroup = null;
+        $this->resetPage();
+    }
+
+    /** Achsen-Filter fuer Detail-Query und Drilldown. 'none' -> IS NULL. */
+    protected function applyAxisFilter(Builder $query, string $key): Builder
+    {
+        $col = self::AXIS_COLUMNS[$this->groupBy];
+
+        if ($this->groupBy === 'frequency') {
+            return $query->where($col, $key);
+        }
+
+        return $key === 'none' ? $query->whereNull($col) : $query->where($col, (int) $key);
+    }
+
+    /**
+     * Gruppenzeilen: EINE Aggregat-Query, keine Models, kein N+1.
+     *
+     * Die Label-Spalten werden mit-gruppiert, nicht nur mit-selektiert - MySQL laeuft mit
+     * ONLY_FULL_GROUP_BY und wuerde sonst abbrechen (auf SQLite faellt das nicht auf).
+     *
+     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     */
+    protected function groupRows(): \Illuminate\Support\Collection
+    {
+        $q = $this->baseQuery();
+
+        $aggregates = 'COUNT(*) as lines_count, '
+            . 'SUM(asset_cost_lines.monthly_amount) as monthly, '
+            // once-Zeilen haben monthly_amount = 0 (FREQUENCY_FACTORS) und fliessen damit korrekt
+            // NICHT in `monthly`. Der Rohbetrag als eigener Topf, damit er nicht still verschwindet.
+            . "SUM(CASE WHEN asset_cost_lines.frequency = 'once' THEN asset_cost_lines.amount ELSE 0 END) as once_amount, "
+            . 'SUM(CASE WHEN asset_cost_lines.active = 0 THEN 1 ELSE 0 END) as inactive_count';
+
+        switch ($this->groupBy) {
+            case 'cost_center':
+                $q->leftJoin('asset_cost_centers', 'asset_cost_centers.id', '=', 'asset_cost_lines.cost_center_id')
+                  ->groupBy('asset_cost_lines.cost_center_id', 'asset_cost_centers.code', 'asset_cost_centers.name')
+                  ->selectRaw('asset_cost_lines.cost_center_id as gkey, asset_cost_centers.code as glabel, '
+                      . 'asset_cost_centers.name as gsub, NULL as glevel, NULL as gsource, ' . $aggregates);
+                break;
+
+            case 'vendor':
+                $q->leftJoin('asset_vendors', 'asset_vendors.id', '=', 'asset_cost_lines.vendor_id')
+                  ->groupBy('asset_cost_lines.vendor_id', 'asset_vendors.name')
+                  ->selectRaw('asset_cost_lines.vendor_id as gkey, asset_vendors.name as glabel, '
+                      . 'NULL as gsub, NULL as glevel, NULL as gsource, ' . $aggregates);
+                break;
+
+            case 'frequency':
+                $q->groupBy('asset_cost_lines.frequency')
+                  ->selectRaw('asset_cost_lines.frequency as gkey, asset_cost_lines.frequency as glabel, '
+                      . 'NULL as gsub, NULL as glevel, NULL as gsource, ' . $aggregates);
+                break;
+
+            default:
+                $q->leftJoin('asset_cost_types', 'asset_cost_types.id', '=', 'asset_cost_lines.cost_type_id')
+                  ->groupBy('asset_cost_lines.cost_type_id', 'asset_cost_types.name',
+                            'asset_cost_types.allocation_level', 'asset_cost_types.aggregation_source')
+                  ->selectRaw('asset_cost_lines.cost_type_id as gkey, asset_cost_types.name as glabel, '
+                      . 'NULL as gsub, asset_cost_types.allocation_level as glevel, '
+                      . 'asset_cost_types.aggregation_source as gsource, ' . $aggregates);
+        }
+
+        // Vorsortierung in SQL, damit bei einem Overflow die groessten Gruppen drin bleiben;
+        // die Feinsortierung passiert danach in PHP (nur ~25 Zeilen, dafuer dialektfrei).
+        return collect(
+            $q->toBase()
+                ->orderByRaw('SUM(asset_cost_lines.monthly_amount) DESC')
+                ->limit(self::MAX_GROUPS + 1)
+                ->get()
+        );
+    }
+
+    /** Detailzeilen der EINEN offenen Gruppe. */
+    protected function openGroupLines(): \Illuminate\Support\Collection
+    {
+        if ($this->view !== 'grouped' || $this->openGroup === null) {
+            return collect();
+        }
+
+        return $this->applyAxisFilter($this->baseQuery(), $this->openGroup)
+            ->with(['costType', 'costCenter', 'vendor', 'assignee'])
+            ->select('asset_cost_lines.*')
+            // Nach Betrag OHNE Vorzeichen: eine Gutschrift von -430 EUR gehoert neben die
+            // Position, die sie gegenrechnet, nicht ans Listenende.
+            ->orderByRaw('ABS(asset_cost_lines.monthly_amount) DESC')
+            ->orderBy('asset_cost_lines.label')
+            ->limit(self::GROUP_DETAIL_LIMIT)
+            ->get();
+    }
+
+    /**
+     * Rohe Aggregat-Zeilen zu Anzeigezeilen machen: Label, Anteil, Befund-Anzahl.
+     *
+     * Bezugsgroesse des Anteils ist die Summe der POSITIVEN Gruppensummen, nicht das Netto:
+     * bei einem Netto von 16.080 EUR und einer Gutschriftgruppe von -1.196 EUR waere der Anteil
+     * jeder Gruppe sonst systematisch ueberzeichnet - und bei einem Netto <= 0 (moeglich, wenn
+     * nur auf Rabatte gefiltert wird) gaebe es ueberhaupt keinen sinnvollen Bezug.
+     *
+     * @param  \Illuminate\Support\Collection<int, object>  $rows
+     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     */
+    protected function decorateGroups(\Illuminate\Support\Collection $rows, array $flaggedMap): \Illuminate\Support\Collection
+    {
+        $freqLabels = ['monthly' => 'Monatlich', 'quarterly' => 'Quartal', 'yearly' => 'Jährlich', 'once' => 'Einmalig'];
+        $emptyLabel = match ($this->groupBy) {
+            'cost_center' => 'Ohne Kostenstelle',
+            'vendor'      => 'Ohne Kreditor',
+            'frequency'   => 'Ohne Frequenz',
+            default       => 'Ohne Kostenart',
+        };
+
+        $grossBase = $rows->sum(fn ($r) => max((float) $r->monthly, 0));
+        $perGroup  = $this->flaggedPerGroup(array_keys($flaggedMap));
+
+        $groups = $rows->map(function ($r) use ($freqLabels, $emptyLabel, $grossBase, $perGroup): array {
+            $key     = $r->gkey === null ? 'none' : (string) $r->gkey;
+            $monthly = round((float) $r->monthly, 2);   // DECIMAL kommt als String aus PDO
+
+            return [
+                'key'      => $key,
+                'label'    => $r->gkey === null
+                    ? $emptyLabel
+                    : ($this->groupBy === 'frequency' ? ($freqLabels[$r->glabel] ?? $r->glabel) : (string) $r->glabel),
+                'sublabel' => $r->gsub ?: null,
+                'count'    => (int) $r->lines_count,
+                'monthly'  => $monthly,
+                'once'     => round((float) $r->once_amount, 2),
+                'inactive' => (int) $r->inactive_count,
+                'flagged'  => $perGroup[$key] ?? 0,
+                'level'    => $r->glevel ?: null,
+                // Positionen auf einer Kostenart, die ihren Wert aus einer ANDEREN Quelle zieht
+                // (ms_license, hardware_afa), fallen aus normalizedLines() und erscheinen damit in
+                // KEINER Auswertung. Heute sind diese Kostenarten leer, aber ein Import kann dort
+                // jederzeit Geld parken. Diese Warnung gibt es sonst nirgends im UI.
+                'offPivot' => $this->groupBy === 'cost_type'
+                    && $r->gsource !== null
+                    && $r->gsource !== AssetCostType::SOURCE_COST_LINE,
+                'sharePct' => $grossBase > 0 ? min(100.0, round(abs($monthly) / $grossBase * 100, 1)) : 0.0,
+            ];
+        });
+
+        return match ($this->groupSort) {
+            'count' => $groups->sortByDesc('count')->values(),
+            'label' => $groups->sortBy('label', SORT_NATURAL | SORT_FLAG_CASE)->values(),
+            // Betrag OHNE Vorzeichen: sonst landet die groesste Gutschrift als kleinster Wert am
+            // Ende der Liste, weit weg von der Position, die sie gegenrechnet.
+            default => $groups->sortByDesc(fn (array $g) => abs($g['monthly']))->values(),
+        };
+    }
+
+    /**
+     * Anzahl auffaelliger Positionen je Gruppe - eine schlanke Query ueber die ~25 geflaggten IDs.
+     *
+     * @param  list<int>  $flaggedIds
+     * @return array<string, int>
+     */
+    protected function flaggedPerGroup(array $flaggedIds): array
+    {
+        if ($flaggedIds === []) {
+            return [];
+        }
+
+        $col    = self::AXIS_COLUMNS[$this->groupBy];
+        $counts = [];
+
+        foreach ($this->baseQuery()->whereIn('asset_cost_lines.id', $flaggedIds)->pluck($col) as $value) {
+            $key = $value === null ? 'none' : (string) $value;
+            $counts[$key] = ($counts[$key] ?? 0) + 1;
+        }
+
+        return $counts;
+    }
+
     /**
      * Plausibilitaets-Befunde als line_id => [Titel, ...] plus die Bestands-Kennzahl.
      *
@@ -441,15 +710,38 @@ class Index extends Component
         $kpi     = $this->kpis();
         $flagged = $this->plausibility();
 
-        $query = $this->baseQuery()
-            ->with(['costType', 'costCenter', 'vendor', 'assignee'])
-            ->select('asset_cost_lines.*');
-        $this->applySort($query);
+        $groups         = collect();
+        $groupsOverflow = false;
+        $openLines      = collect();
+        $openLinesTotal = 0;
+        $lines          = null;
 
-        $lines = $query->paginate($this->perPage);
+        if ($this->view === 'grouped') {
+            $raw            = $this->groupRows();
+            $groupsOverflow = $raw->count() > self::MAX_GROUPS;
+            $groups         = $this->decorateGroups($raw, $flagged['map'])->take(self::MAX_GROUPS);
+
+            $openLines = $this->openGroupLines();
+            if ($this->openGroup !== null) {
+                $openLinesTotal = $this->applyAxisFilter($this->baseQuery(), $this->openGroup)->count();
+            }
+        } else {
+            $query = $this->baseQuery()
+                ->with(['costType', 'costCenter', 'vendor', 'assignee'])
+                ->select('asset_cost_lines.*');
+            $this->applySort($query);
+
+            $lines = $query->paginate($this->perPage);
+        }
 
         return view('asset-manager::livewire.cost-lines.index', [
-            'lines'         => $lines,
+            'lines'          => $lines,
+            'groups'         => $groups,
+            'groupsOverflow' => $groupsOverflow,
+            'openLines'      => $openLines,
+            'openLinesTotal' => $openLinesTotal,
+            'axes'           => self::AXES,
+            'detailLimit'    => self::GROUP_DETAIL_LIMIT,
             'costTypes'     => AssetCostType::where('team_id', $teamId)->orderBy('sort_order')->get(),
             // Baum-sortiert mit tree_label: die numerischen Kostenstellen haben kein `name`, als
             // reine Code-Liste ("gf-gl, 1000, 1900, …") war der Filter nicht benutzbar.
