@@ -422,7 +422,11 @@ class Show extends Component
             $assignments = $this->device->assignments()->with('holder')->limit(20)->get();
 
             // Geräteausgabe-Zeilen dieses Geräts (E6) — gleiche Query wie vormals Devices/Show.
-            $handoverLines = AssetHandoverLine::with('handover.employee')
+            // `handover.holder` und NICHT `handover.employee`: die Relation heißt seit der
+            // Umbenennung „Mitarbeiter"→„Asset-Träger" holder(). Der alte Name warf eine
+            // RelationNotFoundException — aber nur bei Geräten MIT Protokoll-Zeilen, weil Laravel
+            // verschachteltes Eager-Loading bei leerer äußerer Query überspringt.
+            $handoverLines = AssetHandoverLine::with('handover.holder')
                 ->whereHas('handover', fn ($q) => $q->where('team_id', $teamId))
                 ->where('asset_device_id', $this->device->id)
                 ->orderByDesc('id')

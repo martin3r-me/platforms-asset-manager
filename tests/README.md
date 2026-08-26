@@ -11,8 +11,11 @@ php tests/guardrails.php
 ```
 
 Prüft Architektur-Invarianten statisch (Tool-Registrierung vollständig, Abhängigkeitsrichtung
-Models/Services → keine UI/Tools/Http, keine Blade-Alias-Manglung). Exit 0 = grün, 1 = verletzt.
-Bleibt die einzige Sache, die **im Modul-Repo selbst** ausführbar ist.
+Models/Services → keine UI/Tools/Http, keine Blade-Alias-Manglung) sowie die
+Eager-Loading-Invarianten: jeder in `with()`/`load()` genannte Relationsname existiert wirklich,
+Modell-Kosten werden mit Kostenart und Kreditor geladen, und die Kostenauflösung je Instanz
+(`AssetDevice::resolvedMonthlyCost()` & Co.) bleibt auf Einzel-Objekt-Pfaden. Exit 0 = grün,
+1 = verletzt. Bleibt die einzige Sache, die **im Modul-Repo selbst** ausführbar ist.
 
 ## 2. `tests/local/**` — Logik- und Blade-Prüfungen gegen eine Host-App als Library
 
@@ -25,6 +28,7 @@ ersetzt die Feature-Tests nicht.
 php tests/local/cost-lines-grouping.php     # gruppierte Ansicht, Kennzahlen, Auswahl, Export
 php tests/local/cost-lines-editor.php       # Editor-Pfad inkl. Test-Vertrag von CostLineScopingTest
 php tests/local/cost-line-reassign.php      # CostLineReassignService (UI + MCP-Tool teilen ihn)
+php tests/local/n-plus-1.php                # Query-Budgets der Listen + Geraete-Modell-Zuordnung
 php tests/local/blade-lint.php resources/views/livewire/cost-lines/*.blade.php
 ```
 

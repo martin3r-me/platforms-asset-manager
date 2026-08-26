@@ -7,6 +7,7 @@ use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Services\CostAggregationService;
 use Platform\AssetManager\Services\TenantContext;
+use Platform\AssetManager\Support\DeviceCostResolver;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
 use Platform\AssetManager\Tools\Concerns\ResolvesTenant;
 use Platform\Core\Contracts\ToolContext;
@@ -92,7 +93,23 @@ class GetHolderTool implements ToolContract, ToolMetadataContract
             $agg = app(CostAggregationService::class);
 
             // Geräte (Intune)
-            $devices = $emp->devices()->get()->map(fn ($d) => [
+            $deviceRows = $emp->devices()->get();
+
+            // Kosten-Resolver je Tenant EINMAL bauen statt je Gerät: $d->resolvedMonthlyCost()
+            // memoisiert nur pro Instanz und lädt darum je Zeile Katalog + Modell-Kosten neu
+            // (2 Queries/Gerät). Schlüssel ist der Tenant des GERÄTS und nicht der Kontext-Tenant:
+            // ohne auflösbaren Tenant greift der TenantScope nicht, die Liste kann dann
+            // tenant-gemischt sein, und ein gemeinsamer Resolver trüge fremde Modell-Preise ein.
+            // Kein auflösbarer Tenant am Gerät → Schlüssel 0, wie in AssetDevice::costResolver().
+            $resolvers = [];
+            foreach ($deviceRows as $d) {
+                $resolvers[(int) $d->tenant_id] ??= DeviceCostResolver::for(
+                    $teamId,
+                    $d->tenant_id !== null ? (int) $d->tenant_id : null,
+                );
+            }
+
+            $devices = $deviceRows->map(fn ($d) => [
                 'id'               => $d->id,
                 'device_name'      => $d->device_name,
                 'manufacturer'     => $d->manufacturer,
@@ -101,7 +118,7 @@ class GetHolderTool implements ToolContract, ToolMetadataContract
                 'operating_system' => $d->operating_system,
                 'os_version'       => $d->os_version,
                 'compliance'       => $d->complianceLabel(),
-                'monthly_cost'     => $d->resolvedMonthlyCost(),
+                'monthly_cost'     => $resolvers[(int) $d->tenant_id]->monthlyCost($d),
                 'last_check_in_at' => $d->last_check_in_at?->toIso8601String(),
                 'enrolled_at'      => $d->enrolled_at?->toIso8601String(),
             ])->values()->all();

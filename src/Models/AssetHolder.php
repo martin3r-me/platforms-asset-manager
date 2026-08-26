@@ -181,12 +181,19 @@ class AssetHolder extends Model
             ->whereNull('asset_items.deleted_at');
     }
 
+    /**
+     * NUR lazy nutzen (`$holder->licenses` / `$holder->licenses()->…`), NICHT eager laden:
+     * Die Einschränkung greift auf `$this->team_id` zu. Beim Eager-Loading baut Eloquent die
+     * Relation auf einer FRISCHEN Instanz — team_id ist dort null, die Bedingung wird zu
+     * `team_id = null` und `with('licenses')` liefert stumm eine leere Menge.
+     */
     public function licenses(): HasMany
     {
         return $this->hasMany(AssetUserLicense::class, 'user_principal_name', 'user_principal_name')
             ->where('asset_user_licenses.team_id', $this->team_id);
     }
 
+    /** Wie {@see licenses()}: team-gebundene Einschränkung → nur lazy, nie eager laden. */
     public function devices(): HasMany
     {
         return $this->hasMany(AssetDevice::class, 'user_principal_name', 'user_principal_name')

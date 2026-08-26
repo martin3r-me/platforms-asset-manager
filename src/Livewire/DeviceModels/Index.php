@@ -148,8 +148,10 @@ class Index extends Component
         // also von sich aus auf den aktiven Tenant. Bewusst als Relation und NICHT als transiente
         // Attribute am Modell: die Spalten existieren dort nicht mehr, ein späteres save() würde
         // versuchen, sie zu schreiben.
+        // costType/vendor mit vorladen: die Liste zeigt beide Namen je Zeile (index.blade.php) und
+        // ist bewusst unpaginiert — ohne das wären es zwei Queries je Modell (80 Modelle ≈ 160).
         $models = AssetDeviceModel::where('team_id', $teamId)
-            ->with('cost')
+            ->with(['cost.costType', 'cost.vendor'])
             ->orderBy('manufacturer')->orderBy('model')->get();
 
         $models->each(function ($m) use ($counts) {

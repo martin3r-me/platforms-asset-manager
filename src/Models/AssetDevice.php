@@ -23,10 +23,6 @@ class AssetDevice extends Model
         return \Platform\AssetManager\Database\Factories\AssetDeviceFactory::new();
     }
 
-    /** Memoisiertes Modell-Resolve je Instanz (deviceModel() wird pro Render mehrfach gerufen). */
-    protected ?AssetDeviceModel $resolvedModel = null;
-    protected bool $modelResolved = false;
-
     /** Memoisierter Kosten-Resolver je Instanz (Katalog + tenant-eigene Modell-Kosten). */
     protected ?DeviceCostResolver $resolvedCostResolver = null;
 
@@ -185,20 +181,20 @@ class AssetDevice extends Model
     /**
      * Passendes Geräte-Modell (Default-Kosten) per (Hersteller, Modell) auflösen — normalisiert
      * (case-/whitespace-tolerant) über AssetDeviceModel::normalizeKey(), damit Detailansicht und
-     * Pivot/Aggregation IMMER dasselbe Modell treffen. Memoisiert je Instanz.
+     * Pivot/Aggregation IMMER dasselbe Modell treffen.
+     *
+     * Delegiert an {@see DeviceCostResolver} — dieselbe Auflösung wie in Pivot, Inventar-Liste und
+     * Modell-Report, statt einer zweiten Implementierung daneben. Damit greift hier auch die
+     * deterministische Kollisions-Auflösung des Resolvers (Modell mit hinterlegten Tenant-Kosten
+     * gewinnt, sonst kleinste id) statt „was die DB zuerst liefert" — das war der Weg, auf dem
+     * Detailansicht und Pivot bei zwei Modellen mit gleichem Schlüssel auseinanderlaufen konnten.
+     *
+     * Wie {@see resolvedMonthlyCost()} gilt: Für Listen den Resolver DIREKT nutzen — der geteilte
+     * Instanz-Resolver hält den Einzelaufruf bei einem Query-Paar, je Zeile ist es eines pro Zeile.
      */
     public function deviceModel(): ?AssetDeviceModel
     {
-        if ($this->modelResolved) {
-            return $this->resolvedModel;
-        }
-        $this->modelResolved = true;
-
-        $key = AssetDeviceModel::normalizeKey($this->manufacturer, $this->model);
-        $this->resolvedModel = AssetDeviceModel::where('team_id', $this->team_id)->get()
-            ->first(fn($m) => AssetDeviceModel::normalizeKey($m->manufacturer, $m->model) === $key);
-
-        return $this->resolvedModel;
+        return $this->costResolver()->modelFor($this);
     }
 
     /**
