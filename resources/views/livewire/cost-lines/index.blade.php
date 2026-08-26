@@ -9,6 +9,21 @@
             ['label' => 'Kostenpositionen', 'icon' => 'banknotes'],
         ]">
             <x-slot name="actions">
+                {{-- Querverweise: die Seite stand bisher ohne einen einzigen Absprung zu Pivot,
+                     Import oder Stammdaten da, obwohl das die Nachbarschritte derselben Arbeit sind. --}}
+                <x-asset-manager-button variant="ghost" size="sm" :href="route('asset-manager.costs.allocation')" wire:navigate>
+                    @svg('heroicon-o-table-cells', 'w-3.5 h-3.5')
+                    Kostenaufteilung
+                </x-asset-manager-button>
+                <x-asset-manager-button variant="ghost" size="sm" :href="route('asset-manager.costs.import')" wire:navigate>
+                    @svg('heroicon-o-arrow-up-tray', 'w-3.5 h-3.5')
+                    Import
+                </x-asset-manager-button>
+                <x-asset-manager-button variant="ghost" size="sm" :href="route('asset-manager.master-data.index', ['bereich' => 'cost-types'])" wire:navigate>
+                    @svg('heroicon-o-tag', 'w-3.5 h-3.5')
+                    Stammdaten
+                </x-asset-manager-button>
+
                 {{-- Anlegen nur Owner/Admin (E1/ADR 0004) — Backend: save() Gate asset-manager.manage. --}}
                 @can('asset-manager.manage')
                     <x-asset-manager-button variant="primary" size="sm" wire:click="newLine">
@@ -23,61 +38,20 @@
     {{-- LINKS: Filter --}}
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Filter" icon="heroicon-o-funnel" width="w-72" :defaultOpen="true">
-            <div class="p-4 space-y-4 bg-[var(--am-bg)]">
-                <x-asset-manager-filter-section title="Suche">
-                    <x-asset-manager-input size="sm" type="text" wire:model.live.debounce.300ms="search" placeholder="Bezeichnung…" />
-                </x-asset-manager-filter-section>
-
-                <x-asset-manager-filter-section title="Kostenart">
-                    <x-asset-manager-select size="sm" wire:model.live="filterType">
-                        <option value="">Alle</option>
-                        @foreach($costTypes as $t)<option value="{{ $t->id }}">{{ $t->name }}</option>@endforeach
-                    </x-asset-manager-select>
-                </x-asset-manager-filter-section>
-
-                <x-asset-manager-filter-section title="Kostenstelle">
-                    <x-asset-manager-select size="sm" wire:model.live="filterCenter">
-                        <option value="">Alle</option>
-                        @foreach($costCenters as $c)<option value="{{ $c->id }}">{{ $c->code }}</option>@endforeach
-                    </x-asset-manager-select>
-                </x-asset-manager-filter-section>
-
-                <x-asset-manager-filter-section title="Kreditor">
-                    <x-asset-manager-select size="sm" wire:model.live="filterVendor">
-                        <option value="">Alle</option>
-                        @foreach($vendors as $v)<option value="{{ $v->id }}">{{ $v->name }}</option>@endforeach
-                    </x-asset-manager-select>
-                </x-asset-manager-filter-section>
-
-                <x-asset-manager-filter-section title="Status">
-                    <x-asset-manager-select size="sm" wire:model.live="filterActive">
-                        <option value="">Alle</option>
-                        <option value="1">Aktiv</option>
-                        <option value="0">Inaktiv</option>
-                    </x-asset-manager-select>
-                </x-asset-manager-filter-section>
-
-                @if($search || $filterType || $filterCenter || $filterVendor || $filterActive !== '')
-                    <x-asset-manager-button variant="ghost" size="sm" class="w-full" wire:click="resetFilters">
-                        @svg('heroicon-o-x-circle', 'w-3.5 h-3.5')
-                        Filter zurücksetzen
-                    </x-asset-manager-button>
-                @endif
-            </div>
+            @include('asset-manager::livewire.cost-lines.partials.filters')
         </x-ui-page-sidebar>
     </x-slot>
-
-    {{-- Editor als Modal (S8b): Anlegen/Bearbeiten stand vorher in einer zugeklappten rechten Sidebar. --}}
-    @can('asset-manager.manage')
-        @include('asset-manager::livewire.cost-lines.partials.modal-editor')
-    @endcan
 
     {{-- HAUPT --}}
     <div class="flex-1 flex flex-col min-h-0 min-w-0">
         <div class="flex-1 overflow-y-auto p-6 space-y-4">
 
             @if($flash)
-                <div class="px-4 py-2 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg">{{ $flash }}</div>
+                <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200">
+                    @svg('heroicon-o-check-circle', 'w-4 h-4 text-emerald-500 flex-shrink-0')
+                    <p class="text-sm text-emerald-700 m-0">{{ $flash }}</p>
+                    <button type="button" wire:click="$set('flash', null)" class="ml-auto text-emerald-600 hover:text-emerald-800">&times;</button>
+                </div>
             @endif
 
             <div class="flex items-center gap-2">
@@ -94,60 +68,25 @@
                 </span>
             </div>
 
-            <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm overflow-hidden">
-                @if($lines->isEmpty())
-                    <div class="p-8 text-center text-sm text-[var(--am-text-secondary)]">Keine Kostenpositionen gefunden.</div>
-                @else
-                    <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead>
-                            @php
-                                $sortIcon = fn($f) => $sortField === $f
-                                    ? '<svg class="w-3 h-3 inline -mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="' . ($sortDirection === 'asc' ? 'M4.5 15.75l7.5-7.5 7.5 7.5' : 'M19.5 8.25l-7.5 7.5-7.5-7.5') . '" /></svg>'
-                                    : '';
-                            @endphp
-                            <tr class="border-b border-[color:var(--am-border)] text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">
-                                <th class="text-left px-4 py-3 bg-[var(--am-bg)]"><button wire:click="sortBy('label')" class="inline-flex items-center gap-1 uppercase hover:text-[var(--am-text-secondary)]">Bezeichnung {!! $sortIcon('label') !!}</button></th>
-                                <th class="text-left px-4 py-3 bg-[var(--am-bg)]"><button wire:click="sortBy('cost_type')" class="inline-flex items-center gap-1 uppercase hover:text-[var(--am-text-secondary)]">Kostenart {!! $sortIcon('cost_type') !!}</button></th>
-                                <th class="text-left px-4 py-3 bg-[var(--am-bg)]"><button wire:click="sortBy('cost_center')" class="inline-flex items-center gap-1 uppercase hover:text-[var(--am-text-secondary)]">KSt {!! $sortIcon('cost_center') !!}</button></th>
-                                <th class="text-left px-4 py-3 bg-[var(--am-bg)]"><button wire:click="sortBy('vendor')" class="inline-flex items-center gap-1 uppercase hover:text-[var(--am-text-secondary)]">Kreditor {!! $sortIcon('vendor') !!}</button></th>
-                                <th class="text-right px-4 py-3 bg-[var(--am-bg)]"><button wire:click="sortBy('amount')" class="inline-flex items-center gap-1 uppercase hover:text-[var(--am-text-secondary)]">Betrag {!! $sortIcon('amount') !!}</button></th>
-                                <th class="text-left px-4 py-3 bg-[var(--am-bg)]"><button wire:click="sortBy('frequency')" class="inline-flex items-center gap-1 uppercase hover:text-[var(--am-text-secondary)]">Frequenz {!! $sortIcon('frequency') !!}</button></th>
-                                <th class="text-right px-4 py-3 bg-[var(--am-bg)]"><button wire:click="sortBy('monthly_amount')" class="inline-flex items-center gap-1 uppercase hover:text-[var(--am-text-secondary)]">€/Monat {!! $sortIcon('monthly_amount') !!}</button></th>
-                                <th class="px-4 py-3 bg-[var(--am-bg)]"></th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-[color:var(--am-border)]">
-                            @foreach($lines as $line)
-                                <tr wire:key="cl-{{ $line->id }}" wire:click="edit({{ $line->id }})"
-                                    class="cursor-pointer hover:bg-[var(--am-bg)] {{ $line->active ? '' : 'opacity-50' }}">
-                                    <td class="px-4 py-2.5 font-medium text-[var(--am-text)]">{{ $line->label }}</td>
-                                    <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">{{ $line->costType?->name }}</td>
-                                    <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">{{ $line->costCenter?->code ?? '—' }}</td>
-                                    <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">{{ $line->vendor?->name ?? '—' }}</td>
-                                    <td class="px-4 py-2.5 text-right tabular-nums text-[var(--am-text)]">{{ number_format((float)$line->amount, 2, ',', '.') }} €</td>
-                                    <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">{{ ['monthly'=>'mtl.','quarterly'=>'qrtl.','yearly'=>'jähr.','once'=>'einm.'][$line->frequency] ?? $line->frequency }}</td>
-                                    <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-[var(--am-accent)]">
-                                        @if($line->frequency === 'once')
-                                            <x-asset-manager-badge color="amber" size="xs" :pill="false" title="Einmalbetrag — fließt nicht in die monatliche Aufteilung">einmalig</x-asset-manager-badge>
-                                        @else
-                                            {{ number_format((float)$line->monthly_amount, 2, ',', '.') }} €
-                                        @endif
-                                    </td>
-                                    <td class="px-4 py-2.5 text-right whitespace-nowrap">
-                                        @can('asset-manager.manage')
-                                            <button wire:click.stop="toggleActive({{ $line->id }})" class="text-xs text-[var(--am-text-secondary)] hover:text-amber-600" title="Aktiv/Inaktiv">@svg('heroicon-o-power', 'w-4 h-4 inline')</button>
-                                        @endcan
-                                    </td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                    </div>
-                @endif
+            {{-- Schlanke Meta-Zeile: Treffer + Seitengröße (Filter sind in der linken Sidebar). --}}
+            <div class="flex items-center justify-between gap-2 px-1">
+                <div class="text-xs text-[var(--am-text-secondary)]">{{ $totalFiltered }} Positionen</div>
+                <div class="flex items-center gap-1.5 text-xs text-[var(--am-text-secondary)]">
+                    <span>Pro Seite</span>
+                    <select wire:model.live="perPage" class="px-2 py-1 text-xs rounded-md bg-[var(--am-surface)] border border-[color:var(--am-border-strong)] text-[var(--am-text)] cursor-pointer focus:outline-none focus:border-[color:var(--am-accent)] focus:shadow-[var(--am-focus)]">
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
             </div>
 
-            <div>{{ $lines->links() }}</div>
+            @include('asset-manager::livewire.cost-lines.partials.table-flat')
         </div>
     </div>
+
+    {{-- Editor als Modal (S8b) — Modals gehören innerhalb <x-ui-page>. --}}
+    @can('asset-manager.manage')
+        @include('asset-manager::livewire.cost-lines.partials.modal-editor')
+    @endcan
 </x-ui-page>

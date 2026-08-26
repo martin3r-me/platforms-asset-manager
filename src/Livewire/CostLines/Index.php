@@ -2,6 +2,7 @@
 
 namespace Platform\AssetManager\Livewire\CostLines;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -26,7 +27,7 @@ class Index extends Component
     public ?int   $filterCenter   = null;
     public ?int   $filterVendor   = null;
     public string $filterActive   = '';  // ''|'1'|'0'
-    public int    $perPage        = 30;
+    public int    $perPage        = 25;
     public string $sortField      = 'monthly_amount';
     public string $sortDirection  = 'desc';
 
@@ -239,27 +240,48 @@ class Index extends Component
         $this->fActive    = true;
     }
 
+    /**
+     * Gefilterte Basis-Query — bewusst OHNE Sortier-Joins.
+     *
+     * applySort() haengt LEFT JOINs an; die duerfen NIE in eine Aggregat-/Count-Query, sonst
+     * vervielfachen sie COUNT(*) und SUM(). Jeder Aufruf liefert eine frische Query, damit kein
+     * clone()-Ritual noetig ist.
+     */
+    protected function baseQuery(): Builder
+    {
+        $q = AssetCostLine::query()->where('asset_cost_lines.team_id', $this->teamId());
+
+        if ($this->search !== '')       $q->where('asset_cost_lines.label', 'like', '%' . $this->search . '%');
+        if ($this->filterType)          $q->where('asset_cost_lines.cost_type_id', $this->filterType);
+        if ($this->filterCenter)        $q->where('asset_cost_lines.cost_center_id', $this->filterCenter);
+        if ($this->filterVendor)        $q->where('asset_cost_lines.vendor_id', $this->filterVendor);
+        if ($this->filterActive !== '') $q->where('asset_cost_lines.active', $this->filterActive === '1');
+
+        return $q;
+    }
+
+    /** Ist ueberhaupt ein Filter gesetzt? Steuert Reset-Button und Empty-State-Text. */
+    public function hasFilters(): bool
+    {
+        return $this->search !== ''
+            || $this->filterType !== null
+            || $this->filterCenter !== null
+            || $this->filterVendor !== null
+            || $this->filterActive !== '';
+    }
+
     public function render()
     {
-        $teamId = $this->teamId();
+        $teamId   = $this->teamId();
+        $tenantId = TenantContext::scopeTenantId();
 
-        // Basis mit Filtern (Spalten qualifiziert, da die Sortierung Joins ergänzen kann)
-        $base = AssetCostLine::where('asset_cost_lines.team_id', $teamId);
+        $monthlySum    = round((float) $this->baseQuery()->sum('monthly_amount'), 2);
+        // Einmalkosten separat (auditierbar): once-Positionen haben monthly_amount=0 und fliessen NICHT
+        // in die Monatssumme — ihr Rohbetrag wuerde sonst still verschwinden. Hier als eigener Topf.
+        $oneTimeSum    = round((float) $this->baseQuery()->where('asset_cost_lines.frequency', 'once')->sum('amount'), 2);
+        $totalFiltered = $this->baseQuery()->count();
 
-        if ($this->search)       $base->where('asset_cost_lines.label', 'like', '%' . $this->search . '%');
-        if ($this->filterType)   $base->where('asset_cost_lines.cost_type_id', $this->filterType);
-        if ($this->filterCenter) $base->where('asset_cost_lines.cost_center_id', $this->filterCenter);
-        if ($this->filterVendor) $base->where('asset_cost_lines.vendor_id', $this->filterVendor);
-        if ($this->filterActive !== '') $base->where('asset_cost_lines.active', $this->filterActive === '1');
-
-        // Summe ohne Sortier-Join berechnen (Join wäre 1:1, aber so bleibt es robust)
-        $monthlySum = round((float) (clone $base)->sum('monthly_amount'), 2);
-
-        // Einmalkosten separat (auditierbar): once-Positionen haben monthly_amount=0 und fließen NICHT in
-        // die Monatssumme — ihr Rohbetrag würde sonst still verschwinden. Hier als eigener Topf ausgewiesen.
-        $oneTimeSum = round((float) (clone $base)->where('asset_cost_lines.frequency', 'once')->sum('amount'), 2);
-
-        $query = (clone $base)
+        $query = $this->baseQuery()
             ->with(['costType', 'costCenter', 'vendor', 'assignee'])
             ->select('asset_cost_lines.*');
         $this->applySort($query);
@@ -267,12 +289,18 @@ class Index extends Component
         $lines = $query->paginate($this->perPage);
 
         return view('asset-manager::livewire.cost-lines.index', [
-            'lines'       => $lines,
-            'costTypes'   => AssetCostType::where('team_id', $teamId)->orderBy('sort_order')->get(),
-            'costCenters' => AssetCostCenter::where('team_id', $teamId)->orderBy('code')->get(),
-            'vendors'     => AssetVendor::where('team_id', $teamId)->orderBy('name')->get(),
-            'monthlySum'  => $monthlySum,
-            'oneTimeSum'  => $oneTimeSum,
+            'lines'         => $lines,
+            'costTypes'     => AssetCostType::where('team_id', $teamId)->orderBy('sort_order')->get(),
+            // Baum-sortiert mit tree_label: die numerischen Kostenstellen haben kein `name`, als
+            // reine Code-Liste ("gf-gl, 1000, 1900, …") war der Filter nicht benutzbar.
+            'costCenters'   => $tenantId !== null
+                ? AssetCostCenter::treeFor($tenantId)
+                : AssetCostCenter::where('team_id', $teamId)->orderBy('code')->get(),
+            'vendors'       => AssetVendor::where('team_id', $teamId)->orderBy('name')->get(),
+            'monthlySum'    => $monthlySum,
+            'oneTimeSum'    => $oneTimeSum,
+            'totalFiltered' => $totalFiltered,
+            'hasFilters'    => $this->hasFilters(),
         ])->layout('platform::layouts.app');
     }
 }
