@@ -1,6 +1,6 @@
 # Tests — Asset Manager
 
-Dieses Verzeichnis enthält **zwei voneinander unabhängige** Test-Ebenen.
+Dieses Verzeichnis enthält **drei voneinander unabhängige** Test-Ebenen.
 
 ## 1. `tests/guardrails.php` — lokaler, framework-freier Statik-Guard
 
@@ -14,7 +14,43 @@ Prüft Architektur-Invarianten statisch (Tool-Registrierung vollständig, Abhän
 Models/Services → keine UI/Tools/Http, keine Blade-Alias-Manglung). Exit 0 = grün, 1 = verletzt.
 Bleibt die einzige Sache, die **im Modul-Repo selbst** ausführbar ist.
 
-## 2. `tests/Feature/**` — Host-Feature-Tests (post-deploy)
+## 2. `tests/local/**` — Logik- und Blade-Prüfungen gegen eine Host-App als Library
+
+Zwischenstufe zwischen 1 und 3: die Skripte booten eine **vorhandene** Host-App (z. B.
+`demo.bhgdigital.de`) als Library und legen ihr Schema in einer SQLite-In-Memory-DB an. Damit ist
+Fachlogik prüfbar, ohne auf den Deploy zu warten — aber es ist **keine** zweite Testsuite und
+ersetzt die Feature-Tests nicht.
+
+```bash
+php tests/local/cost-lines-grouping.php     # gruppierte Ansicht, Kennzahlen, Auswahl, Export
+php tests/local/cost-lines-editor.php       # Editor-Pfad inkl. Test-Vertrag von CostLineScopingTest
+php tests/local/cost-line-reassign.php      # CostLineReassignService (UI + MCP-Tool teilen ihn)
+php tests/local/blade-lint.php resources/views/livewire/cost-lines/*.blade.php
+```
+
+Die Host-App wird aufwärts gesucht (Verzeichnis mit `artisan` + `vendor/autoload.php` +
+`bootstrap/app.php`); abweichender Pfad über `AM_HOST_APP=…`. Modul-Klassen kommen per
+vorgeschaltetem Autoloader aus dem **lokalen** `src/`, nicht aus `vendor/` der Host-App — das
+funktioniert auch aus einem Worktree.
+
+**`blade-lint.php`** kompiliert Blade echt zu PHP und lintet das Ergebnis. Reine `@if`/`@endif`-Zähler
+reichen nicht: ein nicht erkanntes Direktiv oder ein unbalanciertes `<x-…>`-Tag fällt erst beim
+Kompilieren auf und legt die Seite sonst live mit HTTP 500 lahm.
+
+**Grenzen, die man kennen muss:**
+
+- SQLite ist bei `GROUP BY` **lax** — MySQLs `ONLY_FULL_GROUP_BY` wird hier **nicht** aufgedeckt.
+  Label-Spalten in Aggregat-Queries deshalb immer bewusst mit-gruppieren.
+- Die Modul-Migrationen laufen nicht mit; jedes Skript legt nur die Spalten an, die es anfasst.
+  Ein neues Feld muss dort ergänzt werden, sonst schlägt der Insert fehl.
+- Der Blade-Lint prüft **nicht**, ob eine Komponente oder ein Heroicon existiert (das löst Blade
+  erst zur Laufzeit auf) und nicht, ob die verwendeten Variablen gesetzt sind.
+- Es gibt keinen authentifizierten User. Schreibpfade laufen deshalb ins Gate — die Skripte weisen
+  das zuerst nach und setzen dann `Gate::before(fn (?object $u = null) => true)`. Der **nullable**
+  Parameter ist Pflicht: Laravel ruft before-Callbacks für Gäste nur auf, wenn der erste Parameter
+  `null` zulässt.
+
+## 3. `tests/Feature/**` — Host-Feature-Tests (post-deploy)
 
 PHPUnit-Klassen, die `Tests\TestCase` der **Host-App** erweitern und `RefreshDatabase` nutzen. Sie
 brauchen den vollen Core-Bootstrap (`AUTH_MODEL='Platform\Core\Models\User'`, `team_user`-Pivot,

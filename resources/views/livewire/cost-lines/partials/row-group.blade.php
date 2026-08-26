@@ -2,7 +2,7 @@
     EINE Gruppenzeile plus (wenn offen) der eingerückte Block ihrer Positionen.
 
     Erwartet: $g (dekorierte Gruppe aus Index::decorateGroups), $openGroup, $openLines,
-              $openLinesTotal, $detailLimit, $groupCols, $flaggedMap.
+              $openLinesTotal, $groupCols, $flaggedMap.
 --}}
 @php
     $isOpen   = $openGroup === $g['key'];

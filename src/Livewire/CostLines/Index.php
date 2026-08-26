@@ -1039,7 +1039,6 @@ class Index extends Component
             'openLines'      => $openLines,
             'openLinesTotal' => $openLinesTotal,
             'axes'           => self::AXES,
-            'detailLimit'    => self::GROUP_DETAIL_LIMIT,
             'costTypes'     => AssetCostType::where('team_id', $teamId)->orderBy('sort_order')->get(),
             // Baum-sortiert mit tree_label: die numerischen Kostenstellen haben kein `name`, als
             // reine Code-Liste ("gf-gl, 1000, 1900, …") war der Filter nicht benutzbar.
