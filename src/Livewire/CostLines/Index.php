@@ -15,6 +15,7 @@ use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetVendor;
 use Platform\AssetManager\Services\CostBootstrapService;
+use Platform\AssetManager\Services\CostLineReassignService;
 use Platform\AssetManager\Services\CostPlausibilityService;
 use Platform\AssetManager\Services\MasterDataDeletionService;
 use Platform\AssetManager\Services\TenantContext;
@@ -54,6 +55,9 @@ class Index extends Component
     /** Detailzeilen je aufgeklappter Gruppe; darueber der Absprung in die flache Ansicht. */
     protected const GROUP_DETAIL_LIMIT = 50;
 
+    /** Deckel fuer 'alles auswaehlen' - sonst waechst das Livewire-Payload ins Absurde. */
+    protected const MAX_SELECTION = 500;
+
     public string  $view      = 'grouped';    // grouped|flat
     public string  $groupBy   = 'cost_type';
     public ?string $openGroup = null;         // Achsen-Key der EINEN offenen Gruppe ('none' = ohne Zuordnung)
@@ -88,6 +92,19 @@ class Index extends Component
     /** Request-lokaler Puffer fuer plausibility() - protected, also nicht Teil des Livewire-State. */
     protected ?array $plausibilityCache = null;
 
+    /**
+     * Bulk-Auswahl. IDs als Strings, damit wire:model auf Checkbox-Werten sauber vergleicht
+     * (Muster: Livewire\Assets\Index). Bewusst NICHT im $queryString - ein Array von 500 IDs
+     * macht die URL unbenutzbar.
+     *
+     * @var list<string>
+     */
+    public array   $selected         = [];
+    public bool    $selectPage       = false;
+    public ?int    $bulkCenter       = null;
+    public bool    $showBulkReassign = false;
+    public ?array  $bulkPreview      = null;
+
     protected $queryString = [
         'view'         => ['except' => 'grouped'],
         'groupBy'      => ['except' => 'cost_type'],
@@ -107,16 +124,16 @@ class Index extends Component
         'sortDirection'=> ['except' => 'desc'],
     ];
 
-    public function updatingSearch(): void       { $this->resetPage(); }
-    public function updatingFilterType(): void   { $this->resetPage(); }
-    public function updatingFilterCenter(): void { $this->resetPage(); }
-    public function updatingFilterVendor(): void { $this->resetPage(); }
-    public function updatingFilterActive(): void { $this->resetPage(); }
-    public function updatingFilterSource(): void { $this->resetPage(); }
-    public function updatingFilterFreq(): void   { $this->resetPage(); }
-    public function updatingFilterHolder(): void { $this->resetPage(); }
-    public function updatingFilterValidity(): void { $this->resetPage(); }
-    public function updatingFilterFlagged(): void { $this->resetPage(); }
+    public function updatingSearch(): void       { $this->resetPage(); $this->clearSelection(); }
+    public function updatingFilterType(): void   { $this->resetPage(); $this->clearSelection(); }
+    public function updatingFilterCenter(): void { $this->resetPage(); $this->clearSelection(); }
+    public function updatingFilterVendor(): void { $this->resetPage(); $this->clearSelection(); }
+    public function updatingFilterActive(): void { $this->resetPage(); $this->clearSelection(); }
+    public function updatingFilterSource(): void { $this->resetPage(); $this->clearSelection(); }
+    public function updatingFilterFreq(): void   { $this->resetPage(); $this->clearSelection(); }
+    public function updatingFilterHolder(): void { $this->resetPage(); $this->clearSelection(); }
+    public function updatingFilterValidity(): void { $this->resetPage(); $this->clearSelection(); }
+    public function updatingFilterFlagged(): void { $this->resetPage(); $this->clearSelection(); }
 
     /** Spaltensortierung umschalten: gleiches Feld → Richtung kippen, sonst aufsteigend. */
     public function sortBy(string $field): void
@@ -372,6 +389,132 @@ class Index extends Component
             || $this->filterHolder !== ''
             || $this->filterValidity !== ''
             || $this->filterFlagged !== '';
+    }
+
+    /**
+     * Auswahl verwerfen.
+     *
+     * Aufgerufen wird das nur, wo die Auswahl ihre Bedeutung verliert - bei Filter- und
+     * Suchaenderungen. NICHT beim Blaettern und nicht beim Wechsel von Ansicht oder Achse:
+     * "die 7 necta-Zeilen umbuchen" soll einen Ansichtswechsel ueberleben.
+     */
+    public function clearSelection(): void
+    {
+        $this->selected         = [];
+        $this->selectPage       = false;
+        $this->bulkPreview      = null;
+        $this->showBulkReassign = false;
+    }
+
+    public function updatingPage(): void
+    {
+        $this->selectPage = false;
+    }
+
+    /**
+     * Kopf-Checkbox der flachen Ansicht: alle Zeilen DIESER Seite an- bzw. abwaehlen.
+     *
+     * Ohne diesen Hook waere die Checkbox ein Blindgaenger - sie wuerde $selectPage setzen,
+     * aber $selected nie fuellen.
+     */
+    public function updatedSelectPage($value): void
+    {
+        $query = $this->baseQuery();
+        $this->applySort($query);
+
+        $pageIds = $query->forPage($this->getPage(), $this->perPage)
+            ->pluck('asset_cost_lines.id')
+            ->map(fn ($id) => (string) $id)
+            ->all();
+
+        $this->selected = $value
+            ? array_values(array_unique(array_merge($this->selected, $pageIds)))
+            : array_values(array_diff($this->selected, $pageIds));
+    }
+
+    /** Alle gefilterten Positionen auswaehlen (gedeckelt). */
+    public function selectAllFiltered(): void
+    {
+        $this->selected = $this->baseQuery()
+            ->limit(self::MAX_SELECTION)
+            ->pluck('asset_cost_lines.id')
+            ->map(fn ($id) => (string) $id)
+            ->all();
+    }
+
+    /**
+     * Ganze Gruppe auswaehlen - die eigentliche Bulk-Ergonomie dieser Seite.
+     *
+     * "alle 7 necta-Zeilen" ist ein Klick, nicht sieben. Genommen werden ALLE Positionen der
+     * Gruppe, nicht nur die 50 aufgeklappt sichtbaren.
+     */
+    public function selectGroup(string $key): void
+    {
+        $ids = $this->applyAxisFilter($this->baseQuery(), $key)
+            ->limit(self::MAX_SELECTION)
+            ->pluck('asset_cost_lines.id')
+            ->map(fn ($id) => (string) $id)
+            ->all();
+
+        $this->selected = array_values(array_unique(array_merge($this->selected, $ids)));
+    }
+
+    /**
+     * Vorschau der Umbuchung (dry_run) - fuellt das Bestaetigungs-Modal.
+     *
+     * Bewusst statt eines blinden wire:confirm: die Vorschau sagt, wie viele Positionen wirklich
+     * umziehen, wie viele schon am Ziel haengen und wie viele nicht gefunden wurden. Genau dafuer
+     * gibt es den dry_run-Parameter im Service.
+     */
+    public function openBulkReassign(CostLineReassignService $service): void
+    {
+        Gate::authorize('asset-manager.manage');
+
+        $result = $service->reassignCostCenter(
+            $this->teamId(),
+            array_map('intval', $this->selected),
+            $this->bulkCenter,
+            null,
+            true,
+        );
+
+        if (! $result['ok']) {
+            $this->flash = $result['message'];
+            return;
+        }
+
+        $this->bulkPreview      = $result;
+        $this->showBulkReassign = true;
+    }
+
+    /** Umbuchung ausfuehren. Dieselbe Logik wie das MCP-Tool (CostLineReassignService). */
+    public function bulkReassignCenter(CostLineReassignService $service): void
+    {
+        Gate::authorize('asset-manager.manage');
+
+        $result = $service->reassignCostCenter(
+            $this->teamId(),
+            array_map('intval', $this->selected),
+            $this->bulkCenter,
+            null,
+            false,
+        );
+
+        $this->flash = $result['message'];
+
+        if ($result['ok']) {
+            $this->forgetPlausibility();
+            $this->clearSelection();
+            $this->bulkCenter = null;
+        }
+    }
+
+    /** Backdrop/ESC am Bestaetigungs-Modal: Vorschau verwerfen, Auswahl behalten. */
+    public function updatedShowBulkReassign(bool $value): void
+    {
+        if (! $value) {
+            $this->bulkPreview = null;
+        }
     }
 
     /**

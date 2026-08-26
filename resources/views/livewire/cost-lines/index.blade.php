@@ -75,6 +75,10 @@
 
             @include('asset-manager::livewire.cost-lines.partials.kpis')
 
+            @can('asset-manager.manage')
+                @include('asset-manager::livewire.cost-lines.partials.bulk-bar')
+            @endcan
+
             {{-- Schlanke Meta-Zeile: Treffer + Gruppierungsachse bzw. Seitengröße. --}}
             <div class="flex items-center justify-between gap-2 px-1">
                 <div class="text-xs text-[var(--am-text-secondary)]">
@@ -111,8 +115,9 @@
         </div>
     </div>
 
-    {{-- Editor als Modal (S8b) — Modals gehören innerhalb <x-ui-page>. --}}
+    {{-- Modals gehören innerhalb <x-ui-page>. --}}
     @can('asset-manager.manage')
         @include('asset-manager::livewire.cost-lines.partials.modal-editor')
+        @include('asset-manager::livewire.cost-lines.partials.modal-bulk-reassign')
     @endcan
 </x-ui-page>
