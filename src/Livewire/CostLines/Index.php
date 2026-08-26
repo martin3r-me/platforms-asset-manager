@@ -7,12 +7,14 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Livewire\Attributes\Computed;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetCostType;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetVendor;
 use Platform\AssetManager\Services\CostBootstrapService;
 use Platform\AssetManager\Services\CostLineReassignService;
@@ -87,6 +89,14 @@ class Index extends Component
     public string  $fAmount       = '';
     public string  $fFrequency    = 'monthly';
     public bool    $fActive       = true;
+    public ?int    $fAssignee     = null;
+    public string  $fHolderSearch = '';
+    public string  $fValidFrom    = '';
+    public string  $fValidTo      = '';
+    // Default 'EUR' und nicht '': die Regel unten ist required|size:3, ein leerer Default
+    // wuerde jedes Anlegen ohne explizite Waehrung scheitern lassen.
+    public string  $fCurrency     = 'EUR';
+    public string  $fFxRate       = '';
     public ?string $flash         = null;
 
     /** Request-lokaler Puffer fuer plausibility() - protected, also nicht Teil des Livewire-State. */
@@ -201,6 +211,11 @@ class Index extends Component
         $this->fAmount     = (string) $line->amount;
         $this->fFrequency  = $line->frequency;
         $this->fActive     = (bool) $line->active;
+        $this->fAssignee   = $line->assignee_id;
+        $this->fValidFrom  = $line->valid_from?->format('Y-m-d') ?? '';
+        $this->fValidTo    = $line->valid_to?->format('Y-m-d') ?? '';
+        $this->fCurrency   = $line->currency ?: 'EUR';
+        $this->fFxRate     = $line->fx_rate !== null ? (string) $line->fx_rate : '';
         $this->showEditor  = true;
         $this->resetValidation();
     }
@@ -216,12 +231,31 @@ class Index extends Component
         // FK-Refs TENANT-scopen: Kostenarten und Kreditoren sind seit ADR 0016 tenant-gebunden, eine
         // Fremd-Referenz wird als Validierungsfehler (422) abgelehnt statt still übernommen — sonst
         // grenzüberschreitender FK + fremde Namen in der Liste + verfälschte Kostenzuordnung.
+        // Waehrung vor der Validierung normalisieren, damit die FX-Regel greift.
+        $currency        = strtoupper(trim($this->fCurrency)) ?: 'EUR';
+        $this->fCurrency = $currency;
+
         $this->validate([
             'fCostType'  => ['required', 'integer', Rule::exists('asset_cost_types', 'id')->where('tenant_id', $tenantId)],
             'fLabel'     => 'required|string|max:255',
             'fAmount'    => 'required|numeric',
             'fFrequency' => 'required|in:monthly,quarterly,yearly,once',
             'fVendor'    => ['nullable', 'integer', Rule::exists('asset_vendors', 'id')->where('tenant_id', $tenantId)],
+            // Traeger genauso tenant-scopen wie Kostenart und Kreditor (M2-Leitplanke):
+            // eine Fremd-Referenz wird abgelehnt statt still uebernommen.
+            'fAssignee'  => ['nullable', 'integer', Rule::exists('asset_holders', 'id')->where('tenant_id', $tenantId)],
+            'fCurrency'  => ['required', 'string', 'size:3'],
+            // ADR 0002: Pflicht-Kurs fuer Nicht-EUR. Ohne Kurs wuerde monthly_amount still
+            // 1:1 rechnen, USD also wie EUR gewertet.
+            'fFxRate'    => [$currency === 'EUR' ? 'nullable' : 'required', 'nullable', 'numeric', 'gt:0'],
+            'fValidFrom' => ['nullable', 'date'],
+            'fValidTo'   => ['nullable', 'date', 'after_or_equal:fValidFrom'],
+        ], [], [
+            'fFxRate'    => 'FX-Kurs',
+            'fCurrency'  => 'Waehrung',
+            'fValidFrom' => 'Gueltig ab',
+            'fValidTo'   => 'Gueltig bis',
+            'fAssignee'  => 'Asset-Traeger',
         ]);
 
         // Team-aufgelöste Instanzen laden und deren IDs persistieren (nie die rohe Request-ID).
@@ -234,6 +268,15 @@ class Index extends Component
             ? AssetVendor::where('team_id', $teamId)->find($this->fVendor)
             : null;
         $center = $bootstrap->resolveCostCenter($teamId, $this->fCostCenter ?: null, $tenantId);
+
+        // Team-aufgeloeste Instanz laden und deren ID persistieren, nie die rohe Request-ID.
+        $holder = $this->fAssignee
+            ? AssetHolder::where('team_id', $teamId)->find($this->fAssignee)
+            : null;
+        if ($this->fAssignee && $holder === null) {
+            $this->addError('fAssignee', 'Asset-Träger gehört nicht zum Team.');
+            return;
+        }
 
         // Betrag 0 ablehnen; negativ nur bei allow_negative-Kostenart (Gutschrift) — verhindert stilles
         // Netting durch Tippfehler-Minusbeträge. Inline-Fehler, Editor bleibt offen.
@@ -251,10 +294,16 @@ class Index extends Component
             'cost_type_id'      => $type->id,
             'vendor_id'         => $vendor?->id ?: $type->vendor_default_id,
             'cost_center_id'    => $center?->id,
+            'assignee_id'       => $holder?->id,
             'label'             => $this->fLabel,
             'amount'            => (float) $this->fAmount,
-            'currency'          => 'EUR',
+            'currency'          => $currency,
+            // Bei EUR explizit auf NULL: sonst bliebe nach EUR -> USD -> EUR ein Zombie-Kurs
+            // stehen und monthly_amount waere dauerhaft falsch.
+            'fx_rate'           => $currency === 'EUR' ? null : (float) $this->fFxRate,
             'frequency'         => $this->fFrequency,
+            'valid_from'        => $this->fValidFrom ?: null,
+            'valid_to'          => $this->fValidTo ?: null,
             'accounting_system' => $type?->system_default,
             'active'            => $this->fActive,
         ];
@@ -322,9 +371,13 @@ class Index extends Component
 
     protected function resetEditor(): void
     {
-        $this->reset(['editId', 'fCostType', 'fCostCenter', 'fVendor', 'fLabel', 'fAmount']);
+        $this->reset([
+            'editId', 'fCostType', 'fCostCenter', 'fVendor', 'fLabel', 'fAmount',
+            'fAssignee', 'fHolderSearch', 'fValidFrom', 'fValidTo', 'fFxRate',
+        ]);
         $this->fFrequency = 'monthly';
         $this->fActive    = true;
+        $this->fCurrency  = 'EUR';
     }
 
     /**
@@ -569,6 +622,53 @@ class Index extends Component
             'Content-Type'        => 'text/csv; charset=UTF-8',
             'Content-Disposition' => 'attachment; filename="kostenpositionen-' . now()->format('Y-m-d') . '.csv"',
         ]);
+    }
+
+    /**
+     * Treffer der Traeger-Suche im Editor - max. 20, und nur wenn der Editor offen ist.
+     *
+     * Bewusst ein Suchfeld und kein Select: die Seite laedt Kostenarten, Kostenstellen und
+     * Kreditoren schon vollstaendig bei jedem Render, eine vierte Vollliste (Traeger) waere die
+     * teuerste. Inaktive Traeger stehen hinten, werden aber gezeigt - beim Zuordnen soll man
+     * sehen, dass jemand ausgeschieden ist (das ist eine der Plausibilitaetsregeln).
+     *
+     * @return \Illuminate\Support\Collection<int, AssetHolder>
+     */
+    #[Computed]
+    public function holderOptions(): \Illuminate\Support\Collection
+    {
+        if (! $this->showEditor) {
+            return collect();
+        }
+
+        return AssetHolder::where('team_id', $this->teamId())
+            ->when($this->fHolderSearch !== '', fn ($q) => $q->where(fn ($inner) => $inner
+                ->where('display_name', 'like', '%' . $this->fHolderSearch . '%')
+                ->orWhere('user_principal_name', 'like', '%' . $this->fHolderSearch . '%')))
+            ->orderByDesc('is_active')
+            ->orderBy('display_name')
+            ->limit(20)
+            ->get();
+    }
+
+    /** Aktuell im Editor gewaehlter Traeger (fuer das Chip im Formular). */
+    #[Computed]
+    public function selectedHolder(): ?AssetHolder
+    {
+        return $this->fAssignee === null
+            ? null
+            : AssetHolder::where('team_id', $this->teamId())->find($this->fAssignee);
+    }
+
+    public function chooseHolder(int $holderId): void
+    {
+        $this->fAssignee     = $holderId;
+        $this->fHolderSearch = '';
+    }
+
+    public function clearHolder(): void
+    {
+        $this->fAssignee = null;
     }
 
     public function setView(string $view): void
