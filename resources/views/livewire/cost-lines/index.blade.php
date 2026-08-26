@@ -54,19 +54,7 @@
                 </div>
             @endif
 
-            <div class="flex items-center gap-2">
-                @svg('heroicon-o-banknotes', 'w-5 h-5 text-[var(--am-text-secondary)]')
-                <h2 class="text-lg font-semibold text-[var(--am-text)] m-0">Kostenpositionen</h2>
-                <span class="flex-1"></span>
-                <span class="text-sm text-[var(--am-text-secondary)]">
-                    Summe (gefiltert): <strong class="text-[var(--am-accent)] tabular-nums">{{ number_format($monthlySum, 2, ',', '.') }} € / Monat</strong>
-                    @if($oneTimeSum > 0)
-                        <span class="ml-2 text-[var(--am-text-secondary)]">·</span>
-                        <span class="ml-2">Einmalkosten: <strong class="text-amber-700 tabular-nums">{{ number_format($oneTimeSum, 2, ',', '.') }} €</strong></span>
-                        <span class="text-[10px] text-[var(--am-text-muted)]">(nicht in Monatssumme)</span>
-                    @endif
-                </span>
-            </div>
+            @include('asset-manager::livewire.cost-lines.partials.kpis')
 
             {{-- Schlanke Meta-Zeile: Treffer + Seitengröße (Filter sind in der linken Sidebar). --}}
             <div class="flex items-center justify-between gap-2 px-1">

@@ -26,6 +26,10 @@
     $expired = $to !== null && $to->lt($today);
     $future  = $from !== null && $from->gt($today);
 
+    // Plausibilitäts-Befunde dieser Zeile (CostPlausibilityService liefert die vollständigen
+    // line_ids, die Map wird einmal pro Render gebaut - siehe Index::plausibility()).
+    $findings = $flaggedMap[$line->id] ?? [];
+
     $validityText = match (true) {
         $from !== null && $to !== null => $from->format('d.m.y') . '–' . $to->format('d.m.y'),
         $from !== null                 => 'ab ' . $from->format('d.m.y'),
@@ -45,6 +49,11 @@
                 </span>
             @endif
             {{ $line->label }}
+            @if($findings)
+                <span title="{{ implode(' · ', $findings) }}" class="text-amber-600 flex-shrink-0">
+                    @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5')
+                </span>
+            @endif
         </span>
     </td>
 

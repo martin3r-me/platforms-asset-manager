@@ -76,6 +76,31 @@
         </x-asset-manager-select>
     </x-asset-manager-filter-section>
 
+    <x-asset-manager-filter-section title="Prüfung">
+        <label class="flex items-start gap-2 text-xs text-[var(--am-text-secondary)] cursor-pointer">
+            <input type="checkbox" value="1" wire:model.live="filterFlagged"
+                   class="mt-0.5 rounded border-[color:var(--am-border-strong)] text-[var(--am-accent)]" />
+            <span>Nur auffällige Positionen</span>
+        </label>
+    </x-asset-manager-filter-section>
+
+    {{-- Bezugsgröße angleichen: die Kostenaufteilung zählt nur aktive, heute gültige Zeilen
+         (CostAggregationService::normalizedLines). Ohne dieses Preset zeigt die Seite eine andere
+         Summe als /costs, ohne dass man es merkt. --}}
+    <x-asset-manager-filter-section title="Abgleich">
+        @if($isReconciled)
+            <p class="flex items-start gap-1.5 text-[11px] text-emerald-700 m-0">
+                @svg('heroicon-o-check-circle', 'w-3.5 h-3.5 flex-shrink-0 mt-px')
+                Basis entspricht der Kostenaufteilung.
+            </p>
+        @else
+            <x-asset-manager-button variant="secondary" size="sm" class="w-full" wire:click="applyReconcilePreset">
+                @svg('heroicon-o-scale', 'w-3.5 h-3.5')
+                Basis wie Kostenaufteilung
+            </x-asset-manager-button>
+        @endif
+    </x-asset-manager-filter-section>
+
     @if($hasFilters)
         <x-asset-manager-button variant="ghost" size="sm" class="w-full" wire:click="resetFilters">
             @svg('heroicon-o-x-circle', 'w-3.5 h-3.5')

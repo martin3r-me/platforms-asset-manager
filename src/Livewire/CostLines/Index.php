@@ -4,6 +4,7 @@ namespace Platform\AssetManager\Livewire\CostLines;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -14,6 +15,7 @@ use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetVendor;
 use Platform\AssetManager\Services\CostBootstrapService;
+use Platform\AssetManager\Services\CostPlausibilityService;
 use Platform\AssetManager\Services\MasterDataDeletionService;
 use Platform\AssetManager\Services\TenantContext;
 
@@ -31,6 +33,7 @@ class Index extends Component
     public string $filterFreq     = '';  // ''|monthly|quarterly|yearly|once
     public string $filterHolder   = '';  // ''|with|without
     public string $filterValidity = '';  // ''|current|future|expired|unlimited
+    public string $filterFlagged  = '';  // ''|'1' - nur Positionen mit Plausibilitaets-Befund
     public int    $perPage        = 25;
     public string $sortField      = 'monthly_amount';
     public string $sortDirection  = 'desc';
@@ -47,6 +50,9 @@ class Index extends Component
     public bool    $fActive       = true;
     public ?string $flash         = null;
 
+    /** Request-lokaler Puffer fuer plausibility() - protected, also nicht Teil des Livewire-State. */
+    protected ?array $plausibilityCache = null;
+
     protected $queryString = [
         'search'       => ['except' => ''],
         'filterType'   => ['except' => null],
@@ -57,6 +63,7 @@ class Index extends Component
         'filterFreq'   => ['except' => ''],
         'filterHolder' => ['except' => ''],
         'filterValidity' => ['except' => ''],
+        'filterFlagged' => ['except' => ''],
         'sortField'    => ['except' => 'monthly_amount'],
         'sortDirection'=> ['except' => 'desc'],
     ];
@@ -70,6 +77,7 @@ class Index extends Component
     public function updatingFilterFreq(): void   { $this->resetPage(); }
     public function updatingFilterHolder(): void { $this->resetPage(); }
     public function updatingFilterValidity(): void { $this->resetPage(); }
+    public function updatingFilterFlagged(): void { $this->resetPage(); }
 
     /** Spaltensortierung umschalten: gleiches Feld → Richtung kippen, sonst aufsteigend. */
     public function sortBy(string $field): void
@@ -114,7 +122,7 @@ class Index extends Component
     {
         $this->reset([
             'search', 'filterType', 'filterCenter', 'filterVendor', 'filterActive',
-            'filterSource', 'filterFreq', 'filterHolder', 'filterValidity',
+            'filterSource', 'filterFreq', 'filterHolder', 'filterValidity', 'filterFlagged',
         ]);
         $this->resetPage();
     }
@@ -204,6 +212,7 @@ class Index extends Component
             $this->flash = 'Kostenposition angelegt.';
         }
 
+        $this->forgetPlausibility();
         $this->resetEditor();
         $this->showEditor = false;
     }
@@ -220,6 +229,7 @@ class Index extends Component
             $this->resetEditor();
             $this->showEditor = false;
         }
+        $this->forgetPlausibility();
         $this->flash = $result['message'];
     }
 
@@ -229,6 +239,7 @@ class Index extends Component
 
         $line = AssetCostLine::where('team_id', $this->teamId())->findOrFail($id);
         $line->update(['active' => !$line->active]);
+        $this->forgetPlausibility();
     }
 
     /** Editor-Modal schließen und Formularzustand verwerfen. */
@@ -299,6 +310,12 @@ class Index extends Component
             default     => null,
         };
 
+        // Nur auffaellige: die Arbeitsschleife dieser Seite - Befund finden, hier filtern, korrigieren.
+        if ($this->filterFlagged === '1') {
+            $ids = array_keys($this->plausibility()['map']);
+            $ids === [] ? $q->whereRaw('1 = 0') : $q->whereIn('asset_cost_lines.id', $ids);
+        }
+
         return $q;
     }
 
@@ -313,7 +330,107 @@ class Index extends Component
             || $this->filterSource !== ''
             || $this->filterFreq !== ''
             || $this->filterHolder !== ''
-            || $this->filterValidity !== '';
+            || $this->filterValidity !== ''
+            || $this->filterFlagged !== '';
+    }
+
+    /**
+     * Plausibilitaets-Befunde als line_id => [Titel, ...] plus die Bestands-Kennzahl.
+     *
+     * CostPlausibilityService::check() liefert pro Befund die VOLLSTAENDIGEN line_ids (nicht nur
+     * MAX_EXAMPLES) - ein Aufruf genuegt fuer Warn-Icons in jeder Zeile, kein N+1. Die Regeln sind
+     * kreuz-zeilig (z. B. Einzelpreis-Modus der ganzen Kostenart), lassen sich also nicht auf die
+     * aktuelle Seite eingrenzen: ganz oder gar nicht.
+     *
+     * Der Cache-Key enthaelt die tenant_id - check() laeuft unter dem TenantScope, ein team-only-Key
+     * wuerde Ergebnisse ueber Tenants hinweg vermischen. Gecacht wird nur die kleine Map, nicht das
+     * ganze Befund-Bundle.
+     *
+     * @return array{map: array<int, list<string>>, monthly: float}
+     */
+    protected function plausibility(): array
+    {
+        if ($this->plausibilityCache !== null) {
+            return $this->plausibilityCache;
+        }
+
+        $teamId   = $this->teamId();
+        $tenantId = TenantContext::scopeTenantId() ?? 0;
+
+        return $this->plausibilityCache = Cache::remember(
+            "am:cost-plausibility:{$teamId}:{$tenantId}",
+            now()->addSeconds(120),
+            function () use ($teamId): array {
+                $result = app(CostPlausibilityService::class)->check($teamId);
+
+                $map = [];
+                foreach ($result['findings'] as $finding) {
+                    foreach ($finding['line_ids'] as $lineId) {
+                        $map[(int) $lineId][] = $finding['title'];
+                    }
+                }
+
+                return ['map' => $map, 'monthly' => (float) $result['total_monthly_flagged']];
+            },
+        );
+    }
+
+    /** Nach jeder Korrektur verwerfen - eine veraltete Warnung ist schlimmer als keine. */
+    protected function forgetPlausibility(): void
+    {
+        $tenantId = TenantContext::scopeTenantId() ?? 0;
+        Cache::forget("am:cost-plausibility:{$this->teamId()}:{$tenantId}");
+        $this->plausibilityCache = null;
+    }
+
+    /**
+     * Kennzahlen der gefilterten Menge in EINER Query.
+     *
+     * Aufwand und Gutschriften werden getrennt ausgewiesen: die alte Kopfzeile zeigte nur das Netto
+     * und nannte es "Summe" - dass darin eine Gutschrift verrechnet ist, war nirgends sichtbar.
+     * once-Positionen haben monthly_amount = 0 und bleiben ein eigener Topf.
+     *
+     * @return array{count:int, gross:float, credits:float, net:float, once:float}
+     */
+    protected function kpis(): array
+    {
+        $row = $this->baseQuery()->selectRaw(
+            'COUNT(*) as cnt, '
+            . 'SUM(CASE WHEN asset_cost_lines.monthly_amount > 0 THEN asset_cost_lines.monthly_amount ELSE 0 END) as gross, '
+            . 'SUM(CASE WHEN asset_cost_lines.monthly_amount < 0 THEN asset_cost_lines.monthly_amount ELSE 0 END) as credits, '
+            . "SUM(CASE WHEN asset_cost_lines.frequency = 'once' THEN asset_cost_lines.amount ELSE 0 END) as once_sum"
+        )->first();
+
+        // DECIMAL kommt als String aus PDO -> explizit casten.
+        $gross   = round((float) ($row->gross ?? 0), 2);
+        $credits = round((float) ($row->credits ?? 0), 2);
+
+        return [
+            'count'   => (int) ($row->cnt ?? 0),
+            'gross'   => $gross,
+            'credits' => $credits,
+            'net'     => round($gross + $credits, 2),
+            'once'    => round((float) ($row->once_sum ?? 0), 2),
+        ];
+    }
+
+    /**
+     * Filter auf die Bezugsgroesse der Kostenaufteilung setzen (aktiv + heute gueltig).
+     *
+     * CostAggregationService::normalizedLines() zaehlt nur active()->validOn(now()); ohne diese
+     * Einschraenkung zeigt diese Seite eine andere Summe als /costs, ohne dass man es merkt.
+     */
+    public function applyReconcilePreset(): void
+    {
+        $this->filterActive   = '1';
+        $this->filterValidity = 'current';
+        $this->resetPage();
+    }
+
+    /** Steht die Liste gerade auf der Bezugsgroesse der Kostenaufteilung? */
+    public function isReconciled(): bool
+    {
+        return $this->filterActive === '1' && $this->filterValidity === 'current';
     }
 
     public function render()
@@ -321,11 +438,8 @@ class Index extends Component
         $teamId   = $this->teamId();
         $tenantId = TenantContext::scopeTenantId();
 
-        $monthlySum    = round((float) $this->baseQuery()->sum('monthly_amount'), 2);
-        // Einmalkosten separat (auditierbar): once-Positionen haben monthly_amount=0 und fliessen NICHT
-        // in die Monatssumme — ihr Rohbetrag wuerde sonst still verschwinden. Hier als eigener Topf.
-        $oneTimeSum    = round((float) $this->baseQuery()->where('asset_cost_lines.frequency', 'once')->sum('amount'), 2);
-        $totalFiltered = $this->baseQuery()->count();
+        $kpi     = $this->kpis();
+        $flagged = $this->plausibility();
 
         $query = $this->baseQuery()
             ->with(['costType', 'costCenter', 'vendor', 'assignee'])
@@ -343,10 +457,12 @@ class Index extends Component
                 ? AssetCostCenter::treeFor($tenantId)
                 : AssetCostCenter::where('team_id', $teamId)->orderBy('code')->get(),
             'vendors'       => AssetVendor::where('team_id', $teamId)->orderBy('name')->get(),
-            'monthlySum'    => $monthlySum,
-            'oneTimeSum'    => $oneTimeSum,
-            'totalFiltered' => $totalFiltered,
-            'hasFilters'    => $this->hasFilters(),
+            'kpi'            => $kpi,
+            'flaggedMap'     => $flagged['map'],
+            'flaggedMonthly' => $flagged['monthly'],
+            'totalFiltered'  => $kpi['count'],
+            'hasFilters'     => $this->hasFilters(),
+            'isReconciled'   => $this->isReconciled(),
         ])->layout('platform::layouts.app');
     }
 }
