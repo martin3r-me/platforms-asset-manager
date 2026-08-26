@@ -38,6 +38,11 @@
                     Stammdaten
                 </x-asset-manager-button>
 
+                <x-asset-manager-button variant="secondary" size="sm" wire:click="exportCsv">
+                    @svg('heroicon-o-arrow-down-tray', 'w-3.5 h-3.5')
+                    CSV
+                </x-asset-manager-button>
+
                 {{-- Anlegen nur Owner/Admin (E1/ADR 0004) — Backend: save() Gate asset-manager.manage. --}}
                 @can('asset-manager.manage')
                     <x-asset-manager-button variant="primary" size="sm" wire:click="newLine">

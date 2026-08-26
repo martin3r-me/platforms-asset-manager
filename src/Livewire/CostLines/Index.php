@@ -18,6 +18,7 @@ use Platform\AssetManager\Services\CostBootstrapService;
 use Platform\AssetManager\Services\CostPlausibilityService;
 use Platform\AssetManager\Services\MasterDataDeletionService;
 use Platform\AssetManager\Services\TenantContext;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class Index extends Component
 {
@@ -371,6 +372,60 @@ class Index extends Component
             || $this->filterHolder !== ''
             || $this->filterValidity !== ''
             || $this->filterFlagged !== '';
+    }
+
+    /**
+     * Gefilterte Positionen als CSV. Muster: Devices\Index::exportCsv().
+     *
+     * Immer ueber baseQuery(), nie ueber die Aggregat-Query: die Datei muss denselben
+     * Datenbestand enthalten wie der Bildschirm, von dem sie ausgeloest wurde. cursor() statt
+     * get(), damit auch ein grosser Bestand nicht in den Speicher laeuft. Die ID wandert mit -
+     * sie ist der Rueckweg (Deep-Link, MCP-Tools, Bulk-Umbuchung).
+     */
+    public function exportCsv(): StreamedResponse
+    {
+        $rows = $this->baseQuery()->with(['costType', 'costCenter', 'vendor', 'assignee']);
+        $this->applySort($rows);
+
+        return new StreamedResponse(function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM fuer Excel
+
+            fputcsv($out, [
+                'ID', 'Bezeichnung', 'Kostenart', 'Bezugsebene', 'Kostenstelle', 'KSt-Bezeichnung',
+                'Asset-Traeger', 'Kreditor', 'Betrag', 'Waehrung', 'FX-Kurs', 'Frequenz', 'EUR/Monat',
+                'Herkunft', 'Gueltig ab', 'Gueltig bis', 'Aktiv', 'Buchhaltung', 'Periode',
+            ], ';');
+
+            foreach ($rows->cursor() as $line) {
+                fputcsv($out, [
+                    $line->id,
+                    $line->label,
+                    $line->costType?->name,
+                    $line->costType?->levelLabel(),
+                    $line->costCenter?->code,
+                    $line->costCenter?->name,
+                    $line->assignee?->name,
+                    $line->vendor?->name,
+                    number_format((float) $line->amount, 2, ',', ''),
+                    $line->currency,
+                    $line->fx_rate !== null ? number_format((float) $line->fx_rate, 6, ',', '') : '',
+                    $line->frequency,
+                    number_format((float) $line->monthly_amount, 2, ',', ''),
+                    $line->source,
+                    $line->valid_from?->format('Y-m-d'),
+                    $line->valid_to?->format('Y-m-d'),
+                    $line->active ? 'ja' : 'nein',
+                    $line->accounting_system,
+                    $line->period_label,
+                ], ';');
+            }
+
+            fclose($out);
+        }, 200, [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="kostenpositionen-' . now()->format('Y-m-d') . '.csv"',
+        ]);
     }
 
     public function setView(string $view): void
