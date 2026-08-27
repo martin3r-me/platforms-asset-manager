@@ -10,6 +10,7 @@ use Platform\AssetManager\Concerns\AuthorizesTeamRole;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Services\CostExcelImportService;
 use Platform\AssetManager\Services\CostResetService;
+use Platform\AssetManager\Services\LicenseInvoiceImportService;
 use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Services\VodafoneInvoiceImportService;
 
@@ -31,6 +32,12 @@ class Import extends Component
     public ?array $vodafoneResult = null;
     public ?string $vodafoneError = null;
     public bool $vodafoneWasDryRun = true;
+
+    /** Dritter Upload: Lizenz-Abrechnung des Wiederverkäufers (ADR 0019). */
+    public $licenseFile;
+    public ?array $licenseResult = null;
+    public ?string $licenseError = null;
+    public bool $licenseWasDryRun = true;
 
     /** owner/admin im aktiven Team? (analog AssetDevicePolicy) */
     protected function canManage(): bool
@@ -187,6 +194,85 @@ class Import extends Component
             // Die Meldungen des Services sind bewusst fachlich formuliert (fehlendes Blatt, fehlende
             // Kostenart) — die darf der Nutzer sehen, sie sagen ihm, was zu tun ist.
             $this->vodafoneError = $e instanceof \RuntimeException
+                ? $e->getMessage()
+                : 'Der Import ist fehlgeschlagen. Bitte Datei und Format prüfen; Details stehen im Server-Log.';
+        } finally {
+            $this->running = false;
+        }
+    }
+
+    public function updatedLicenseFile(): void
+    {
+        $this->licenseResult = null;
+        $this->licenseError  = null;
+        $this->validateLicenseFile();
+    }
+
+    /** Validiert die Lizenz-Abrechnung; gibt false zurück (statt zu werfen), wenn ungültig. */
+    protected function validateLicenseFile(): bool
+    {
+        $this->resetErrorBag('licenseFile');
+
+        if (! $this->licenseFile) {
+            $this->addError('licenseFile', 'Bitte eine Datei wählen.');
+            return false;
+        }
+        if ($this->licenseFile->getSize() > 20 * 1024 * 1024) {
+            $this->addError('licenseFile', 'Datei zu groß (max. 20 MB).');
+            return false;
+        }
+        if (strtolower($this->licenseFile->getClientOriginalExtension() ?? '') !== 'csv') {
+            $this->addError('licenseFile', 'Bitte den Export „Abrechnungsdetails" als .csv hochladen.');
+            return false;
+        }
+
+        return true;
+    }
+
+    public function previewLicenseInvoice(LicenseInvoiceImportService $service): void
+    {
+        $this->runLicenseInvoice($service, true);
+    }
+
+    public function runLicenseInvoiceImport(LicenseInvoiceImportService $service): void
+    {
+        $this->runLicenseInvoice($service, false);
+    }
+
+    protected function runLicenseInvoice(LicenseInvoiceImportService $service, bool $dryRun): void
+    {
+        // Gleiche Grenze wie bei den anderen Importen (ADR 0004): der Lauf schreibt Preise, die in die
+        // Kostenaufteilung einfließen, und löst handgepflegte Stückpreise ab — Owner/Admin.
+        abort_unless($this->canManage(), 403);
+
+        $this->licenseError  = null;
+        $this->licenseResult = null;
+
+        if (! $this->validateLicenseFile()) {
+            return;
+        }
+
+        $this->running          = true;
+        $this->licenseWasDryRun = $dryRun;
+
+        try {
+            $this->licenseResult = $service->import(
+                $this->teamId(),
+                $this->licenseFile->getRealPath(),
+                'license-upload',
+                $dryRun,
+                $this->activeTenantId(),
+            );
+        } catch (\Throwable $e) {
+            Log::error('AssetManager: Lizenz-Rechnungsimport fehlgeschlagen', [
+                'team_id' => $this->teamId(),
+                'dry_run' => $dryRun,
+                'error'   => $e->getMessage(),
+            ]);
+
+            // Die Meldungen des Services sind bewusst fachlich formuliert (falsche Kopfzeile, keine
+            // Positionen) — sie sagen dem Nutzer, was mit der Datei nicht stimmt.
+            $this->licenseError = $e instanceof \RuntimeException
                 ? $e->getMessage()
                 : 'Der Import ist fehlgeschlagen. Bitte Datei und Format prüfen; Details stehen im Server-Log.';
         } finally {

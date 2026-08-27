@@ -6,6 +6,7 @@ use Platform\AssetManager\Livewire\Devices\Index as DevicesIndex;
 use Platform\AssetManager\Livewire\Devices\Status as DevicesStatus;
 use Platform\AssetManager\Livewire\Compliance\Index as ComplianceIndex;
 use Platform\AssetManager\Livewire\Licenses\Index as LicensesIndex;
+use Platform\AssetManager\Livewire\Licenses\Contracts as LicensesContracts;
 use Platform\AssetManager\Livewire\Licenses\Show as LicensesShow;
 use Platform\AssetManager\Livewire\Assets\Index as AssetsIndex;
 use Platform\AssetManager\Livewire\Assets\Create as AssetsCreate;
@@ -73,6 +74,8 @@ Route::get('/handovers', HandoversIndex::class)->name('asset-manager.handovers.i
 Route::get('/handovers/{handover}/pdf', HandoverPdfController::class)->name('asset-manager.handovers.pdf');
 
 Route::get('/licenses', LicensesIndex::class)->name('asset-manager.licenses.index');
+// Muss VOR der Platzhalter-Route stehen — sonst fasst {sku} das Wort „contracts" als SKU-Id auf.
+Route::get('/licenses/contracts', LicensesContracts::class)->name('asset-manager.licenses.contracts');
 Route::get('/licenses/{sku}', LicensesShow::class)->name('asset-manager.licenses.show');
 
 Route::get('/printers', PrintersIndex::class)->name('asset-manager.printers.index');

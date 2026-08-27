@@ -57,6 +57,49 @@
                     </div>
                 </x-asset-manager-filter-section>
 
+                {{-- Träger-Typ (ADR 0017) und, bei Funktionskonten, das zugehörige System (ADR 0019) --}}
+                <x-asset-manager-filter-section title="Art des Trägers">
+                    <div class="space-y-1.5">
+                        <x-asset-manager-select size="sm" wire:model.live="holderType">
+                            <option value="person">Person</option>
+                            <option value="function">Funktionskonto</option>
+                            <option value="admin">Admin-Account</option>
+                            <option value="service">Service-/Technik-Account</option>
+                            <option value="external">Extern</option>
+                        </x-asset-manager-select>
+                        @error('holderType')<span class="text-[10px] text-red-700">{{ $message }}</span>@enderror
+
+                        <p class="text-[10px] text-[var(--am-text-muted)] m-0">
+                            Von Hand gesetzt bleibt der Typ beim nächsten Sync erhalten. Automatisch erkennen
+                            lassen sich Muster über die Regeln in den
+                            <a href="{{ route('asset-manager.settings') }}" wire:navigate class="underline">Moduleinstellungen</a>.
+                        </p>
+
+                        @if($holderType === 'function')
+                            <div class="pt-1.5 space-y-1.5">
+                                <label class="block text-[10px] text-[var(--am-text-muted)]">Zugehöriges System</label>
+                                <x-asset-manager-input size="sm" type="text" wire:model="functionSystem"
+                                    placeholder="z. B. Archivsystem, Scanstation" />
+                                @error('functionSystem')<span class="text-[10px] text-red-700">{{ $message }}</span>@enderror
+
+                                @if(trim($functionSystem) === '' || $holder->cost_center_id === null)
+                                    <p class="text-[10px] text-amber-700 m-0">
+                                        @svg('heroicon-o-exclamation-triangle', 'w-3 h-3 inline')
+                                        Ohne System <strong>und</strong> Kostenstelle wird dieses Konto bei der
+                                        Lizenz-Verteilung wie eine Person behandelt — es bekommt keine
+                                        Monatslizenz bevorzugt zugeteilt.
+                                    </p>
+                                @else
+                                    <p class="text-[10px] text-[var(--am-text-muted)] m-0">
+                                        Erhält bei der Lizenz-Verteilung vorrangig die teureren
+                                        Monatspreis-Zeilen (flexibel kündbar).
+                                    </p>
+                                @endif
+                            </div>
+                        @endif
+                    </div>
+                </x-asset-manager-filter-section>
+
                 <div class="rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm overflow-hidden">
                     <div class="px-3 py-2">
                         <label class="flex items-center gap-2 text-[11px] text-[var(--am-text-secondary)]">

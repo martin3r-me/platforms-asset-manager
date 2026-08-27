@@ -1,0 +1,17 @@
+Produkt;Typ;Abrechnungszeitraum;Edition;Anzahl;Betrag;Listenpreis/Rabatt;Einheit
+Testprodukt;monatliche Entgelte;01.07.2026-01.08.2026;Muster Suite Standard;10,0000000000;200,0000000000;20,0000000000;EUR
+Testprodukt;monatliche Entgelte;01.07.2026-01.08.2026;NCE Muster Suite Standard 12 (RAHMEN Standalone) - P1Y;40,0000000000;800,0000000000;20,0000000000;EUR
+Testprodukt;monatliche Entgelte;01.07.2026-01.08.2026;NCE Muster Suite Standard 12 (RAHMEN Standalone) - P1Y - 12 M 25%;1,0000000000;-200,0000000000;-25,0000000000;%
+Testprodukt;monatliche Entgelte;01.07.2026-01.08.2026;Muster Assistent;2,0000000000;20,0000000000;10,0000000000;EUR
+Testprodukt;monatliche Entgelte;01.07.2026-01.08.2026;Muster Assistent - 12 M 10%;1,0000000000;-2,0000000000;-10,0000000000;%
+Testprodukt;monatliche Entgelte;01.07.2026-17.07.2026;Muster Assistent Business (Standalone Add-on) - Muster Assistent Business - Per User Fee Zeitraum von 07/01/26 bis 07/17/26;3,0000000000;15,4800000000;10,0000000000;EUR
+Testprodukt;monatliche Entgelte;01.07.2026-17.07.2026;Muster Assistent Business - Prozentualer Rabatt 20%;1,0000000000;-3,1000000000;-20,0000000000;%
+Testprodukt;monatliche Entgelte;17.07.2026-01.08.2026;Muster Assistent Business (Standalone Add-on) - Muster Assistent Business - Gebühr pro Benutzer Zeitraum von 07/17/26 bis 08/01/26;3,0000000000;14,5200000000;10,0000000000;EUR
+Testprodukt;monatliche Entgelte;17.07.2026-01.08.2026;Muster Assistent Business - Prozentualer Rabatt 20%;1,0000000000;-2,9000000000;-20,0000000000;%
+Testprodukt;monatliche Entgelte;01.07.2026-01.08.2026;Muster Archiv Ablage - Addon;5,0000000000;25,0000000000;5,0000000000;EUR
+Testprodukt;monatliche Entgelte;09.07.2026-01.08.2026;Muster Randfall Flex;2,0000000000;7,4200000000;5,0000000000;EUR
+Testprodukt;monatliche Entgelte;20.07.2026-01.08.2026;Muster Suite Standard;-1,0000000000;-7,7400000000;20,0000000000;EUR
+Testprodukt;monatliche Entgelte;20.07.2026-01.08.2026;Muster Suite Standard;2,0000000000;15,4800000000;20,0000000000;EUR
+;;;;Gesamtnetto;882,16;;EUR
+;;;;MwSt. 19%;167,6104;;EUR
+;;;;Gesamtbetrag;1.049,7704;;EUR

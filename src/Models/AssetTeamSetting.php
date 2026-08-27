@@ -28,6 +28,10 @@ class AssetTeamSetting extends Model
         // Klassifizierungsregeln für Asset-Träger je Tenant (ADR 0017): Präfix-/Muster-Listen,
         // damit keine Kundenkonvention im Code landet.
         'holder_type_rules',
+        // Ziele der Lizenz-Verteilungs-Kaskade für Mengen ohne Träger. Konfigurierbar, weil
+        // „IT-Gemeinkosten" und „Lizenzpool IT" Kostenstellennamen *eines* Kunden sind.
+        'license_overflow_cost_center_id',
+        'license_pool_cost_center_id',
     ];
 
     protected $casts = [
@@ -43,5 +47,17 @@ class AssetTeamSetting extends Model
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(AssetTenant::class, 'tenant_id');
+    }
+
+    /** Sammelstelle für Monats-Seats über dem Bedarf an Funktionskonten. */
+    public function licenseOverflowCostCenter(): BelongsTo
+    {
+        return $this->belongsTo(AssetCostCenter::class, 'license_overflow_cost_center_id');
+    }
+
+    /** Sammelstelle für bezahlte, aber unbesetzte Seats. */
+    public function licensePoolCostCenter(): BelongsTo
+    {
+        return $this->belongsTo(AssetCostCenter::class, 'license_pool_cost_center_id');
     }
 }

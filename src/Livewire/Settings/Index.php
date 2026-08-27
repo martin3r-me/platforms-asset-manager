@@ -40,10 +40,66 @@ class Index extends Component
 
     public ?string $holderRulesError = null;
 
+    /**
+     * Ziele der Lizenz-Verteilungs-Kaskade für Mengen ohne Träger (ADR 0019).
+     *
+     * `licenseOverflowCostCenterId` nimmt Monats-Seats auf, die über den Bedarf an Funktionskonten
+     * hinausgehen; `licensePoolCostCenterId` bezahlten, aber unbesetzten Leerstand. Beide sind
+     * konfigurierbar, weil „IT-Gemeinkosten" und „Lizenzpool IT" Kostenstellennamen *eines* Kunden
+     * sind — im Code wären sie eine Kundenspezifik im Schema.
+     */
+    public ?int $licenseOverflowCostCenterId = null;
+
+    public ?int $licensePoolCostCenterId = null;
+
+    public ?string $licenseCostCenterFlash = null;
+
     public function mount(): void
     {
         $this->controllingEnabled = app(ControllingContext::class)->enabledFor($this->teamId());
         $this->loadHolderRules();
+        $this->loadLicenseCostCenters();
+    }
+
+    protected function loadLicenseCostCenters(): void
+    {
+        $settings = AssetTeamSetting::where('team_id', $this->teamId())->first();
+
+        $this->licenseOverflowCostCenterId = $settings?->license_overflow_cost_center_id;
+        $this->licensePoolCostCenterId     = $settings?->license_pool_cost_center_id;
+    }
+
+    /**
+     * Sammel-Kostenstellen speichern. Eine Änderung wirkt sofort auf die Kostenaufteilung, ohne dass
+     * neu verteilt werden muss: die Mengen stehen an den Vertragszeilen, nur ihr Ziel ändert sich.
+     */
+    public function saveLicenseCostCenters(): void
+    {
+        abort_unless(Gate::allows('asset-manager.manage'), 403);
+
+        $valid = \Platform\AssetManager\Models\AssetCostCenter::where('team_id', $this->teamId())
+            ->pluck('id')
+            ->all();
+
+        foreach (['licenseOverflowCostCenterId', 'licensePoolCostCenterId'] as $field) {
+            $value = $this->{$field} !== null ? (int) $this->{$field} : null;
+
+            // Fremde oder gelöschte Kostenstelle nicht übernehmen — sonst zeigte die Einstellung auf
+            // eine Zeile, die in diesem Tenant nicht existiert, und die Beträge verschwänden.
+            $this->{$field} = ($value !== null && in_array($value, $valid, true)) ? $value : null;
+        }
+
+        AssetTeamSetting::updateOrCreate(
+            ['team_id' => $this->teamId(), 'tenant_id' => TenantContext::scopeTenantId()],
+            [
+                'license_overflow_cost_center_id' => $this->licenseOverflowCostCenterId,
+                'license_pool_cost_center_id'     => $this->licensePoolCostCenterId,
+            ],
+        );
+
+        \Platform\AssetManager\Support\LicensePriceBook::flush();
+
+        $this->licenseCostCenterFlash = 'Gespeichert.';
     }
 
     protected function loadHolderRules(): void
@@ -181,6 +237,9 @@ class Index extends Component
                 ['type' => 'admin', 'field' => 'upn', 'match' => 'prefix', 'value' => 'adm-'],
                 ['type' => 'service', 'field' => 'upn', 'match' => 'contains', 'value' => 'svc'],
             ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
+            'costCenters' => \Platform\AssetManager\Models\AssetCostCenter::where('team_id', $this->teamId())
+                ->orderBy('code')
+                ->get(['id', 'code', 'name']),
         ])->layout('platform::layouts.app');
     }
 }

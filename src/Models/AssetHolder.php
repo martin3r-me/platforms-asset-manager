@@ -81,6 +81,10 @@ class AssetHolder extends Model
         'data_volume',
         'is_active',
         'holder_type',
+        // Zugehöriges System eines Funktionskontos — zusammen mit der Kostenstelle die zweite
+        // Pflichtangabe, ohne die die Lizenz-Verteilungs-Kaskade ein Funktionskonto nicht
+        // bevorzugt behandelt. Freitext, weil „das System" je Kunde etwas anderes ist.
+        'function_system',
         // DEPRECATED (ADR 0017): durch holder_type ersetzt. Bleibt im fillable, solange die Spalte als
         // Sicherheitsnetz existiert — ein Rollback des Deploys soll die Typinformation nicht verlieren.
         'account_type',

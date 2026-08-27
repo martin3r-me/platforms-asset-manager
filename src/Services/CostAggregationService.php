@@ -14,6 +14,7 @@ use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetUserLicense;
 use Platform\AssetManager\Support\DeviceCostResolver;
+use Platform\AssetManager\Support\LicensePriceBook;
 
 class CostAggregationService
 {
@@ -122,16 +123,12 @@ class CostAggregationService
             ->get()
             ->groupBy('assignee_id');
 
-        // Lizenz-SKU-Preise lookup (per sku_id)
-        $skuPrices = AssetLicenseSku::where('team_id', $teamId)
-            ->whereNotNull('unit_price')
-            ->pluck('unit_price', 'sku_id');
+        // Lizenzpreise: eine Quelle fuer alle Auswertungen (Vertragszeile vor handgepflegtem
+        // SKU-Preis) — siehe LicensePriceBook.
+        $book = LicensePriceBook::for($teamId);
 
-        // Lizenz-Zuweisungen gruppiert per UPN
-        $licenseAssignments = AssetUserLicense::where('team_id', $teamId)
-            ->whereIn('sku_id', $skuPrices->keys())
-            ->get()
-            ->groupBy('user_principal_name');
+        // Lizenz-Zuweisungen gruppiert per UPN, jeweils mit ihrem aufgeloesten Preis
+        $licenseAssignments = $book->seatRows()->groupBy('upn');
 
         // Sonstige Kostenpositionen (cost_line) pro Asset-Träger
         $costLineSums = AssetCostLine::active()
@@ -148,12 +145,12 @@ class CostAggregationService
             ->groupBy('upn')
             ->map(fn($g) => (float) $g->sum('amount'));
 
-        $results = $holders->map(function ($emp) use ($items, $licenseAssignments, $skuPrices, $costLineSums, $deviceSums) {
+        $results = $holders->map(function ($emp) use ($items, $licenseAssignments, $costLineSums, $deviceSums) {
             $hardware = ($items[$emp->id] ?? collect())->sum(fn($i) => $i->monthlyCost())
                 + (float) ($deviceSums[$emp->user_principal_name] ?? 0);
 
-            $licenses = ($licenseAssignments[$emp->user_principal_name] ?? collect())
-                ->sum(fn($lic) => (float) ($skuPrices[$lic->sku_id] ?? 0));
+            // Die Preise stecken schon in den Zeilen des Preisbuchs (Vertragspreis vor SKU-Preis).
+            $licenses = ($licenseAssignments[$emp->user_principal_name] ?? collect())->sum('amount');
 
             $costlines = (float) ($costLineSums[$emp->id] ?? 0);
 
@@ -288,16 +285,30 @@ class CostAggregationService
      */
     public function byLicenseSku(int $teamId): Collection
     {
+        $book = LicensePriceBook::for($teamId);
+
         return AssetLicenseSku::where('team_id', $teamId)
             ->get()
-            ->map(fn($sku) => [
-                'label'        => $sku->display_name ?? $sku->sku_part_number,
-                'monthly'      => round($sku->monthlyCost(), 2),
-                'consumed'     => $sku->consumed_units,
-                'purchased'    => $sku->purchased_units,
-                'unit_price'   => $sku->unit_price !== null ? (float) $sku->unit_price : null,
-                'utilization'  => $sku->utilizationPercent(),
-            ])
+            ->map(function ($sku) use ($book) {
+                $range = $book->priceRangeForSku((string) $sku->sku_id);
+
+                return [
+                    'label'       => $sku->display_name ?? $sku->sku_part_number,
+                    // Rechnungsgedeckt: Seats + Sammelstellen-Mengen. Sonst der handgepflegte Weg.
+                    'monthly'     => $range !== null
+                        ? $book->monthlyCostForSku((string) $sku->sku_id)
+                        : round($sku->monthlyCost(), 2),
+                    'consumed'    => $sku->consumed_units,
+                    'purchased'   => $sku->purchased_units,
+                    // Bei mehreren Tarifen gibt es keinen einen Stueckpreis — dann bleibt das Feld
+                    // leer und die Spanne traegt die Information.
+                    'unit_price'  => $range !== null
+                        ? ($range['min'] === $range['max'] ? $range['min'] : null)
+                        : ($sku->unit_price !== null ? (float) $sku->unit_price : null),
+                    'price_range' => $range,
+                    'utilization' => $sku->utilizationPercent(),
+                ];
+            })
             ->filter(fn($r) => $r['monthly'] > 0)
             ->sortByDesc('monthly')
             ->values();
@@ -316,12 +327,21 @@ class CostAggregationService
         $poolValue = $poolItems->sum(fn($i) => (float) $i->purchase_price);
         $poolCount = $poolItems->count();
 
-        // Ungenutzte Lizenzen
+        // Ungenutzte Lizenzen. Das Sparpotenzial kommt aus den Vertragszeilen (bezahlter, unbesetzter
+        // Pool) und ist damit belegt statt geschaetzt. Der fruehere Weg — available_units x
+        // Stueckpreis — ist nicht mehr bestimmt, sobald eine Lizenz mehrere Tarife hat: welcher der
+        // beiden Preise steht leer? Ohne Rechnungsdaten bleibt der alte Weg als Rueckfall.
         $unusedSkus = AssetLicenseSku::where('team_id', $teamId)
             ->where('available_units', '>', 0)
-            ->whereNotNull('unit_price')
             ->get();
-        $unusedSavings = $unusedSkus->sum(fn($s) => (float) $s->unit_price * $s->available_units);
+        $book = LicensePriceBook::for($teamId);
+        $unusedSavings = $book->hasContractData()
+            ? $book->unusedSavings()
+            : $unusedSkus->whereNotNull('unit_price')
+                ->sum(fn($s) => (float) $s->unit_price * $s->available_units);
+        $unusedSkus = $unusedSkus->filter(
+            fn($s) => $s->unit_price !== null || $book->priceRangeForSku((string) $s->sku_id) !== null
+        );
 
         // Hardware bei inaktiven Asset-Trägern
         $inactiveEmpIds = AssetHolder::where('team_id', $teamId)
@@ -420,24 +440,25 @@ class CostAggregationService
         // 3) ms_license
         $msType = $types->firstWhere('aggregation_source', AssetCostType::SOURCE_MS_LICENSE);
         if ($msType) {
-            $skuPrices = AssetLicenseSku::where('team_id', $teamId)
-                ->whereNotNull('unit_price')
-                ->pluck('unit_price', 'sku_id');
+            $book = LicensePriceBook::for($teamId);
 
-            if ($skuPrices->isNotEmpty()) {
-                AssetUserLicense::where('team_id', $teamId)
-                    ->whereIn('sku_id', $skuPrices->keys())
-                    ->get(['sku_id', 'user_principal_name'])
-                    ->each(function ($lic) use ($rows, $msType, $skuPrices, $ccByUpn) {
-                        $p = (float) ($skuPrices[$lic->sku_id] ?? 0);
-                        if ($p <= 0) return;
-                        $rows->push([
-                            'cost_center_id' => $ccByUpn[$lic->user_principal_name] ?? null,
-                            'cost_type_id'   => (int) $msType->id,
-                            'amount'         => $p,
-                        ]);
-                    });
-            }
+            // Bezahlte Seats — Preis je Seat aus seiner Vertragszeile, sonst aus dem handgepflegten
+            // SKU-Preis. Kostenstelle wie bisher über den Asset-Träger zur Kennung.
+            $book->seatRows()->each(fn ($row) => $rows->push([
+                'cost_center_id' => $ccByUpn[$row['upn']] ?? null,
+                'cost_type_id'   => (int) $msType->id,
+                'amount'         => $row['amount'],
+            ]));
+
+            // Bezahlte Mengen ohne Seat: Überhang an Monatslizenzen und unbesetzter Pool. Sie gehören
+            // in die Summe — der Wiederverkäufer stellt sie in Rechnung, unabhängig davon, ob jemand
+            // sie nutzt. Ziel ist die im Tenant konfigurierte Sammel-Kostenstelle; fehlt sie, landen
+            // sie sichtbar unter „ohne Kostenstelle" statt aus der Auswertung zu verschwinden.
+            $book->unallocatedRows()->each(fn ($row) => $rows->push([
+                'cost_center_id' => $row['cost_center_id'],
+                'cost_type_id'   => (int) $msType->id,
+                'amount'         => $row['amount'],
+            ]));
         }
 
         // 4) asset_device — Intune-Geräte, deren (aufgelöste) Kostenart aggregation_source='asset_device' ist
@@ -513,7 +534,7 @@ class CostAggregationService
      * Einzige Quelle der Wahrheit für die Asset-Träger-Sicht: Asset-Träger/Show (Kosten-Sidebar) UND das
      * Zusammenfassungs-Panel der Liste (Asset-Träger/Index) rufen diese Methode → garantiert identische Zahl.
      * Buckets bewusst wie die Profil-Seite: Hardware-AfA (manuelle Items über assignee_id) + Intune-Geräte
-     * (über UPN, gated via deviceCostRows) + MS-Lizenzen (SKU-unit_price). Assignee-gebundene cost_line-Posten
+     * (über UPN, gated via deviceCostRows) + MS-Lizenzen (Seat-Preis via LicensePriceBook). Assignee-gebundene cost_line-Posten
      * sind hier — wie im Profil — NICHT enthalten.
      *
      * @param  Collection|null  $deviceRows  optional vorgeladen (keyBy device_id), sonst intern berechnet —
@@ -542,21 +563,14 @@ class CostAggregationService
                 ->get()
                 ->sum(fn ($d) => (float) ($deviceRows[$d->id]['amount'] ?? 0));
 
-            $licenses = AssetUserLicense::where('team_id', $teamId)
+            // Preis je Seat aus der Vertragszeile, sonst aus dem handgepflegten SKU-Preis — dieselbe
+            // Reihenfolge wie im Pivot, damit Trägerdetail und Kostenaufteilung nicht auseinanderlaufen.
+            $book = LicensePriceBook::for($teamId);
+
+            $license += (float) AssetUserLicense::where('team_id', $teamId)
                 ->where('user_principal_name', $upn)
-                ->get();
-
-            $skuMap = AssetLicenseSku::where('team_id', $teamId)
-                ->whereIn('sku_id', $licenses->pluck('sku_id')->unique())
                 ->get()
-                ->keyBy('sku_id');
-
-            foreach ($licenses as $lic) {
-                $sku = $skuMap[$lic->sku_id] ?? null;
-                if ($sku && $sku->unit_price !== null) {
-                    $license += (float) $sku->unit_price;
-                }
-            }
+                ->sum(fn ($lic) => $book->seatPrice($lic));
         }
 
         return [

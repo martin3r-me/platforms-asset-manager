@@ -30,6 +30,23 @@ class Show extends Component
     public string  $costCenter  = '';
     public string  $jobTitle    = '';
     public bool    $isActive    = true;
+
+    /**
+     * Träger-Typ (ADR 0017). Von Hand setzbar, weil die Erkennungsregeln nur Namensmuster kennen: ein
+     * Funktionskonto, dessen Kennung wie die einer Person aussieht, findet keine Regel. Ein hier
+     * gesetzter Nicht-Personen-Typ **überlebt jeden Sync** ({@see HolderClassifier::classify()}).
+     *
+     * Für die Lizenz-Verteilung ist das der entscheidende Schalter: nur Funktionskonten erhalten die
+     * Monatspreis-Zeilen (ADR 0019, Schritt 1).
+     */
+    public string  $holderType = AssetHolder::TYPE_PERSON;
+
+    /**
+     * Zugehöriges System eines Funktionskontos (ADR 0019). Zusammen mit der Kostenstelle die zweite
+     * Pflichtangabe, ohne die die Lizenz-Verteilungs-Kaskade ein Funktionskonto nicht bevorzugt
+     * behandelt — ein Konto ohne benanntes System ist nicht bewirtschaftbar.
+     */
+    public string  $functionSystem = '';
     public bool    $saved       = false;
     public bool    $anonymized  = false;
 
@@ -55,6 +72,8 @@ class Show extends Component
         $this->costCenter  = $holder->cost_center ?? '';
         $this->jobTitle    = $holder->job_title ?? '';
         $this->isActive    = $holder->is_active;
+        $this->holderType     = $holder->holder_type ?? AssetHolder::TYPE_PERSON;
+        $this->functionSystem = $holder->function_system ?? '';
 
         $this->mobilePhone    = $holder->mobile_phone ?? '';
         $this->businessPhone  = $holder->business_phone ?? '';
@@ -75,6 +94,8 @@ class Show extends Component
             'costCenter'  => 'nullable|string|max:255',
             'jobTitle'    => 'nullable|string|max:255',
             'isActive'    => 'boolean',
+            'functionSystem' => 'nullable|string|max:255',
+            'holderType'     => 'required|in:' . implode(',', AssetHolder::TYPES),
         ]);
 
         // Kostenstellen-Code team-scoped auflösen und cost_center + cost_center_id KONSISTENT setzen.
@@ -85,7 +106,12 @@ class Show extends Component
             ? AssetCostCenter::where('team_id', $this->holder->team_id)->where('code', $code)->first()
             : null;
 
+        $wasFunction  = $this->holder->isFunctionAccount();
+        $isFunction   = $this->holderType === AssetHolder::TYPE_FUNCTION;
+        $systemBefore = $this->holder->function_system;
+
         $this->holder->update([
+            'holder_type'    => $this->holderType,
             'display_name'   => $this->displayName ?: null,
             'email'          => $this->email ?: null,
             'department'     => $this->department ?: null,
@@ -93,9 +119,45 @@ class Show extends Component
             'cost_center_id' => $center?->id,
             'job_title'      => $this->jobTitle ?: null,
             'is_active'      => $this->isActive,
+            // Nur an Funktionskonten sinnvoll; an einer Person würde das Feld nur verwirren. Bewertet
+            // wird der eben gewählte Typ, nicht der alte — sonst ginge das System beim Umstellen auf
+            // „Funktionskonto" im selben Speichervorgang verloren.
+            'function_system' => $isFunction ? ($this->functionSystem ?: null) : null,
         ]);
 
+        // Typ und System steuern die Lizenz-Verteilung (ADR 0019, Schritt 1). Ändert sich einer der
+        // beiden, verschieben sich Mengen zwischen Trägern und Sammel-Kostenstellen — ohne erneute
+        // Verteilung stünde in der Kostenaufteilung ein Stand, den die Stammdaten nicht mehr hergeben.
+        if ($wasFunction !== $isFunction || $systemBefore !== $this->holder->function_system) {
+            $this->redistributeLicenses();
+        }
+
         $this->saved = true;
+    }
+
+    /**
+     * Lizenzmengen des jüngsten Abrechnungsmonats neu verteilen.
+     *
+     * Läuft nur, wenn überhaupt Vertragszeilen existieren — ohne Rechnungsimport gibt es nichts zu
+     * verteilen, und ein Lauf ins Leere würde nur Zeit kosten.
+     */
+    protected function redistributeLicenses(): void
+    {
+        $period = \Platform\AssetManager\Models\AssetLicenseContractLine::where('team_id', $this->holder->team_id)
+            ->max('period_label');
+
+        if ($period === null) {
+            return;
+        }
+
+        app(\Platform\AssetManager\Services\LicenseSeatAllocator::class)->allocateForPeriod(
+            (int) $this->holder->team_id,
+            (int) $this->holder->tenant_id,
+            (string) $period,
+            false,
+        );
+
+        \Platform\AssetManager\Support\LicensePriceBook::flush();
     }
 
     /**

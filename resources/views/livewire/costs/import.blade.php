@@ -252,6 +252,9 @@
                 </div>
             @endif
 
+            {{-- ── Lizenz-Abrechnung des Wiederverkäufers (ADR 0019) ──────────────────────── --}}
+            @include('asset-manager::livewire.costs._license-invoice')
+
             {{-- Danger-Zone: Import zurücksetzen --}}
             @if($canManage)
                 <div class="rounded-xl bg-rose-50 border border-rose-200 p-5 space-y-3">

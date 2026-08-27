@@ -50,7 +50,8 @@
              Assets"); die Bulk-Anlage bleibt unter /assets per URL erreichbar. --}}
         <x-asset-manager-nav-item :href="route('asset-manager.inventory.index')" :active="request()->routeIs('asset-manager.inventory.*') || request()->routeIs('asset-manager.assets.*')" icon="heroicon-o-rectangle-group" label="Inventar" />
         <x-asset-manager-nav-item :href="route('asset-manager.devices.index')" :active="request()->routeIs('asset-manager.devices.*')" icon="heroicon-o-computer-desktop" label="Intune-Geräte" />
-        <x-asset-manager-nav-item :href="route('asset-manager.licenses.index')" :active="request()->routeIs('asset-manager.licenses.*')" icon="heroicon-o-key" label="Lizenzen" />
+        <x-asset-manager-nav-item :href="route('asset-manager.licenses.index')" :active="request()->routeIs('asset-manager.licenses.index') || request()->routeIs('asset-manager.licenses.show')" icon="heroicon-o-key" label="Lizenzen" />
+        <x-asset-manager-nav-item :href="route('asset-manager.licenses.contracts')" :active="request()->routeIs('asset-manager.licenses.contracts')" icon="heroicon-o-document-currency-euro" label="Vertragszeilen" />
         <x-asset-manager-nav-item :href="route('asset-manager.printers.index')" :active="request()->routeIs('asset-manager.printers.*')" icon="heroicon-o-printer" label="Drucker" />
         <x-asset-manager-nav-item :href="route('asset-manager.internet.index')" :active="request()->routeIs('asset-manager.internet.*')" icon="heroicon-o-wifi" label="Internet" />
     </x-ui-sidebar-list>

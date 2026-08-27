@@ -22,15 +22,28 @@ class AssetLicenseSku extends Model
         'consumed_units',
         'available_units',
         'unit_price',
+        'price_source',
+        'price_period',
+        'price_updated_at',
         'synced_at',
         'raw_data',
     ];
 
     protected $casts = [
-        'raw_data'   => 'array',
-        'synced_at'  => 'datetime',
-        'unit_price' => 'decimal:2',
+        'raw_data'         => 'array',
+        'synced_at'        => 'datetime',
+        'price_updated_at' => 'datetime',
+        'unit_price'       => 'decimal:2',
     ];
+
+    /** Preis von Hand gepflegt — der einzige Fall, in dem `unit_price` hier gilt. */
+    public const PRICE_SOURCE_MANUAL = 'manual';
+
+    /**
+     * Preis kommt aus Vertragszeilen. `unit_price` ist dann leer und **nicht** maßgeblich: die SKU
+     * hat mehrere Tarife, der Preis hängt je Seat an der Vertragszeile.
+     */
+    public const PRICE_SOURCE_CONTRACT = 'contract';
 
     public function team(): BelongsTo
     {
@@ -43,6 +56,27 @@ class AssetLicenseSku extends Model
         return $this->belongsTo(AssetTenant::class, 'tenant_id');
     }
 
+    /** Die Vertragszeilen, die diese Lizenz bezahlen — über die Graph-GUID, nicht die lokale ID. */
+    public function contractLines(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(AssetLicenseContractLine::class, 'sku_id', 'sku_id');
+    }
+
+    /** Steht der Preis dieser Lizenz auf einer Rechnung? Dann gilt `unit_price` hier nicht. */
+    public function isContractPriced(): bool
+    {
+        return $this->price_source === self::PRICE_SOURCE_CONTRACT;
+    }
+
+    /**
+     * Monatskosten aus dem **handgepflegten** Stückpreis.
+     *
+     * Gilt nur für Lizenzen ohne Vertragszeilen (Self-Service- und Gratis-SKUs). Ist die Lizenz
+     * rechnungsgedeckt, ist `unit_price` leer und diese Rechnung ergibt 0 — die Kosten stehen dann an
+     * den Vertragszeilen und werden über
+     * {@see \Platform\AssetManager\Support\LicensePriceBook} summiert, das die Zeilen aller SKUs
+     * einmalig lädt (eine Query je Aufruf statt einer je Lizenz).
+     */
     public function monthlyCost(): float
     {
         if ($this->unit_price === null) {

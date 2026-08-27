@@ -98,6 +98,66 @@
                 </div>
             </x-asset-manager-panel>
 
+            {{-- Sammel-Kostenstellen der Lizenz-Verteilung (ADR 0019) --}}
+            <x-asset-manager-panel title="Lizenz-Verteilung: Sammel-Kostenstellen">
+                <div class="space-y-4">
+                    <p class="text-xs text-[var(--am-text-secondary)] m-0">
+                        Bezahlte Lizenzmengen, die keinem Träger gehören, werden hierauf gebucht statt auf
+                        willkürlich gewählte Personen. Sind die Kostenstellen nicht gesetzt, erscheinen die
+                        Beträge in der Kostenaufteilung unter „ohne Kostenstelle" — sie verschwinden nicht.
+                    </p>
+
+                    @if($canManage)
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs text-[var(--am-text-secondary)] mb-1">
+                                    Überhang Monatslizenzen
+                                </label>
+                                <x-asset-manager-select wire:model="licenseOverflowCostCenterId">
+                                    <option value="">— nicht gesetzt —</option>
+                                    @foreach($costCenters as $costCenter)
+                                        <option value="{{ $costCenter->id }}">{{ $costCenter->code }} — {{ $costCenter->name }}</option>
+                                    @endforeach
+                                </x-asset-manager-select>
+                                <p class="text-[11px] text-[var(--am-text-muted)] mt-1 m-0">
+                                    Monats-Seats über dem Bedarf an Funktionskonten. Ein gefüllter Betrag heißt:
+                                    auf Jahresbindung umstellbar und damit günstiger.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs text-[var(--am-text-secondary)] mb-1">
+                                    Lizenzpool (unbesetzt)
+                                </label>
+                                <x-asset-manager-select wire:model="licensePoolCostCenterId">
+                                    <option value="">— nicht gesetzt —</option>
+                                    @foreach($costCenters as $costCenter)
+                                        <option value="{{ $costCenter->id }}">{{ $costCenter->code }} — {{ $costCenter->name }}</option>
+                                    @endforeach
+                                </x-asset-manager-select>
+                                <p class="text-[11px] text-[var(--am-text-muted)] mt-1 m-0">
+                                    Bezahlt, aber niemandem zugewiesen. Mit Kündigungsdatum an der Vertragszeile
+                                    wird daraus eine belastbare Kündigungsentscheidung.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <x-asset-manager-button variant="primary" size="sm" wire:click="saveLicenseCostCenters">
+                                Speichern
+                            </x-asset-manager-button>
+                            @if($licenseCostCenterFlash)
+                                <span class="text-xs text-emerald-700">{{ $licenseCostCenterFlash }}</span>
+                            @endif
+                        </div>
+                    @else
+                        <p class="text-xs text-[var(--am-text-muted)] m-0">
+                            Ändern ist Owner/Admin vorbehalten.
+                        </p>
+                    @endif
+                </div>
+            </x-asset-manager-panel>
+
             {{-- Gefahrenzone — kompletter Team-Reset --}}
             <x-asset-manager-panel title="Gefahrenzone">
                 <div class="flex items-start justify-between gap-6">
