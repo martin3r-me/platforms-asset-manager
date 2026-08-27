@@ -292,15 +292,16 @@
                                             {{ $monthly > 0 ? '€ ' . number_format($monthly * 12, 2, ',', '.') : '—' }}
                                         </span>
                                     </td>
-                                    {{-- „Nutzer" zeigte die Zuweisungen früher in einem rechten Vorschau-Panel,
-                                         das die Detailseite verkürzt wiederholte. Seit S8b geht der Weg direkt
-                                         dorthin (S8b/#762). --}}
+                                    {{-- „Nutzer" öffnet eine Vorschau im Modal, statt die Seite zu wechseln:
+                                         der häufigste Griff ist „wer hängt an dieser Lizenz", und dafür die
+                                         Liste samt Filtern und Scrollposition zu verlassen war zu viel.
+                                         Die Detailseite bleibt über den Fuß des Modals erreichbar. --}}
                                     <td class="px-5 py-3 text-right">
-                                        <a href="{{ route('asset-manager.licenses.show', $sku) }}" wire:navigate
-                                           class="inline-flex items-center gap-1 text-xs text-[var(--am-accent)] hover:underline">
+                                        <button type="button" wire:click="openUsers('{{ $sku->sku_id }}')"
+                                                class="inline-flex items-center gap-1 text-xs text-[var(--am-accent)] hover:underline">
                                             Nutzer
                                             @svg('heroicon-o-chevron-right', 'w-3 h-3')
-                                        </a>
+                                        </button>
                                     </td>
                                 </tr>
                             @endforeach
@@ -317,6 +318,9 @@
             </x-asset-manager-panel>
 
             @endif {{-- Ende: Connector konfiguriert --}}
+
+            {{-- Nutzer-Vorschau. Modal liegt INNERHALB von x-ui-page (Konvention, siehe DESIGN.md). --}}
+            @include('asset-manager::livewire.licenses.partials.modal-users')
 
             </div>
         </div>

@@ -8,7 +8,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Jobs\SyncLicensesJob;
 use Platform\AssetManager\Models\AssetDevice;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetLicenseSku;
+use Platform\AssetManager\Models\AssetUserLicense;
 use Platform\AssetManager\Models\AssetLicenseSyncLog;
 use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Support\LicensePriceBook;
@@ -24,6 +26,27 @@ class Index extends Component
 
     /** Hinweis, wenn ein Preis nicht von Hand gesetzt werden kann (rechnungsgedeckte Lizenz). */
     public ?string $priceNotice   = null;
+
+    /**
+     * Nutzer-Modal: Graph-SKU-Id der Lizenz, deren Zuweisungen gezeigt werden.
+     *
+     * „Nutzer" oeffnet damit eine Vorschau statt die Detailseite. Das kehrt eine fruehere Entscheidung
+     * (#762) um, die ein rechtes Vorschau-Panel entfernt hat, weil es die Detailseite verkuerzt
+     * wiederholte. Der Unterschied: hier geht es nicht um eine zweite Sicht auf dieselbe Seite,
+     * sondern um den kurzen Blick „wer haengt an dieser Lizenz", ohne die Liste zu verlassen — mit
+     * dem Weg zur vollen Detailseite im Fuss des Modals.
+     */
+    public ?string $usersForSkuId = null;
+
+    /**
+     * Sichtbarkeit des Nutzer-Modals. Eigene Boolean-Eigenschaft, weil `x-ui-modal` genau das
+     * erwartet — und bewusst NICHT `showUsers` genannt: eine Methode gleichen Namens wuerde Livewire
+     * als Eigenschafts-Hook auffassen und bei jeder Interaktion aufrufen.
+     */
+    public bool $showUsersModal = false;
+
+    /** Suche innerhalb des Nutzer-Modals. */
+    public string $usersSearch = '';
 
     // Inline-Preis-Bearbeitung
     public array $editingPrices = [];
@@ -91,6 +114,82 @@ class Index extends Component
         LicensePriceBook::flush();
 
         unset($this->editingPrices[$skuId]);
+    }
+
+    /** Nutzer-Vorschau einer Lizenz oeffnen. */
+    public function openUsers(string $skuId): void
+    {
+        $this->usersForSkuId  = $skuId;
+        $this->usersSearch    = '';
+        $this->showUsersModal = true;
+    }
+
+    public function closeUsers(): void
+    {
+        $this->showUsersModal = false;
+        $this->usersForSkuId  = null;
+        $this->usersSearch    = '';
+    }
+
+    /**
+     * Zuweisungen der im Modal gewaehlten Lizenz.
+     *
+     * Gedeckelt auf 100 Zeilen: Business Premium hat 131 Nutzer, und ein Modal ist keine Liste zum
+     * Durchblaettern — fuer alles steht der Weg zur Detailseite im Fuss. `contractLine` wird eager
+     * geladen, weil je Zeile die Bindung angezeigt wird.
+     *
+     * @return array{rows: \Illuminate\Support\Collection, total: int, sku: ?AssetLicenseSku}
+     */
+    protected function usersModalData(): array
+    {
+        if (! $this->showUsersModal || $this->usersForSkuId === null) {
+            return ['rows' => collect(), 'total' => 0, 'total_all' => 0, 'sku' => null];
+        }
+
+        $team = Auth::user()->currentTeam;
+
+        $query = AssetUserLicense::with('contractLine')
+            ->where('team_id', $team->id)
+            ->where('sku_id', $this->usersForSkuId);
+
+        // Vor dem Suchfilter zaehlen: das Suchfeld haengt an dieser Zahl und wuerde sonst beim Tippen
+        // verschwinden, sobald die Trefferzahl unter die Schwelle faellt.
+        $totalAll = (clone $query)->count();
+
+        if (trim($this->usersSearch) !== '') {
+            $needle = '%' . trim($this->usersSearch) . '%';
+            $query->where(function ($q) use ($needle) {
+                $q->where('user_principal_name', 'like', $needle)
+                  ->orWhere('display_name', 'like', $needle);
+            });
+        }
+
+        $total = (clone $query)->count();
+
+        $rows = $query->orderBy('display_name')->limit(100)->get();
+
+        // Kostenstelle und Traeger-Typ je Kennung — EINE Query fuer alle Zeilen statt einer je Zeile.
+        $holders = AssetHolder::where('team_id', $team->id)
+            ->whereIn('user_principal_name', $rows->pluck('user_principal_name')->filter()->all())
+            ->with('costCenter')
+            ->get()
+            ->keyBy(fn ($holder) => mb_strtolower((string) $holder->user_principal_name));
+
+        return [
+            'rows'    => $rows->map(fn ($row) => [
+                'upn'         => $row->user_principal_name,
+                'name'        => $row->display_name ?: $row->user_principal_name,
+                'price'       => $row->unit_price !== null ? (float) $row->unit_price : null,
+                'binding'     => $row->contractLine?->binding,
+                'holder'      => $holders[mb_strtolower((string) $row->user_principal_name)] ?? null,
+                'assigned_at' => $row->assigned_at,
+            ]),
+            'total'     => $total,
+            'total_all' => $totalAll,
+            'sku'       => AssetLicenseSku::where('team_id', $team->id)
+                ->where('sku_id', $this->usersForSkuId)
+                ->first(),
+        ];
     }
 
     public function render()
@@ -178,6 +277,7 @@ class Index extends Component
         return view('asset-manager::livewire.licenses.index', [
             'skus'             => $skus,
             'book'             => $book,
+            'usersModal'       => $this->usersModalData(),
             'totalMonthlyCost' => $totalMonthlyCost,
             'unusedLicenses'   => $unusedLicenses,
             'unpricedCount'    => $unpricedCount,
