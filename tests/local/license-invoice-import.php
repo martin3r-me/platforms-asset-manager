@@ -526,4 +526,90 @@ ok('Mengenbilanz hält nach Typänderung', $archivAfter->quantityBalances(),
     sprintf('%.2f + %.2f + %.2f vs %.2f', $archivAfter->assigned_quantity,
         $archivAfter->overflow_quantity, $archivAfter->pool_quantity, $archivAfter->quantity));
 
+// ---- 11. Import-Protokoll ------------------------------------------------------------------
+
+Schema::create('asset_import_runs', function (Blueprint $t) {
+    $t->id();
+    $t->unsignedBigInteger('team_id');
+    $t->unsignedBigInteger('tenant_id');
+    $t->string('source', 32);
+    $t->string('file_name')->nullable();
+    $t->string('batch_id')->nullable();
+    $t->boolean('dry_run')->default(false);
+    $t->string('status', 16)->default('ok');
+    $t->string('headline')->nullable();
+    $t->text('error')->nullable();
+    $t->text('summary')->nullable();
+    $t->unsignedBigInteger('user_id')->nullable();
+    $t->timestamp('started_at')->nullable();
+    $t->unsignedInteger('duration_ms')->nullable();
+    $t->timestamps();
+});
+
+$recorder = new \Platform\AssetManager\Support\ImportRunRecorder();
+
+// Ein Lauf mit Befunden: das Ergebnis von oben trägt Überhang, Pool und unbezahlte Seats.
+$run = $recorder->record(
+    source: \Platform\AssetManager\Models\AssetImportRun::SOURCE_LICENSE_INVOICE,
+    teamId: TEAM,
+    tenantId: TENANT,
+    result: $result,
+    fileName: 'license-invoice-sample.csv',
+    dryRun: false,
+    userId: null,
+    startedAt: microtime(true) - 0.25,
+);
+
+ok('Lauf protokolliert', $run->exists);
+ok('Status „mit Befund" bei Auffälligkeiten',
+    $run->status === \Platform\AssetManager\Models\AssetImportRun::STATUS_WARNING, $run->status);
+ok('Kennzahlen erfasst', $run->metrics() !== [] && isset($run->metrics()['Abrechnungsmonat']),
+    implode(', ', array_keys($run->metrics())));
+ok('Kopfzeile nennt Monat und Monatswert',
+    str_contains((string) $run->headline, '2026-07') && str_contains((string) $run->headline, '897,00'),
+    (string) $run->headline);
+ok('Laufzeit gemessen', $run->duration_ms >= 200, (string) $run->duration_ms);
+
+$findings = implode(' | ', $run->findings());
+
+ok('Befund: Überhang auf Jahresbindung umstellbar', str_contains($findings, 'Jahresbindung umstellbar'));
+ok('Befund: unbezahlte Seats gemeldet', str_contains($findings, 'von keiner Rechnungsposition bezahlt'));
+ok('Nutzdaten nicht dupliziert', ! isset($run->summary['raw']['lines']));
+
+// Ein Lauf ohne Befunde muss „ok" sein — sonst wäre die Warnung wertlos.
+$clean = $recorder->record(
+    source: \Platform\AssetManager\Models\AssetImportRun::SOURCE_VODAFONE,
+    teamId: TEAM,
+    tenantId: TENANT,
+    result: [
+        'period'            => ['from' => '01.07.2026', 'to' => '01.08.2026', 'invoice' => 'R-1'],
+        'stats'             => ['numbers' => 3, 'matched' => 3, 'unmatched' => 0, 'account_items' => 0,
+                                'unknown_centers' => [], 'cost_center_diff' => []],
+        'sum_net'           => 100.0,
+        'invoice_total_net' => 100.0,
+        'reconciles'        => true,
+    ],
+    fileName: 'vodafone.xlsx',
+    dryRun: true,
+    userId: null,
+);
+
+ok('Sauberer Lauf ist „ok"',
+    $clean->status === \Platform\AssetManager\Models\AssetImportRun::STATUS_OK, $clean->status);
+ok('Probelauf als solcher erkennbar', $clean->dry_run === true);
+ok('Quellen-Label je Import', $clean->sourceLabel() === 'Vodafone-Rechnung', $clean->sourceLabel());
+
+// Ein Fehlschlag ist die wichtigste Zeile im Protokoll.
+$failed = $recorder->recordFailure(
+    source: \Platform\AssetManager\Models\AssetImportRun::SOURCE_EXCEL,
+    teamId: TEAM,
+    tenantId: TENANT,
+    message: 'Blatt „Übersicht" nicht gefunden.',
+    fileName: 'kaputt.xlsx',
+    dryRun: false,
+    userId: null,
+);
+
+ok('Fehlschlag protokolliert', $failed->failed() && $failed->error !== null, $failed->status);
+
 check_summary();

@@ -81,10 +81,9 @@
         @endif
         {{-- Geräte-Modelle bleibt IT-Kern (Hardware-Katalog), unabhängig vom Controlling --}}
         <x-asset-manager-nav-item :href="route('asset-manager.device-models.index')" :active="request()->routeIs('asset-manager.device-models.*')" icon="heroicon-o-cpu-chip" label="Geräte-Modelle" />
-        {{-- Kosten-Import + Import-Log = Controlling (ADR 0008) --}}
+        {{-- Kosten-Import = Controlling (ADR 0008). Das Import-Protokoll liegt auf derselben Seite. --}}
         @if($controllingEnabled)
         <x-asset-manager-nav-item :href="route('asset-manager.costs.import')" :active="request()->routeIs('asset-manager.costs.import')" icon="heroicon-o-arrow-up-tray" label="Kosten-Import" />
-        <x-asset-manager-nav-item :href="route('asset-manager.costs.import-log')" :active="request()->routeIs('asset-manager.costs.import-log')" icon="heroicon-o-document-magnifying-glass" label="Import-Log" />
         @endif
         <x-asset-manager-nav-item :href="route('asset-manager.setup')" :active="request()->routeIs('asset-manager.setup')" icon="heroicon-o-wrench-screwdriver" label="Connector" />
         <x-asset-manager-nav-item :href="route('asset-manager.settings')" :active="request()->routeIs('asset-manager.settings')" icon="heroicon-o-cog-6-tooth" label="Modul-Einstellungen" />
@@ -141,7 +140,6 @@
             <a href="{{ route('asset-manager.costs.import') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.costs.import') ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)]' : 'text-[var(--am-text-secondary)] hover:bg-[var(--am-bg)]' }}">
                 @svg('heroicon-o-arrow-up-tray', 'w-5 h-5')
             </a>
-            <a href="{{ route('asset-manager.costs.import-log') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.costs.import-log') ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)]' : 'text-[var(--am-text-secondary)] hover:bg-[var(--am-bg)]' }}">
                 @svg('heroicon-o-document-magnifying-glass', 'w-5 h-5')
             </a>
             @endif

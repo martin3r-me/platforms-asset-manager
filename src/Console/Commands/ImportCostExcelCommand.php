@@ -43,7 +43,27 @@ class ImportCostExcelCommand extends Command
         $target = $tenantId !== null ? "Tenant {$tenantId}" : 'den Default-Tenant';
         $this->info(($this->option('dry-run') ? '[DRY-RUN] ' : '') . "Importiere {$file} für Team {$teamId} in {$target} …");
 
+        $startedAt = microtime(true);
+
         $stats = $service->import($teamId, $file, (string) $this->option('batch'), (bool) $this->option('dry-run'), $tenantId);
+
+        // Auch Konsolen-Läufe ins Import-Protokoll (ADR 0019): sonst hätte die Historie ein Loch und
+        // ein per Cron oder von Hand gefahrener Import wäre im UI nicht nachvollziehbar. Nach dem
+        // Import, damit ein Probelauf-Rollback den Eintrag nicht mitnimmt.
+        try {
+            app(\Platform\AssetManager\Support\ImportRunRecorder::class)->record(
+                source: \Platform\AssetManager\Models\AssetImportRun::SOURCE_EXCEL,
+                teamId: $teamId,
+                tenantId: $tenantId ?? \Platform\AssetManager\Services\TenantContext::defaultTenantId($teamId),
+                result: $stats,
+                fileName: basename($file),
+                dryRun: (bool) $this->option('dry-run'),
+                userId: null,
+                startedAt: $startedAt,
+            );
+        } catch (\Throwable $e) {
+            $this->warn('Import-Protokoll konnte nicht geschrieben werden: ' . $e->getMessage());
+        }
 
         foreach ($stats as $sheet => $value) {
             $this->line(sprintf('  %-14s %s', $sheet, is_int($value) ? "{$value} Positionen" : $value));

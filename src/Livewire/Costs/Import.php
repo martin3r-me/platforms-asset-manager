@@ -10,9 +10,11 @@ use Platform\AssetManager\Concerns\AuthorizesTeamRole;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Services\CostExcelImportService;
 use Platform\AssetManager\Services\CostResetService;
+use Platform\AssetManager\Models\AssetImportRun;
 use Platform\AssetManager\Services\LicenseInvoiceImportService;
 use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Services\VodafoneInvoiceImportService;
+use Platform\AssetManager\Support\ImportRunRecorder;
 
 class Import extends Component
 {
@@ -38,6 +40,9 @@ class Import extends Component
     public ?array $licenseResult = null;
     public ?string $licenseError = null;
     public bool $licenseWasDryRun = true;
+
+    /** Aufgeklappter Protokoll-Eintrag (Import-Historie unten auf der Seite). */
+    public ?int $expandedRunId = null;
 
     /** owner/admin im aktiven Team? (analog AssetDevicePolicy) */
     protected function canManage(): bool
@@ -101,10 +106,19 @@ class Import extends Component
         $this->running   = true;
         $this->wasDryRun = $dryRun;
 
+        $startedAt = microtime(true);
+        $fileName  = $this->file->getClientOriginalName();
+
         try {
             $path = $this->file->getRealPath();
             $this->result = $service->import($this->teamId(), $path, 'excel-upload', $dryRun, $this->activeTenantId());
+
+            // Nach dem Import protokollieren, nie daraus heraus: der Importer arbeitet in einer
+            // Transaktion, die im Probelauf zurueckgerollt wird — ein von dort geschriebener Eintrag
+            // verschwaende mit dem Rollback.
+            $this->recordRun(AssetImportRun::SOURCE_EXCEL, $this->result, $fileName, $dryRun, $startedAt);
         } catch (\Throwable $e) {
+            $this->recordFailure(AssetImportRun::SOURCE_EXCEL, $e, $fileName, $dryRun, $startedAt);
             // Rohe Exception-Message ins Server-Log (kann Pfade/interne Details enthalten), dem Nutzer eine
             // generische bzw. handhabbare Meldung zeigen (N8) — keine rohe Exception in die UI.
             Log::error('AssetManager: Excel-Import fehlgeschlagen', [
@@ -176,6 +190,9 @@ class Import extends Component
         $this->running          = true;
         $this->vodafoneWasDryRun = $dryRun;
 
+        $startedAt = microtime(true);
+        $fileName  = $this->vodafoneFile->getClientOriginalName();
+
         try {
             $this->vodafoneResult = $service->import(
                 $this->teamId(),
@@ -184,7 +201,11 @@ class Import extends Component
                 $dryRun,
                 $this->activeTenantId(),
             );
+
+            $this->recordRun(AssetImportRun::SOURCE_VODAFONE, $this->vodafoneResult, $fileName, $dryRun, $startedAt);
         } catch (\Throwable $e) {
+            $this->recordFailure(AssetImportRun::SOURCE_VODAFONE, $e, $fileName, $dryRun, $startedAt);
+
             Log::error('AssetManager: Vodafone-Import fehlgeschlagen', [
                 'team_id' => $this->teamId(),
                 'dry_run' => $dryRun,
@@ -255,6 +276,9 @@ class Import extends Component
         $this->running          = true;
         $this->licenseWasDryRun = $dryRun;
 
+        $startedAt = microtime(true);
+        $fileName  = $this->licenseFile->getClientOriginalName();
+
         try {
             $this->licenseResult = $service->import(
                 $this->teamId(),
@@ -263,7 +287,11 @@ class Import extends Component
                 $dryRun,
                 $this->activeTenantId(),
             );
+
+            $this->recordRun(AssetImportRun::SOURCE_LICENSE_INVOICE, $this->licenseResult, $fileName, $dryRun, $startedAt);
         } catch (\Throwable $e) {
+            $this->recordFailure(AssetImportRun::SOURCE_LICENSE_INVOICE, $e, $fileName, $dryRun, $startedAt);
+
             Log::error('AssetManager: Lizenz-Rechnungsimport fehlgeschlagen', [
                 'team_id' => $this->teamId(),
                 'dry_run' => $dryRun,
@@ -278,6 +306,67 @@ class Import extends Component
         } finally {
             $this->running = false;
         }
+    }
+
+    // ---- Import-Protokoll ------------------------------------------------------------------
+
+    /**
+     * Einen abgeschlossenen Lauf festhalten.
+     *
+     * Bewusst hier und nicht in den Importern: nur an dieser Stelle ist die Transaktion des
+     * Importers schon abgeschlossen (im Probelauf zurückgerollt), und nur hier sind Dateiname und
+     * angemeldeter Nutzer bekannt. Ein Fehler beim Protokollieren darf den Import nie nachträglich
+     * scheitern lassen — deshalb gekapselt.
+     *
+     * @param array<string, mixed> $result
+     */
+    protected function recordRun(string $source, array $result, ?string $fileName, bool $dryRun, float $startedAt): void
+    {
+        try {
+            app(ImportRunRecorder::class)->record(
+                source: $source,
+                teamId: $this->teamId(),
+                tenantId: $this->activeTenantId() ?? TenantContext::defaultTenantId($this->teamId()),
+                result: $result,
+                fileName: $fileName,
+                dryRun: $dryRun,
+                userId: Auth::id(),
+                startedAt: $startedAt,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('AssetManager: Import-Protokoll konnte nicht geschrieben werden', [
+                'source' => $source,
+                'error'  => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /** Fehlgeschlagenen Lauf festhalten — die wichtigste Zeile im Protokoll. */
+    protected function recordFailure(string $source, \Throwable $exception, ?string $fileName, bool $dryRun, float $startedAt): void
+    {
+        try {
+            app(ImportRunRecorder::class)->recordFailure(
+                source: $source,
+                teamId: $this->teamId(),
+                tenantId: $this->activeTenantId() ?? TenantContext::defaultTenantId($this->teamId()),
+                message: $exception->getMessage(),
+                fileName: $fileName,
+                dryRun: $dryRun,
+                userId: Auth::id(),
+                startedAt: $startedAt,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('AssetManager: Import-Protokoll (Fehlschlag) konnte nicht geschrieben werden', [
+                'source' => $source,
+                'error'  => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /** Einen Protokoll-Eintrag auf- oder zuklappen. */
+    public function toggleRun(int $runId): void
+    {
+        $this->expandedRunId = $this->expandedRunId === $runId ? null : $runId;
     }
 
     /** Macht den Excel-Import komplett rückgängig (Stammdaten bleiben). Nur owner/admin. */
@@ -304,6 +393,12 @@ class Import extends Component
     {
         return view('asset-manager::livewire.costs.import', [
             'canManage' => $this->canManage(),
+            // Import-Historie: die letzten Läufe aller drei Quellen. 25 reichen — der Log ist zum
+            // Nachvollziehen der jüngsten Arbeit da, nicht als Archiv.
+            'runs'      => AssetImportRun::where('team_id', $this->teamId())
+                ->orderByDesc('id')
+                ->limit(25)
+                ->get(),
         ])->layout('platform::layouts.app');
     }
 }

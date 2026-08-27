@@ -18,7 +18,6 @@ use Platform\AssetManager\Livewire\Holders\Show as HoldersShow;
 use Platform\AssetManager\Livewire\Costs\Dashboard as CostsDashboard;
 use Platform\AssetManager\Livewire\Costs\Allocation as CostsAllocation;
 use Platform\AssetManager\Livewire\Costs\Import as CostsImport;
-use Platform\AssetManager\Livewire\Costs\ImportLog as CostsImportLog;
 use Platform\AssetManager\Livewire\CostLines\Index as CostLinesIndex;
 use Platform\AssetManager\Livewire\Reports\DeviceModels as DeviceModelsReport;
 use Platform\AssetManager\Livewire\MasterData\Index as MasterDataIndex;
@@ -90,7 +89,6 @@ Route::middleware(EnsureControllingEnabled::class)->group(function () {
     Route::get('/cost-lines', CostLinesIndex::class)->name('asset-manager.cost-lines.index');
     Route::get('/reports/device-models', DeviceModelsReport::class)->name('asset-manager.reports.device-models');
     Route::get('/costs/import', CostsImport::class)->name('asset-manager.costs.import');
-    Route::get('/costs/import-log', CostsImportLog::class)->name('asset-manager.costs.import-log');
 
     // Stammdaten: alle vier Bereiche auf EINER Seite
     Route::get('/master-data', MasterDataIndex::class)->name('asset-manager.master-data.index');
