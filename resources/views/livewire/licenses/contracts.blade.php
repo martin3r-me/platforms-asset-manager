@@ -1,23 +1,36 @@
-<x-ui-page title="Vertragszeilen">
+<x-ui-page>
     @php
         $money = fn ($value) => number_format((float) $value, 2, ',', '.') . ' €';
         $seats = fn ($value) => number_format((float) $value, 0, ',', '.');
     @endphp
 
-    <x-asset-manager-page-actionbar>
-        <div class="flex items-center gap-3">
-            @if($periods->isNotEmpty())
-                <label class="text-xs text-[var(--am-text-secondary)]">Abrechnungsmonat</label>
-                <x-asset-manager-select wire:model.live="period" class="w-40">
-                    @foreach($periods as $option)
-                        <option value="{{ $option }}">{{ $option }}</option>
-                    @endforeach
-                </x-asset-manager-select>
-            @endif
-        </div>
-    </x-asset-manager-page-actionbar>
+    <x-slot name="navbar">
+        <x-ui-page-navbar title="" />
+    </x-slot>
 
-    <div class="p-4 sm:p-6 space-y-5">
+    <x-slot name="actionbar">
+        <x-asset-manager-page-actionbar :breadcrumbs="[
+            ['label' => 'Asset Manager', 'href' => route('asset-manager.dashboard'), 'icon' => 'cube'],
+            ['label' => 'Lizenzen', 'href' => route('asset-manager.licenses.index'), 'icon' => 'key'],
+            ['label' => 'Vertragszeilen', 'icon' => 'document-currency-euro'],
+        ]">
+            <x-slot name="actions">
+                @if($periods->isNotEmpty())
+                    <div class="flex items-center gap-2">
+                        <label class="text-xs text-[var(--am-text-secondary)] whitespace-nowrap">Abrechnungsmonat</label>
+                        <x-asset-manager-select size="sm" wire:model.live="period" class="w-32">
+                            @foreach($periods as $option)
+                                <option value="{{ $option }}">{{ $option }}</option>
+                            @endforeach
+                        </x-asset-manager-select>
+                    </div>
+                @endif
+            </x-slot>
+        </x-asset-manager-page-actionbar>
+    </x-slot>
+
+    <div class="flex-1 flex flex-col min-h-0 min-w-0">
+        <div class="flex-1 overflow-y-auto p-6 space-y-5">
         @if($flash)
             <div class="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-2.5 text-sm text-emerald-800">
                 @svg('heroicon-o-check-circle', 'w-4 h-4 inline') {{ $flash }}
@@ -218,5 +231,6 @@
                 </div>
             </x-asset-manager-panel>
         @endif
+        </div>
     </div>
 </x-ui-page>
