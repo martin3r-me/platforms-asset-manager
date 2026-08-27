@@ -144,7 +144,10 @@ class GetHolderTool implements ToolContract, ToolMetadataContract
                 // Lizenz-Anzeigename kommt aus dem SKU-Katalog (asset_license_skus). NICHT
                 // $l->display_name nehmen — das ist der NUTZER-Name (Graph displayName, SyncLicensesJob).
                 'display_name'    => $l->sku?->display_name ?: $l->sku_part_number,
-                'unit_price'      => $l->sku?->unit_price !== null ? (float) $l->sku->unit_price : null,
+                // Preis dieses Seats aus seiner Vertragszeile, sonst der Handpreis (ADR 0019).
+                'unit_price'      => $l->unit_price !== null
+                    ? (float) $l->unit_price
+                    : ($l->sku?->unit_price !== null ? (float) $l->sku->unit_price : null),
                 'assigned_at'     => $l->assigned_at?->toIso8601String(),
             ])->values()->all();
 

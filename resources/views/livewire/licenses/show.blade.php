@@ -35,24 +35,59 @@
                     </x-asset-manager-detail-list>
                 </x-asset-manager-panel>
 
-                {{-- Preis --}}
+                {{-- Preis. Rechnungsgedeckt gibt es je Tarif einen Preis, also keinen einen
+                     Stückpreis — dann treten die Vertragszeilen an seine Stelle (ADR 0019). --}}
                 <x-asset-manager-panel title="Preis">
+                    @php
+                        $contractLines = $book->linesForSku((string) $sku->sku_id);
+                        $monthly       = $contractLines->isNotEmpty()
+                            ? $book->monthlyCostForSku((string) $sku->sku_id)
+                            : $sku->monthlyCost();
+                    @endphp
+
                     <x-asset-manager-detail-list>
-                        <x-asset-manager-detail-row label="Stückpreis / Monat">
-                            @if($sku->unit_price !== null)
-                                <span class="tabular-nums">{{ number_format((float) $sku->unit_price, 2, ',', '.') }} €</span>
-                            @else
-                                <span class="text-[var(--am-text-muted)]">—</span>
-                            @endif
-                        </x-asset-manager-detail-row>
+                        @if($contractLines->isNotEmpty())
+                            @foreach($contractLines as $line)
+                                <x-asset-manager-detail-row :label="$line->bindingLabel()">
+                                    <span class="tabular-nums">{{ number_format((float) $line->unit_price, 2, ',', '.') }} €</span>
+                                    <span class="text-xs text-[var(--am-text-secondary)]">
+                                        × {{ number_format((float) $line->quantity, 0, ',', '.') }}
+                                        @if($line->discount_percent > 0)
+                                            · Liste {{ number_format((float) $line->list_price, 2, ',', '.') }} €
+                                            − {{ number_format((float) $line->discount_percent, 1, ',', '.') }} %
+                                        @endif
+                                        @if($line->cancellable_at)
+                                            · kündbar {{ $line->cancellable_at->format('d.m.Y') }}
+                                        @endif
+                                    </span>
+                                </x-asset-manager-detail-row>
+                            @endforeach
+                        @else
+                            <x-asset-manager-detail-row label="Stückpreis / Monat">
+                                @if($sku->unit_price !== null)
+                                    <span class="tabular-nums">{{ number_format((float) $sku->unit_price, 2, ',', '.') }} €</span>
+                                @else
+                                    <span class="text-[var(--am-text-muted)]">—</span>
+                                @endif
+                            </x-asset-manager-detail-row>
+                        @endif
+
                         <x-asset-manager-detail-row label="Gesamt / Monat">
-                            @if($sku->unit_price !== null)
-                                <span class="font-semibold tabular-nums">{{ number_format($sku->monthlyCost(), 2, ',', '.') }} €</span>
+                            @if($monthly > 0)
+                                <span class="font-semibold tabular-nums">{{ number_format($monthly, 2, ',', '.') }} €</span>
                             @else
                                 <span class="text-[var(--am-text-muted)]">—</span>
                             @endif
                         </x-asset-manager-detail-row>
                     </x-asset-manager-detail-list>
+
+                    @if($contractLines->isNotEmpty())
+                        <p class="text-[11px] text-[var(--am-text-muted)] mt-2">
+                            Preise aus der Abrechnung {{ $book->period() }} —
+                            <a href="{{ route('asset-manager.licenses.contracts') }}" wire:navigate class="underline">Vertragszeilen</a>.
+                            Der Rabatt ist im Monatspreis verrechnet.
+                        </p>
+                    @endif
                 </x-asset-manager-panel>
 
                 {{-- SKU-Info --}}

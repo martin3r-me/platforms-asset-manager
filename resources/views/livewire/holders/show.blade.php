@@ -297,8 +297,21 @@
                                         @endif
                                     </div>
                                 </div>
-                                @if($sku && $sku->unit_price !== null)
-                                    <span class="text-xs text-[var(--am-text-secondary)] tabular-nums">{{ number_format((float) $sku->unit_price, 2, ',', '.') }} €</span>
+                                @php
+                                    // Der Preis DIESES Seats: aus seiner Vertragszeile, sonst der
+                                    // handgepflegte Stückpreis der Lizenz (ADR 0019). Zwei Personen mit
+                                    // derselben Lizenz können unterschiedliche Tarife tragen.
+                                    $seatPrice = $lic->unit_price ?? $sku?->unit_price;
+                                @endphp
+                                @if($seatPrice !== null)
+                                    <span class="text-xs text-[var(--am-text-secondary)] tabular-nums whitespace-nowrap">
+                                        {{ number_format((float) $seatPrice, 2, ',', '.') }} €
+                                        @if($lic->unit_price !== null && $lic->contractLine?->isYearly())
+                                            <span class="text-[10px] text-[var(--am-text-muted)]">Jahr</span>
+                                        @elseif($lic->unit_price !== null)
+                                            <span class="text-[10px] text-[var(--am-text-muted)]">Monat</span>
+                                        @endif
+                                    </span>
                                 @endif
                             </div>
                         @endforeach

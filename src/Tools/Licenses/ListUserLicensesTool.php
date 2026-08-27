@@ -150,7 +150,13 @@ class ListUserLicensesTool implements ToolContract, ToolMetadataContract
                         'sku_id'          => $l->sku_id,
                         'sku_part_number' => $l->sku_part_number,
                         'sku_name'        => ($sku && $sku->display_name) ? $sku->display_name : $l->sku_part_number,
-                        'unit_price'      => ($sku && $sku->unit_price !== null) ? (float) $sku->unit_price : null,
+                        // Preis DIESES Seats aus seiner Vertragszeile, sonst der Handpreis der
+                        // Lizenz (ADR 0019) — zwei Personen derselben Lizenz koennen unterschiedliche
+                        // Tarife tragen, ein SKU-weiter Preis waere dort schlicht falsch.
+                        'unit_price'      => $l->unit_price !== null
+                            ? (float) $l->unit_price
+                            : (($sku && $sku->unit_price !== null) ? (float) $sku->unit_price : null),
+                        'price_source'    => $l->unit_price !== null ? 'contract' : (($sku && $sku->unit_price !== null) ? 'manual' : null),
                         'assigned_at'     => $l->assigned_at?->toIso8601String(),
                     ];
                 })->sortBy('sku_name')->values()->all();

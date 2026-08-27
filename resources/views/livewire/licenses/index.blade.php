@@ -138,6 +138,17 @@
                 </x-asset-manager-stat-card>
             </div>
 
+            @if($priceNotice)
+                <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-sky-50 border border-sky-200">
+                    @svg('heroicon-o-information-circle', 'w-4 h-4 text-sky-600 flex-shrink-0')
+                    <p class="text-sm text-sky-900 flex-1">{{ $priceNotice }}</p>
+                    <a href="{{ route('asset-manager.licenses.contracts') }}" wire:navigate
+                       class="text-xs font-medium text-sky-800 hover:underline flex-shrink-0 whitespace-nowrap">
+                        Zu den Vertragszeilen
+                    </a>
+                </div>
+            @endif
+
             {{-- Hinweis: genutzte Lizenzen ohne hinterlegten Preis --}}
             @if($unpricedCount > 0)
                 <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200">
@@ -224,8 +235,30 @@
                                             <div class="text-xs text-amber-600 mt-0.5">{{ $sku->available_units }} frei</div>
                                         @endif
                                     </td>
+                                    @php
+                                        // Preisherkunft entscheidet die ganze Zelle: eine Lizenz mit
+                                        // Vertragszeilen hat je Tarif einen eigenen Preis — dort gibt es
+                                        // keinen einzelnen Stückpreis zu setzen (ADR 0019).
+                                        $range   = $book->priceRangeForSku((string) $sku->sku_id);
+                                        $monthly = $range !== null
+                                            ? $book->monthlyCostForSku((string) $sku->sku_id)
+                                            : $sku->monthlyCost();
+                                    @endphp
                                     <td class="px-5 py-3">
-                                        @if($canSync)
+                                        @if($range !== null)
+                                            <div class="text-sm font-medium text-[var(--am-text)] tabular-nums whitespace-nowrap">
+                                                @if($range['min'] == $range['max'])
+                                                    € {{ number_format($range['min'], 2, ',', '.') }}
+                                                @else
+                                                    € {{ number_format($range['min'], 2, ',', '.') }}–{{ number_format($range['max'], 2, ',', '.') }}
+                                                @endif
+                                            </div>
+                                            <a href="{{ route('asset-manager.licenses.contracts') }}" wire:navigate
+                                               class="text-[10px] text-[var(--am-text-muted)] hover:underline whitespace-nowrap">
+                                                @svg('heroicon-o-document-currency-euro', 'w-3 h-3 inline -mt-0.5')
+                                                {{ $range['count'] }} {{ $range['count'] === 1 ? 'Vertragszeile' : 'Vertragszeilen' }}
+                                            </a>
+                                        @elseif($canSync)
                                             <div class="flex items-center gap-1">
                                                 <span class="text-xs text-[var(--am-text-secondary)]">€</span>
                                                 <input
@@ -241,7 +274,8 @@
                                                 {{ $sku->unit_price !== null ? '€ ' . number_format((float)$sku->unit_price, 2, ',', '.') : '—' }}
                                             </span>
                                         @endif
-                                        @if($sku->unit_price === null && $sku->consumed_units > 0)
+
+                                        @if($range === null && $sku->unit_price === null && $sku->consumed_units > 0)
                                             <div class="text-[10px] text-amber-600 mt-1 whitespace-nowrap">
                                                 @svg('heroicon-o-exclamation-triangle', 'w-3 h-3 inline -mt-0.5')
                                                 Preis fehlt
@@ -249,13 +283,13 @@
                                         @endif
                                     </td>
                                     <td class="px-5 py-3">
-                                        <span class="text-sm font-medium text-[var(--am-text)]">
-                                            {{ $sku->monthlyCost() > 0 ? '€ ' . number_format($sku->monthlyCost(), 2, ',', '.') : '—' }}
+                                        <span class="text-sm font-medium text-[var(--am-text)] tabular-nums">
+                                            {{ $monthly > 0 ? '€ ' . number_format($monthly, 2, ',', '.') : '—' }}
                                         </span>
                                     </td>
                                     <td class="px-5 py-3">
-                                        <span class="text-sm text-[var(--am-text-secondary)]">
-                                            {{ $sku->monthlyCost() > 0 ? '€ ' . number_format($sku->annualCost(), 2, ',', '.') : '—' }}
+                                        <span class="text-sm text-[var(--am-text-secondary)] tabular-nums">
+                                            {{ $monthly > 0 ? '€ ' . number_format($monthly * 12, 2, ',', '.') : '—' }}
                                         </span>
                                     </td>
                                     {{-- „Nutzer" zeigte die Zuweisungen früher in einem rechten Vorschau-Panel,

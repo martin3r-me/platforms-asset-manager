@@ -28,7 +28,10 @@ class ListLicensesTool implements ToolContract, ToolMetadataContract
     public function getDescription(): string
     {
         return 'GET /asset-manager/licenses - Listet Microsoft-Lizenz-SKUs des Teams: purchased/consumed/'
-            . 'available Einheiten, Stückpreis, Monatskosten (unit_price × consumed) und Auslastung in %. '
+            . 'available Einheiten, Preis und Monatskosten sowie Auslastung in %. Der Preis kommt aus den '
+            . 'Vertragszeilen der Lizenz-Abrechnung, sonst aus dem handgepflegten Stueckpreis '
+            . '(price_source). Bei mehreren Tarifen je Lizenz ist unit_price null und price_range '
+            . '{min,max,count} traegt die Spanne. '
             . 'Mit only_underutilized=true nur SKUs mit verfügbaren (ungenutzten) Einheiten.';
     }
 
@@ -65,17 +68,33 @@ class ListLicensesTool implements ToolContract, ToolMetadataContract
                 $query->where('available_units', '>', 0);
             }
 
-            $skus = $query->get()->map(fn (AssetLicenseSku $s) => [
-                'sku_id'          => $s->sku_id,
-                'sku_part_number' => $s->sku_part_number,
-                'display_name'    => $s->display_name ?? $s->sku_part_number,
-                'purchased_units' => $s->purchased_units,
-                'consumed_units'  => $s->consumed_units,
-                'available_units' => $s->available_units,
-                'unit_price'      => $s->unit_price !== null ? (float) $s->unit_price : null,
-                'monthly_cost'    => round($s->monthlyCost(), 2),
-                'utilization'     => $s->utilizationPercent(),
-            ])->sortByDesc('monthly_cost')->values()->all();
+            // Preisherkunft: Vertragszeilen vor Handpreis (ADR 0019). Eine Lizenz kann mehrere Tarife
+            // haben — dann bleibt `unit_price` leer und `price_range` traegt die Information. Ohne das
+            // meldete das Tool bei rechnungsgedeckten Lizenzen `unit_price: null, monthly_cost: 0`,
+            // obwohl die Kosten belegt sind.
+            $book = \Platform\AssetManager\Support\LicensePriceBook::for($teamId);
+
+            $skus = $query->get()->map(function (AssetLicenseSku $s) use ($book) {
+                $range = $book->priceRangeForSku((string) $s->sku_id);
+
+                return [
+                    'sku_id'          => $s->sku_id,
+                    'sku_part_number' => $s->sku_part_number,
+                    'display_name'    => $s->display_name ?? $s->sku_part_number,
+                    'purchased_units' => $s->purchased_units,
+                    'consumed_units'  => $s->consumed_units,
+                    'available_units' => $s->available_units,
+                    'unit_price'      => $range !== null
+                        ? ($range['min'] === $range['max'] ? $range['min'] : null)
+                        : ($s->unit_price !== null ? (float) $s->unit_price : null),
+                    'price_range'     => $range,
+                    'price_source'    => $range !== null ? 'contract' : ($s->unit_price !== null ? 'manual' : null),
+                    'monthly_cost'    => $range !== null
+                        ? $book->monthlyCostForSku((string) $s->sku_id)
+                        : round($s->monthlyCost(), 2),
+                    'utilization'     => $s->utilizationPercent(),
+                ];
+            })->sortByDesc('monthly_cost')->values()->all();
 
             return ToolResult::success([
                 'licenses' => $skus,

@@ -195,7 +195,17 @@
                                     @php $util = $row['utilization']; $c = $util >= 95 ? 'red' : ($util >= 80 ? 'amber' : 'emerald'); @endphp
                                     <tr class="hover:bg-[var(--am-bg)]">
                                         <td class="px-5 py-3 font-medium text-[var(--am-text)]">{{ $row['label'] }}</td>
-                                        <td class="px-5 py-3 text-right text-sm tabular-nums">{{ number_format((float)($row['unit_price'] ?? 0), 2, ',', '.') }} €</td>
+                                        {{-- Mehrere Tarife je Lizenz haben keinen einen Stückpreis —
+                                             dann steht hier die Spanne statt einer 0 (ADR 0019). --}}
+                                        <td class="px-5 py-3 text-right text-sm tabular-nums whitespace-nowrap">
+                                            @if(($row['unit_price'] ?? null) !== null)
+                                                {{ number_format((float) $row['unit_price'], 2, ',', '.') }} €
+                                            @elseif($row['price_range'] ?? null)
+                                                {{ number_format($row['price_range']['min'], 2, ',', '.') }}–{{ number_format($row['price_range']['max'], 2, ',', '.') }} €
+                                            @else
+                                                <span class="text-[var(--am-text-muted)]">—</span>
+                                            @endif
+                                        </td>
                                         <td class="px-5 py-3 text-right text-sm tabular-nums">{{ $row['consumed'] }} / {{ $row['purchased'] }}</td>
                                         <td class="px-5 py-3 text-right">
                                             <x-asset-manager-badge :color="$c" size="xs" class="min-w-[3rem] justify-center tabular-nums">{{ $util }}%</x-asset-manager-badge>

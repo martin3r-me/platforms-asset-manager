@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Platform\AssetManager\Concerns\GuardsTenantBoundary;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetUserLicense;
+use Platform\AssetManager\Support\LicensePriceBook;
 
 class Show extends Component
 {
@@ -49,6 +50,8 @@ class Show extends Component
         // gezeigt (S8b). Der letzte Sync steht weiterhin im SKU-Panel links.
         return view('asset-manager::livewire.licenses.show', [
             'assignments' => $assignments,
+            // Preisherkunft dieser Lizenz: Vertragszeilen (je Tarif ein Preis) vor Handpreis (ADR 0019).
+            'book'        => LicensePriceBook::for((int) Auth::user()->currentTeam->id),
         ])->layout('platform::layouts.app');
     }
 }

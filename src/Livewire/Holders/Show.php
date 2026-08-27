@@ -236,8 +236,10 @@ class Show extends Component
             ->orderBy('device_name')
             ->get();
 
-        // Lizenzen (über UPN)
-        $licenses = AssetUserLicense::where('team_id', $teamId)
+        // Lizenzen (über UPN). `contractLine` mitladen: die Liste zeigt je Seat die Bindung, und ohne
+        // Eager-Loading wäre das eine Query je Lizenzzeile.
+        $licenses = AssetUserLicense::with('contractLine')
+            ->where('team_id', $teamId)
             ->where('user_principal_name', $upn)
             ->orderBy('sku_part_number')
             ->get();
