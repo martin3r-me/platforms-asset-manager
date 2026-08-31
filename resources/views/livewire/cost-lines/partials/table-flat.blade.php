@@ -40,13 +40,13 @@
             <table class="w-full text-sm">
                 <thead>
                     <tr class="border-b border-[color:var(--am-border)] bg-[var(--am-bg)]">
-                        @can('asset-manager.manage')
+                        @if($canManage)
                             <th class="w-10 pl-4 pr-1 py-3">
                                 {{-- Fuellt/leert $selected ueber updatedSelectPage() --}}
                                 <input type="checkbox" wire:model.live="selectPage"
                                        class="rounded border-[color:var(--am-border-strong)] text-[var(--am-accent)]" />
                             </th>
-                        @endcan
+                        @endif
                         @foreach($sortCols as $field => [$heading, $align])
                             <th class="{{ $align === 'right' ? 'text-right' : 'text-left' }} px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">
                                 <button type="button" wire:click="sortBy('{{ $field }}')"

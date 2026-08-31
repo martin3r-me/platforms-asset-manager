@@ -86,14 +86,14 @@
     </td>
 
     <td class="pr-4 pl-2 py-3 text-right whitespace-nowrap">
-        @can('asset-manager.manage')
+        @if($canManage)
             {{-- Ganze Gruppe auswaehlen: "alle 7 necta-Zeilen" ist ein Klick, nicht sieben. --}}
             <button type="button" wire:click.stop="selectGroup('{{ $g['key'] }}')"
                     class="mr-1 text-[var(--am-text-secondary)] hover:text-[var(--am-accent)]"
                     title="Alle {{ $g['count'] }} Positionen dieser Gruppe auswählen">
                 @svg('heroicon-o-check-circle', 'w-4 h-4 inline')
             </button>
-        @endcan
+        @endif
         <button type="button" wire:click.stop="drillDown('{{ $g['key'] }}')"
                 class="text-[var(--am-text-secondary)] hover:text-[var(--am-accent)]"
                 title="Gefiltert in der Liste öffnen">
@@ -112,7 +112,7 @@
                     <table class="w-full text-sm bg-[var(--am-surface)]">
                         <thead>
                             <tr class="border-y border-[color:var(--am-border)] text-[10px] font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">
-                                @can('asset-manager.manage')<th class="w-10 pl-4 pr-1 py-2"></th>@endcan
+                                @if($canManage)<th class="w-10 pl-4 pr-1 py-2"></th>@endif
                                 <th class="text-left px-4 py-2">Bezeichnung</th>
                                 <th class="text-left px-4 py-2">Kostenart</th>
                                 <th class="text-left px-4 py-2">KSt</th>

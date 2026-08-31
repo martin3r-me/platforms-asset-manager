@@ -44,12 +44,12 @@
                 </x-asset-manager-button>
 
                 {{-- Anlegen nur Owner/Admin (E1/ADR 0004) — Backend: save() Gate asset-manager.manage. --}}
-                @can('asset-manager.manage')
+                @if($canManage)
                     <x-asset-manager-button variant="primary" size="sm" wire:click="newLine">
                         @svg('heroicon-o-plus', 'w-3.5 h-3.5')
                         Neue Position
                     </x-asset-manager-button>
-                @endcan
+                @endif
             </x-slot>
         </x-asset-manager-page-actionbar>
     </x-slot>
@@ -75,9 +75,9 @@
 
             @include('asset-manager::livewire.cost-lines.partials.kpis')
 
-            @can('asset-manager.manage')
+            @if($canManage)
                 @include('asset-manager::livewire.cost-lines.partials.bulk-bar')
-            @endcan
+            @endif
 
             {{-- Schlanke Meta-Zeile: Treffer + Gruppierungsachse bzw. Seitengröße. --}}
             <div class="flex items-center justify-between gap-2 px-1">
@@ -116,8 +116,8 @@
     </div>
 
     {{-- Modals gehören innerhalb <x-ui-page>. --}}
-    @can('asset-manager.manage')
+    @if($canManage)
         @include('asset-manager::livewire.cost-lines.partials.modal-editor')
         @include('asset-manager::livewire.cost-lines.partials.modal-bulk-reassign')
-    @endcan
+    @endif
 </x-ui-page>

@@ -1032,7 +1032,14 @@ class Index extends Component
             $lines = $query->paginate($this->perPage);
         }
 
+        // EINMAL pro Render statt @can pro Zeile: der Gate-Callback laeuft ueber
+        // TeamRole::isOwnerOrAdmin, und ein Aufruf kostet zwei Queries (Pivot + der
+        // ungecachte currentTeam-Accessor im Core). Bei 17 Gruppen- und 50 Detailzeilen
+        // mit je zwei @can-Bloecken waren das ~280 Queries fuer 140 mal dieselbe Antwort.
+        $canManage = Gate::allows('asset-manager.manage');
+
         return view('asset-manager::livewire.cost-lines.index', [
+            'canManage'     => $canManage,
             'lines'          => $lines,
             'groups'         => $groups,
             'groupsOverflow' => $groupsOverflow,

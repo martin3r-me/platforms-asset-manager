@@ -45,12 +45,12 @@
 <tr wire:key="cl-{{ $line->id }}" wire:click="edit({{ $line->id }})"
     class="cursor-pointer hover:bg-[var(--am-bg)] {{ $line->active ? '' : 'opacity-50' }} {{ $isSelected ? 'bg-[var(--am-accent-surface)] shadow-[inset_3px_0_0_var(--am-accent)]' : '' }}">
 
-    @can('asset-manager.manage')
+    @if($canManage)
         <td class="w-10 pl-4 pr-1 {{ $dense ? 'py-2' : 'py-2.5' }}" wire:click.stop>
             <input type="checkbox" value="{{ $line->id }}" wire:model.live="selected"
                    class="rounded border-[color:var(--am-border-strong)] text-[var(--am-accent)]" />
         </td>
-    @endcan
+    @endif
 
     <td class="{{ $cellPad }} font-medium text-[var(--am-text)]">
         <span class="inline-flex items-center gap-1.5">
@@ -120,12 +120,12 @@
     </td>
 
     <td class="{{ $cellPad }} text-right whitespace-nowrap">
-        @can('asset-manager.manage')
+        @if($canManage)
             <button type="button" wire:click.stop="toggleActive({{ $line->id }})"
                     class="text-xs text-[var(--am-text-secondary)] hover:text-amber-600"
                     title="{{ $line->active ? 'Deaktivieren' : 'Aktivieren' }}">
                 @svg('heroicon-o-power', 'w-4 h-4 inline')
             </button>
-        @endcan
+        @endif
     </td>
 </tr>
