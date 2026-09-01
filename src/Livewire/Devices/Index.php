@@ -14,6 +14,7 @@ use Platform\AssetManager\Models\AssetDeviceSyncLog;
 use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetHandoverLine;
 use Platform\AssetManager\Jobs\SyncIntuneDevicesJob;
+use Platform\AssetManager\Support\DeviceCostResolver;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class Index extends Component
@@ -42,7 +43,7 @@ class Index extends Component
 
     public array $columnOrder = ['device', 'user', 'os', 'status', 'lastCheckIn'];
 
-    public const COLUMN_KEYS = ['device', 'serial', 'user', 'os', 'status', 'lastCheckIn'];
+    public const COLUMN_KEYS = ['device', 'serial', 'user', 'os', 'status', 'lastCheckIn', 'cost'];
 
     /** Schwellwert (Tage ohne Check-in), ab dem ein Gerät als inaktiv gilt. */
     public const INACTIVE_DAYS = 30;
@@ -85,7 +86,10 @@ class Index extends Component
             fn($i) => is_array($i) ? ($i['value'] ?? null) : $i,
             $order
         );
-        $valid = array_values(array_intersect($flat, self::COLUMN_KEYS));
+        // array_unique NACH dem Filtern: array_intersect behält Dubletten, und eine doppelt
+        // gelistete Spalte würde zweimal gerendert — inklusive doppeltem wire:key, was Livewire
+        // beim Diffing durcheinanderbringt. Zudem verdrängt jede Dublette eine echte Spalte.
+        $valid = array_values(array_unique(array_intersect($flat, self::COLUMN_KEYS)));
 
         // Fehlende Spalten einsortieren, damit nichts verschwindet — und zwar an ihrer in
         // COLUMN_KEYS definierten Position, nicht am Ende. Sonst landet eine neu hinzugefügte
@@ -419,8 +423,19 @@ class Index extends Component
             ->flip()
             ->all();
 
+        // Monatskosten wie in der Inventar-Liste: AUFGELÖST (Geräte-Override → tenant-eigener
+        // Modell-Default) über EINEN vorgeladenen Resolver, nur für die Geräte dieser Seite — nicht
+        // resolvedMonthlyCost() je Zeile, das baut den Katalog pro Gerät neu auf (Muster:
+        // InventoryService). Bewusst NICHT sortierbar: die Liste sortiert DB-seitig, `monthly_cost`
+        // ist aber nur der Override — Geräte, die ihre Rate vom Modell erben, würden mit 0 einsortiert.
+        $resolver    = DeviceCostResolver::for($team->id);
+        $deviceCosts = collect($devices->items())
+            ->mapWithKeys(fn (AssetDevice $d) => [$d->id => $resolver->monthlyCost($d)])
+            ->all();
+
         return view('asset-manager::livewire.devices.index', [
             'devices'             => $devices,
+            'deviceCosts'         => $deviceCosts,
             'stats'               => $stats,
             'presetCounts'        => $presetCounts,
             'osList'              => $osList,

@@ -232,6 +232,7 @@
                     'os'          => ['label' => 'Betriebssystem',  'sortField' => null],
                     'status'      => ['label' => 'Status',          'sortField' => 'compliance_state'],
                     'lastCheckIn' => ['label' => 'Letztes Check-In','sortField' => 'last_check_in_at'],
+                    'cost'        => ['label' => 'Monatskosten',   'sortField' => null, 'align' => 'right'],
                 ];
             @endphp
 
@@ -246,7 +247,7 @@
                     </div>
                 @else
                     @if($canManage && $selectPage && count($selected) < $devices->total())
-                        <div class="px-5 py-2 bg-[var(--am-accent-surface)] border-b border-[color:var(--am-border)] text-center text-xs text-[var(--am-accent)]">
+                        <div class="px-4 py-2 bg-[var(--am-accent-surface)] border-b border-[color:var(--am-border)] text-center text-xs text-[var(--am-accent)]">
                             {{ count($selected) }} auf dieser Seite ausgewählt.
                             <button wire:click="selectAllFiltered" class="font-medium underline hover:opacity-80">Alle {{ $devices->total() }} gefilterten auswählen</button>
                         </div>
@@ -254,9 +255,9 @@
                     <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
-                            <tr wire:sortable="reorderColumns" wire:sortable.options="{ axis: 'x' }" class="border-b border-[color:var(--am-border)]">
+                            <tr wire:sortable="reorderColumns" wire:sortable.options="{ axis: 'x' }" class="border-b border-[color:var(--am-border)] bg-[var(--am-bg)]">
                                 @if($canManage)
-                                    <th class="w-10 px-5 py-3 bg-[var(--am-bg)]">
+                                    <th class="w-10 px-4 py-3">
                                         <input type="checkbox" wire:model.live="selectPage" class="rounded border-[color:var(--am-border)] text-[var(--am-accent)] focus:ring-[var(--am-accent)]/30" />
                                     </th>
                                 @endif
@@ -264,8 +265,8 @@
                                     @php $def = $columnDefs[$colKey] ?? null; @endphp
                                     @if($def)
                                         <th wire:sortable.item="{{ $colKey }}" wire:key="col-{{ $colKey }}"
-                                            class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)] bg-[var(--am-bg)]">
-                                            <div class="flex items-center gap-2">
+                                            class="{{ ($def['align'] ?? 'left') === 'right' ? 'text-right' : 'text-left' }} px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">
+                                            <div class="flex items-center gap-2 {{ ($def['align'] ?? 'left') === 'right' ? 'justify-end' : '' }}">
                                                 <button wire:sortable.handle type="button" title="Spalte verschieben" class="text-[var(--am-text-muted)] hover:text-[var(--am-text-secondary)] cursor-grab active:cursor-grabbing">
                                                     @svg('heroicon-o-bars-3', 'w-3.5 h-3.5')
                                                 </button>
@@ -291,7 +292,7 @@
                                 <tr wire:key="row-{{ $device->id }}"
                                     class="transition-colors {{ $isChecked ? 'bg-[var(--am-bg)]' : 'hover:bg-[var(--am-bg)]' }}">
                                     @if($canManage)
-                                        <td class="px-5 py-3">
+                                        <td class="px-4 py-3">
                                             <input type="checkbox" value="{{ $device->id }}" wire:model.live="selected" class="rounded border-[color:var(--am-border)] text-[var(--am-accent)] focus:ring-[var(--am-accent)]/30" />
                                         </td>
                                     @endif
@@ -301,7 +302,7 @@
                                                 {{-- Der Zellklick öffnete früher ein rechtes Vorschau-Panel; seit S8b
                                                      führt der Gerätename direkt auf die vereinte Detailseite (ADR 0012),
                                                      die dieselben Felder vollständig zeigt. --}}
-                                                <td class="px-5 py-3">
+                                                <td class="px-4 py-3">
                                                     <a href="{{ route('asset-manager.inventory.show', ['type' => 'intune', 'id' => $device->id]) }}" wire:navigate
                                                        class="font-medium text-[var(--am-text)] hover:text-[var(--am-accent)]">
                                                         {{ $device->device_name ?? '—' }}
@@ -329,12 +330,12 @@
                                                 {{-- Seriennummer wie in der Inventar-Liste: die Serie ist die
                                                      Geräte-Identität (ADR 0006) und der Schlüssel zum Leasingvertrag,
                                                      also gehört sie in beide Übersichten. --}}
-                                                <td class="px-5 py-3 text-xs text-[var(--am-text-muted)]">
+                                                <td class="px-4 py-3 text-xs text-[var(--am-text-muted)]">
                                                     {{ $device->serial_number ?: '—' }}
                                                 </td>
                                             @break
                                             @case('user')
-                                                <td class="px-5 py-3">
+                                                <td class="px-4 py-3">
                                                     @if($device->user_principal_name)
                                                         {{-- Der UPN steht am Gerät, die Träger-ID nicht — die Auflösung
                                                              bleibt serverseitig und springt aufs Profil statt in ein
@@ -349,21 +350,34 @@
                                                 </td>
                                             @break
                                             @case('os')
-                                                <td class="px-5 py-3">
+                                                <td class="px-4 py-3">
                                                     <div class="text-[var(--am-text-secondary)]">{{ $device->operating_system ?? '—' }}</div>
                                                     @if($device->os_version)<div class="text-xs text-[var(--am-text-muted)]">{{ $device->os_version }}</div>@endif
                                                 </td>
                                             @break
                                             @case('status')
-                                                <td class="px-5 py-3">
+                                                <td class="px-4 py-3">
                                                     <x-asset-manager-badge :color="$device->complianceBadgeColor()" dot size="sm">
                                                         {{ $device->complianceLabel() }}
                                                     </x-asset-manager-badge>
                                                 </td>
                                             @break
                                             @case('lastCheckIn')
-                                                <td class="px-5 py-3 text-sm text-[var(--am-text-muted)]">
+                                                <td class="px-4 py-3 text-sm text-[var(--am-text-muted)]">
                                                     {{ $device->last_check_in_at ? $device->last_check_in_at->diffForHumans() : '—' }}
+                                                </td>
+                                            @break
+                                            @case('cost')
+                                                {{-- Aufgelöste Rate (Override → Modell-Default), vorgeladen in der
+                                                     Komponente. Gleiche Bedeutung und Darstellung wie im Inventar:
+                                                     AfA/Leasing je Gerät, NICHT die kostenstellen-zugeteilte Summe. --}}
+                                                @php $cost = $deviceCosts[$device->id] ?? 0.0; @endphp
+                                                <td class="px-4 py-3 text-right">
+                                                    @if($cost > 0)
+                                                        <span class="tabular-nums text-[var(--am-text)]">{{ number_format($cost, 2, ',', '.') }} €</span>
+                                                    @else
+                                                        <span class="text-[var(--am-text-disabled)]">—</span>
+                                                    @endif
                                                 </td>
                                             @break
                                         @endswitch
@@ -374,7 +388,7 @@
                     </table>
                     </div>
                     @if($devices->hasPages())
-                        <div class="px-5 py-3 border-t border-[color:var(--am-border)]">{{ $devices->links() }}</div>
+                        <div class="px-4 py-3 border-t border-[color:var(--am-border)]">{{ $devices->links() }}</div>
                     @endif
                 @endif
             </div>
