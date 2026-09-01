@@ -29,6 +29,8 @@ php tests/local/cost-lines-grouping.php     # gruppierte Ansicht, Kennzahlen, Au
 php tests/local/cost-lines-editor.php       # Editor-Pfad inkl. Test-Vertrag von CostLineScopingTest
 php tests/local/cost-line-reassign.php      # CostLineReassignService (UI + MCP-Tool teilen ihn)
 php tests/local/n-plus-1.php                # Query-Budgets der Listen + Geraete-Modell-Zuordnung
+php tests/local/table-view-state.php        # anpassbare Tabellen-Ansicht: Zustand, Sanitizing, Faltung
+php tests/local/table-view-service.php      # deren Speicherpfad (Scoping, Pruefen beim Schreiben)
 php tests/local/blade-lint.php resources/views/livewire/cost-lines/*.blade.php
 ```
 

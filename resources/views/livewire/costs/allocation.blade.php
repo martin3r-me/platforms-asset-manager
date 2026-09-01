@@ -44,7 +44,7 @@
                 <p class="text-[11px] text-[var(--am-text-muted)]">
                     MS-Lizenzen &amp; Hardware-AfA stammen aus dem Graph-Sync bzw. Inventar; alle übrigen Kostenarten aus den erfassten Kostenpositionen.
                 </p>
-                @include('asset-manager::livewire.costs._pivot-table', ['pivot' => $pivot])
+                @include('asset-manager::livewire.costs._pivot-table', ['pivot' => $pivot, 'grid' => $grid])
             </section>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
