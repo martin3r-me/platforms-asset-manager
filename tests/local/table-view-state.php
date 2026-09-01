@@ -175,75 +175,90 @@ check('Alle Zeilen einblenden raeumt auf',      false, TableViewState::fresh()
     ->withRowHidden('cc:1')->withRowGroupToggled('cc:2')->withFlagToggled('hide_empty_rows')
     ->withAllRowsVisible()->isCustomized());
 
-echo "\n=== 4) Shaper: Default-Ansicht zeigt alles ===\n";
+echo "\n=== 4) Shaper: Default-Ansicht — alles da, nichts gefiltert ===\n";
 
 $pivot = am_pivot();
 $plain = (new PivotTableShaper(TableViewState::fresh()))->shape($pivot);
 
-check('Alle Spalten sichtbar',                  3, count($plain['visibleColumns']));
-check('Alle Zeilen sichtbar (4 + Auffangzeile)', 5, count($plain['rows']));
+check('Alle Spalten in Ursprungsreihenfolge',   ['1', '2', '3'], array_column($plain['columns'], 'key'));
+check('Alle Zeilen (4 Baumknoten + Auffang)',   5,               count($plain['rows']));
 check('Zeilen-Schluessel aus der Kostenstelle', ['cc:100', 'cc:110', 'cc:111', 'cc:200', 'x:unassigned'], am_row_keys($plain));
-check('Gruppe zeigt den Rollup (60 + 5)',       65.0, (float) $plain['rows'][0]['total']);
-check('Blatt zeigt eigene Zahlen',              35.0, (float) $plain['rows'][2]['total']);
-check('Default-Breite je Kostenart',            PivotTableShaper::DEFAULT_COLUMN_WIDTH, $plain['visibleColumns'][0]['width']);
-check('Tabellenbreite = Summe der Spalten',
-    PivotTableShaper::DEFAULT_LABEL_WIDTH + PivotTableShaper::DEFAULT_TOTAL_WIDTH + 3 * PivotTableShaper::DEFAULT_COLUMN_WIDTH,
-    $plain['tableWidth']);
-check('Einrueckung waechst mit der Tiefe',      28, $plain['rows'][2]['indent']);
-check('Leere Kostenart ist als leer markiert',  true, $plain['columns'][2]['empty']);
+check('Gruppe zeigt den Rollup (60 + 5)',       65.0,            (float) $plain['rows'][0]['total']);
+check('Blatt zeigt eigene Zahlen',              35.0,            (float) $plain['rows'][2]['total']);
+check('Default-Breite je Kostenart',            PivotTableShaper::DEFAULT_COLUMN_WIDTH, $plain['columns'][0]['width']);
+check('Default-Breite der Label-Spalte',        PivotTableShaper::DEFAULT_LABEL_WIDTH,  $plain['labelWidth']);
+check('Einrueckung waechst mit der Tiefe',      28,              $plain['rows'][2]['indent']);
+check('Leere Kostenart ist markiert',           true,            $plain['columns'][2]['empty']);
+check('Bespielte Kostenart ist nicht leer',     false,           $plain['columns'][0]['empty']);
+check('Nullzeile ist markiert',                 true,            $plain['rows'][3]['empty']);
+check('Zeile mit Betrag ist nicht markiert',    false,           $plain['rows'][0]['empty']);
+check('Gruppen sind als Gruppe markiert',       true,            $plain['rows'][0]['isGroup']);
+check('Blatt ist keine Gruppe',                 false,           $plain['rows'][2]['isGroup']);
 
-echo "\n=== 5) Shaper: Reihenfolge, Breiten, ausgeblendete Spalten ===\n";
+echo "\n=== 5) Shaper: Vorfahren-Kette — sie traegt die Faltung im Browser ===\n";
+
+// Die CSS-Regel [data-ancestors~="cc:100"] versteckt genau die Zeilen, die cc:100 in dieser Kette
+// haben. Fehlte der Grossvater beim Enkel, wuerde eine eingeklappte Gruppe ihre Enkel zeigen.
+$anc = [];
+foreach ($plain['rows'] as $row) {
+    $anc[$row['key']] = $row['ancestors'];
+}
+
+check('Wurzel hat keine Vorfahren',             '',                  $anc['cc:100']);
+check('Kind kennt seinen Elternknoten',         'cc:100',            $anc['cc:110']);
+check('Enkel kennt Eltern UND Grossvater',      'cc:100 cc:110',     $anc['cc:111']);
+check('Geschwister der Wurzel bleiben frei',    '',                  $anc['cc:200']);
+check('Auffangzeile haengt an keinem Baum',     '',                  $anc['x:unassigned']);
+check('Kette ist eine CSS-Wortliste',           true,                str_contains($anc['cc:111'], ' '));
+
+echo "\n=== 6) Shaper: Reihenfolge und Breiten aus der gespeicherten Ansicht ===\n";
 
 $custom = new TableViewState(
-    widths: ['2' => 200, 'label' => 300],
+    widths: ['2' => 200, 'label' => 300, 'total' => 130],
     order: ['2', '1', '3'],
     hiddenColumns: ['1'],
+    collapsedRows: ['cc:100'],
+    hiddenRows: ['cc:200'],
 );
 $shaped = (new PivotTableShaper($custom))->shape($pivot);
 
 check('Reihenfolge folgt der Ansicht',          ['2', '1', '3'], array_column($shaped['columns'], 'key'));
-check('Ausgeblendete Spalte fehlt in der Tabelle', ['2', '3'],   array_column($shaped['visibleColumns'], 'key'));
-check('Ausgeblendete bleibt im Menue erhalten', true,            $shaped['columns'][1]['hiddenManually']);
-check('Gezogene Breite gewinnt',                200,             $shaped['visibleColumns'][0]['width']);
+check('Gezogene Breite gewinnt',                200,             $shaped['columns'][0]['width']);
 check('Label-Breite gezogen',                   300,             $shaped['labelWidth']);
-check('Zaehler der ausgeblendeten Spalten',     1,               $shaped['stats']['hiddenColumns']);
-check('Nur abweichende Breiten gehen an den Browser', ['2' => 200, 'label' => 300], $shaped['widths']);
-check('Spaltensummen bleiben unberuehrt',       67.0,            (float) $pivot['colTotals'][1]);
+check('Summen-Breite gezogen',                  130,             $shaped['totalWidth']);
+check('Ausgeblendete Spalte ist markiert',      true,            $shaped['columns'][1]['hidden']);
+check('Sichtbare Spalte ist nicht markiert',    false,           $shaped['columns'][0]['hidden']);
 
-echo "\n=== 6) Shaper: leere Spalten ausblenden ===\n";
+// Entscheidend: der Shaper filtert NICHTS. Ausgeblendetes und Gefaltetes wird gerendert und nur
+// markiert — sonst koennte der Browser es nicht ohne Roundtrip wieder einblenden.
+check('Ausgeblendete Spalte wird trotzdem gerendert', 3,    count($shaped['columns']));
+check('Ausgeblendete Zeile wird trotzdem gerendert',  5,    count($shaped['rows']));
+check('Gefaltete Kinder werden trotzdem gerendert',   true, in_array('cc:111', am_row_keys($shaped), true));
+check('Ausgeblendete Zeile ist markiert',            true,  $shaped['rows'][3]['hidden']);
+check('Eingeklappte Gruppe ist markiert',            true,  $shaped['rows'][0]['collapsed']);
+check('Nicht eingeklappte Gruppe ist nicht markiert', false, $shaped['rows'][1]['collapsed']);
+check('Spaltensummen bleiben unberuehrt',            67.0,  (float) $pivot['colTotals'][1]);
 
-$noEmpty = (new PivotTableShaper(new TableViewState(hideEmptyColumns: true)))->shape($pivot);
-check('Leere Kostenart verschwindet',           ['1', '2'], array_column($noEmpty['visibleColumns'], 'key'));
-check('Als Filter markiert, nicht als manuell', true,       $noEmpty['columns'][2]['hiddenByFilter']);
-check('Manuell-Flag bleibt aus',                false,      $noEmpty['columns'][2]['hiddenManually']);
+echo "\n=== 7) Der Zustand fuer den Browser ist zurueckschickbar ===\n";
 
-echo "\n=== 7) Shaper: Faltung schluckt ALLE Nachfahren, nicht nur Kinder ===\n";
+// Der Browser bekommt genau die Transportform von TableViewState und schickt sie unveraendert
+// zurueck (syncTableView). Waeren die Schluessel verschieden, ginge bei jedem Speichern etwas verloren.
+check('view ist die Transportform',             $custom->toArray(), $shaped['view']);
+check('Roundtrip Browser → Server ist stabil',  $custom->toArray(),
+    TableViewState::fromArray($shaped['view'])->toArray());
+check('Default-Breiten liegen bei',             [
+    'label'  => PivotTableShaper::DEFAULT_LABEL_WIDTH,
+    'column' => PivotTableShaper::DEFAULT_COLUMN_WIDTH,
+    'total'  => PivotTableShaper::DEFAULT_TOTAL_WIDTH,
+], $shaped['defaults']);
 
-$folded = (new PivotTableShaper(new TableViewState(collapsedRows: ['cc:100'])))->shape($pivot);
-check('Kind und Enkel verschwinden',            ['cc:100', 'cc:200', 'x:unassigned'], am_row_keys($folded));
-check('Gruppe bleibt sichtbar und eingeklappt', true,  $folded['rows'][0]['collapsed']);
-check('Eingeklappte Gruppe traegt den Rollup',  65.0,  (float) $folded['rows'][0]['total']);
-check('Zaehler eingeklappter Gruppen',          1,     $folded['stats']['collapsedGroups']);
-check('Zaehler gefalteter Zeilen',              2,     $folded['stats']['foldedRows']);
+echo "\n=== 8) Leerer Pivot ===\n";
 
-$foldedInner = (new PivotTableShaper(new TableViewState(collapsedRows: ['cc:110'])))->shape($pivot);
-check('Faltung auf Ebene 1 laesst Ebene 0 stehen', ['cc:100', 'cc:110', 'cc:200', 'x:unassigned'], am_row_keys($foldedInner));
-
-echo "\n=== 8) Shaper: Zeilen ausblenden und Nullzeilen-Filter ===\n";
-
-$hiddenRow = (new PivotTableShaper(new TableViewState(hiddenRows: ['cc:110', 'x:unassigned'])))->shape($pivot);
-check('Ausgeblendete Zeile fehlt',              ['cc:100', 'cc:111', 'cc:200'], am_row_keys($hiddenRow));
-check('Kinder bleiben ohne Faltung sichtbar',   true, in_array('cc:111', am_row_keys($hiddenRow), true));
-check('Zaehler ausgeblendeter Zeilen',          2,    $hiddenRow['stats']['hiddenRows']);
-
-$noZeroRows = (new PivotTableShaper(new TableViewState(hideEmptyRows: true)))->shape($pivot);
-check('Nullzeile verschwindet',                 false, in_array('cc:200', am_row_keys($noZeroRows), true));
-check('Zeilen mit Betrag bleiben',              4,     count($noZeroRows['rows']));
-
-echo "\n=== 9) Ansicht, die alles versteckt, bleibt bedienbar ===\n";
-
-$blind = (new PivotTableShaper(new TableViewState(hiddenColumns: ['1', '2', '3'])))->shape($pivot);
-check('Keine sichtbaren Spalten',               0,    count($blind['visibleColumns']));
-check('Als angepasst erkannt (Reset-Hinweis)',  true, $blind['stats']['customized']);
+$empty = (new PivotTableShaper(TableViewState::fresh()))->shape([
+    'types' => [], 'rows' => [], 'colTotals' => [], 'grandTotal' => 0.0, 'meta' => [],
+]);
+check('Keine Spalten',                          [], $empty['columns']);
+check('Keine Zeilen',                           [], $empty['rows']);
+check('Breiten trotzdem gesetzt',               PivotTableShaper::DEFAULT_LABEL_WIDTH, $empty['labelWidth']);
 
 check_summary();

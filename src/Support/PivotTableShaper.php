@@ -3,19 +3,23 @@
 namespace Platform\AssetManager\Support;
 
 /**
- * Formt den Kosten-Pivot (`CostAggregationService::costCenterByType()`) nach einer gespeicherten
- * Ansicht ({@see TableViewState}) in ein fertiges Anzeige-Modell um: Spalten in gewählter Reihenfolge
- * und Breite, ausgeblendete Spalten und Zeilen aussortiert, eingeklappte Gruppen zusammengefaltet
+ * Formt den Kosten-Pivot (`CostAggregationService::costCenterByType()`) in ein Anzeige-Modell um:
+ * Spalten in gewählter Reihenfolge und Breite, jede Zeile mit ihren Vorfahren und Flags
  * (docs/adr/0020).
  *
- * Warum eine eigene Klasse und nicht im Blade: die Faltung des Baums ist die einzige Stelle mit
- * echter Logik in dieser Ansicht (eine eingeklappte Gruppe schluckt **alle** Nachfahren, nicht nur
- * die direkten Kinder) — und sie muss ohne Datenbank prüfbar bleiben
- * (`tests/local/table-view-state.php`).
+ * **Der Shaper blendet nichts aus.** Er rendert immer alle Spalten und alle Zeilen und markiert sie
+ * nur — Sichtbarkeit und Faltung entscheidet der Browser über eine generierte CSS-Regel. Grund: jede
+ * Sichtbarkeits-Änderung wäre sonst ein Livewire-Roundtrip, und der lässt `render()` das komplette
+ * Kostenmodell neu berechnen (`normalizedLines()` lädt Kostenzeilen, alle Asset-Träger, alle Items,
+ * das Lizenz-Preisbuch und die Gerätekosten). Ein Klick auf „Spalte ausblenden" kostete damit die
+ * Rechenzeit einer ganzen Auswertung. Genau das war der Ruckler.
+ *
+ * Die einzige Änderung, die weiter serverseitig rendert, ist das **Verschieben** einer Spalte: dabei
+ * ändert sich die Zellen-Reihenfolge im DOM, und die kann CSS nicht umsortieren.
  *
  * **Rechnet nichts nach.** Beträge, Spalten- und Gesamtsummen kommen unverändert aus dem Pivot; die
  * Ansicht entscheidet ausschließlich, was zu sehen ist. Ausgeblendetes zählt weiter in die Summen —
- * so wie Excel über versteckte Zeilen summiert. Die Zeile „Summe" wäre sonst je Nutzer eine andere.
+ * so wie Excel über versteckte Zeilen summiert.
  */
 final class PivotTableShaper
 {
@@ -45,37 +49,28 @@ final class PivotTableShaper
      */
     public function shape(array $pivot): array
     {
-        $columns        = $this->columns($pivot);
-        $visibleColumns = array_values(array_filter($columns, fn ($c) => ! $c['hidden']));
-        $rows           = $this->rows($pivot);
-
-        $labelWidth = $this->state->width(self::LABEL_KEY, self::DEFAULT_LABEL_WIDTH);
-        $totalWidth = $this->state->width(self::TOTAL_KEY, self::DEFAULT_TOTAL_WIDTH);
+        $columns = $this->columns($pivot);
 
         return [
-            'columns'        => $columns,          // alle, in Anzeige-Reihenfolge (für das Spalten-Menü)
-            'visibleColumns' => $visibleColumns,
-            'rows'           => $rows['visible'],
-            // Nur die abweichenden Breiten: der Browser-Spiegel fällt für alles Übrige auf die
-            // servergerenderte Default-Breite zurück. So bleibt ein Reset ohne Sonderfall.
-            'widths'         => $this->state->widths,
-            'labelWidth'     => $labelWidth,
-            'totalWidth'     => $totalWidth,
-            'tableWidth'     => $labelWidth + $totalWidth + array_sum(array_column($visibleColumns, 'width')),
-            'stats'          => [
-                'hiddenColumns'      => count($columns) - count($visibleColumns),
-                'hiddenRows'         => $rows['hiddenCount'],
-                'collapsedGroups'    => $rows['collapsedCount'],
-                'foldedRows'         => $rows['foldedCount'],
-                'emptyColumnsFilter' => $this->state->hideEmptyColumns,
-                'emptyRowsFilter'    => $this->state->hideEmptyRows,
-                'customized'         => $this->state->isCustomized(),
+            'columns'    => $columns,
+            'rows'       => $this->rows($pivot),
+            'labelWidth' => $this->state->width(self::LABEL_KEY, self::DEFAULT_LABEL_WIDTH),
+            'totalWidth' => $this->state->width(self::TOTAL_KEY, self::DEFAULT_TOTAL_WIDTH),
+            // Der Zustand, den der Browser übernimmt — in der Transportform von TableViewState, damit
+            // er unverändert zurückgeschickt werden kann. Von hier an rechnet der Browser Sichtbarkeit,
+            // Zähler und Tabellenbreite selbst; der Server sieht den Zustand erst beim nächsten
+            // Voll-Render wieder.
+            'view'       => $this->state->toArray(),
+            'defaults'   => [
+                'label'  => self::DEFAULT_LABEL_WIDTH,
+                'column' => self::DEFAULT_COLUMN_WIDTH,
+                'total'  => self::DEFAULT_TOTAL_WIDTH,
             ],
         ];
     }
 
     /**
-     * Spalten in Anzeige-Reihenfolge, jede mit Breite, Metadaten und Sichtbarkeit.
+     * Spalten in Anzeige-Reihenfolge, jede mit Breite, Metadaten und Ausgangs-Sichtbarkeit.
      *
      * @return array<int,array<string,mixed>>
      */
@@ -89,27 +84,20 @@ final class PivotTableShaper
 
         $columns = [];
         foreach ($this->state->orderColumns(array_keys($byKey)) as $key) {
-            $type  = $byKey[$key];
-            $meta  = $pivot['meta'][$type['id']] ?? [];
-            $empty = abs((float) ($pivot['colTotals'][$type['id']] ?? 0)) < self::EPSILON;
-
-            // Zwei Gründe, warum eine Spalte weg ist — der Unterschied zählt für die UI: manuell
-            // Ausgeblendetes bleibt im Menü angehakt-abwählbar, den Schnellfilter hebt ein Klick auf.
-            $hiddenManually = $this->state->isColumnHidden($key);
-            $hiddenByFilter = $this->state->hideEmptyColumns && $empty;
+            $type = $byKey[$key];
+            $meta = $pivot['meta'][$type['id']] ?? [];
 
             $columns[] = [
-                'key'            => $key,
-                'id'             => $type['id'],
-                'name'           => $type['name'],
-                'vendor'         => $meta['vendor'] ?? null,
-                'system'         => $meta['system'] ?? null,
-                'frequency'      => $meta['frequency'] ?? null,
-                'width'          => $this->state->width($key, self::DEFAULT_COLUMN_WIDTH),
-                'empty'          => $empty,
-                'hidden'         => $hiddenManually || $hiddenByFilter,
-                'hiddenManually' => $hiddenManually,
-                'hiddenByFilter' => $hiddenByFilter,
+                'key'       => $key,
+                'id'        => $type['id'],
+                'name'      => $type['name'],
+                'vendor'    => $meta['vendor'] ?? null,
+                'system'    => $meta['system'] ?? null,
+                'frequency' => $meta['frequency'] ?? null,
+                'width'     => $this->state->width($key, self::DEFAULT_COLUMN_WIDTH),
+                // Spalte ohne jeden Betrag — Grundlage des Schnellfilters „leere Spalten ausblenden".
+                'empty'     => abs((float) ($pivot['colTotals'][$type['id']] ?? 0)) < self::EPSILON,
+                'hidden'    => $this->state->isColumnHidden($key),
             ];
         }
 
@@ -117,80 +105,54 @@ final class PivotTableShaper
     }
 
     /**
-     * Zeilen in Baum-Reihenfolge, gefaltet und gefiltert.
+     * Alle Zeilen in Baum-Reihenfolge, jede mit der Kette ihrer Vorfahren.
      *
-     * Die Faltung nutzt die Tiefe statt der Eltern-Kette: die Zeilen kommen in Baum-Reihenfolge, also
-     * gehören alle folgenden Zeilen mit größerer Tiefe zum eingeklappten Knoten. Das erfasst auch
-     * Enkel — ein Filter auf `parent_code` würde sie durchlassen und die Faltung wäre löchrig.
+     * Die Vorfahren-Kette ist der Trick, mit dem die Faltung ohne Server auskommt: eine eingeklappte
+     * Gruppe `cc:100` versteckt ihre Nachfahren als eine CSS-Regel
+     * (`[data-ancestors~="cc:100"]{display:none}`) — inklusive Enkel, ohne Baumlogik im Browser.
+     * Abgeleitet wird sie aus der Tiefe, denn die Zeilen kommen in Baum-Reihenfolge: ein Knoten der
+     * Tiefe d hat als Vorfahren genau die zuletzt gesehenen Knoten der Tiefen 0…d-1.
      *
-     * @return array{visible: array<int,array<string,mixed>>, hiddenCount:int, collapsedCount:int, foldedCount:int}
+     * @return array<int,array<string,mixed>>
      */
     private function rows(array $pivot): array
     {
-        $visible        = [];
-        $hiddenCount    = 0;
-        $collapsedCount = 0;
-        $foldedCount    = 0;
-        $foldDepth      = null;
+        $rows    = [];
+        $lineage = [];   // Tiefe → Schlüssel des dort zuletzt gesehenen Knotens
 
         foreach ($this->allRows($pivot) as $row) {
-            $depth = (int) ($row['depth'] ?? 0);
+            $depth = max(0, (int) ($row['depth'] ?? 0));
+            $key   = $row['_key'];
 
-            // Innerhalb einer eingeklappten Gruppe: alles Tiefere überspringen.
-            if ($foldDepth !== null) {
-                if ($depth > $foldDepth) {
-                    $foldedCount++;
-                    continue;
-                }
-                $foldDepth = null;
-            }
+            $lineage          = array_slice($lineage, 0, $depth);
+            $ancestors        = $lineage;
+            $lineage[$depth]  = $key;
 
-            $key       = $row['_key'];
-            $isGroup   = ! empty($row['has_children']);
-            $collapsed = $isGroup && $this->state->isRowCollapsed($key);
+            $isGroup = ! empty($row['has_children']);
 
-            if ($collapsed) {
-                $collapsedCount++;
-                $foldDepth = $depth;
-            }
-
-            if ($this->state->isRowHidden($key)) {
-                $hiddenCount++;
-                continue;
-            }
-
-            // Gruppen zeigen den Rollup (eigene + Nachfahren), Blätter ihre eigenen Zahlen. Eingeklappt
-            // gilt dasselbe: die Gruppenzeile trägt die Summe ihrer nun unsichtbaren Kinder.
+            // Gruppen zeigen den Rollup (eigene + Nachfahren), Blätter ihre eigenen Zahlen. Das gilt
+            // eingeklappt wie ausgeklappt: die Gruppenzeile trägt immer die Summe ihres Teilbaums.
             $cells = $isGroup ? ($row['rollupCells'] ?? $row['cells']) : $row['cells'];
             $total = $isGroup ? ($row['rollupTotal'] ?? $row['rowTotal']) : $row['rowTotal'];
 
-            if ($this->state->hideEmptyRows && abs((float) $total) < self::EPSILON) {
-                $hiddenCount++;
-                continue;
-            }
-
-            $visible[] = [
+            $rows[] = [
                 'key'       => $key,
                 'code'      => $row['code'],
                 'name'      => $row['name'],
                 'depth'     => $depth,
-                // Einrückung in px, gedeckelt: die Baumtiefe ist fachlich unbegrenzt, die Spalte
-                // nicht. Gefaltet wird weiter über die **echte** Tiefe — ein gedeckelter Wert
-                // würde tiefe Zweige fälschlich als Geschwister behandeln.
+                // Einrückung in px, gedeckelt: die Baumtiefe ist fachlich unbegrenzt, die Spalte nicht.
                 'indent'    => min($depth, self::MAX_INDENT_LEVELS) * self::INDENT_PX,
                 'isGroup'   => $isGroup,
-                'collapsed' => $collapsed,
+                'collapsed' => $isGroup && $this->state->isRowCollapsed($key),
+                'ancestors' => implode(' ', $ancestors),
+                'empty'     => abs((float) $total) < self::EPSILON,
+                'hidden'    => $this->state->isRowHidden($key),
                 'cells'     => $cells,
                 'total'     => $total,
             ];
         }
 
-        return [
-            'visible'        => $visible,
-            'hiddenCount'    => $hiddenCount,
-            'collapsedCount' => $collapsedCount,
-            'foldedCount'    => $foldedCount,
-        ];
+        return $rows;
     }
 
     /**

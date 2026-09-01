@@ -15,14 +15,24 @@ use Platform\AssetManager\Support\TableViewState;
  * {@see self::tableViewColumnKeys()} (die aktuell existierenden Spalten, damit „verschieben" eine
  * lückenlose Reihenfolge speichern kann). Setzt {@see ResolvesCurrentTeam} voraus.
  *
- * **Der Zustand liegt absichtlich NICHT als Livewire-Property auf dem Draht.** Er wird pro Request aus
- * der Datenbank gelesen (memoisiert, eine Query) und nach jeder Änderung geschrieben. Gründe: der
- * Payload wäre sonst Roundtrip-Ballast in jeder Interaktion der Seite, und die gespeicherte Ansicht
- * bliebe eine Kopie im Browser, die nach dem Zurück-Button wieder auftaucht.
+ * **Nur drei Aktionen, und die häufigste rendert nicht neu.** Sichtbarkeit, Faltung und Breiten wendet
+ * der Browser selbst an (eine generierte CSS-Regel); {@see self::syncTableView()} speichert den
+ * Endzustand und ruft {@see \Livewire\Component::skipRender()}. Ohne das liefe für jeden Klick
+ * `render()` und damit die komplette Kostenaggregation — alle Asset-Träger, alle Items, das
+ * Lizenz-Preisbuch, die Gerätekosten. Genau das machte die Tabelle träge.
+ *
+ * Neu gerendert wird nur, wo sich das DOM ändern muss: beim **Verschieben** einer Spalte (CSS kann
+ * Tabellenzellen nicht umsortieren) und beim **Zurücksetzen**. Beide rendern normal, und die Ansicht
+ * setzt sich dabei über ihren `wire:key`-Fingerprint im Browser neu auf — eine gemorphte
+ * Alpine-Komponente wertet ihr `x-data` sonst nicht neu aus und behielte den alten Spiegel.
+ *
+ * Der Zustand liegt **nicht** als Livewire-Property auf dem Draht, sondern wird pro Request aus der
+ * Datenbank gelesen (memoisiert, eine Query) und nach jeder Änderung geschrieben.
  *
  * Kein `asset-manager.manage`-Gate: das hier ändert keine Daten, nur den eigenen Blick darauf. Jede
- * Methode arbeitet ausschließlich auf (aktueller User × aktuelles Team) — fremde Ansichten sind
- * nicht adressierbar.
+ * Methode arbeitet ausschließlich auf (aktueller User × aktuelles Team) — fremde Ansichten sind nicht
+ * adressierbar. Der Payload kommt aus dem Browser und wird von {@see TableViewState::fromArray()}
+ * geprüft, nicht geglaubt.
  */
 trait CustomizesTableView
 {
@@ -48,23 +58,24 @@ trait CustomizesTableView
             ->load($this->teamId(), $this->currentUserId(), $this->tableViewKey());
     }
 
-    // --- Aktionen (aus dem Blade aufgerufen) ---------------------------------------------------
-
     /**
-     * Spaltenbreiten übernehmen — gebündelt, nicht pro Pixel: das Ziehen läuft im Browser (Alpine),
-     * hier landet nur das Ergebnis beim Loslassen. Ein Roundtrip pro Mausbewegung wäre unbenutzbar.
+     * Den im Browser gebauten Zustand speichern — **ohne** Neu-Rendern.
      *
-     * @param  array<string,mixed>  $widths
+     * Erwartet die Transportform von {@see TableViewState::toArray()} (also genau das, was der Browser
+     * beim Rendern bekommen hat). Fehlende Felder behalten ihren gespeicherten Wert; alles Unbekannte
+     * fällt beim Prüfen weg. Der Browser bündelt schnelle Klicks und schickt den Endzustand.
+     *
+     * @param  array<string,mixed>  $view
      */
-    public function setColumnWidths(array $widths): void
+    public function syncTableView(array $view): void
     {
-        $this->mutateTableView(fn (TableViewState $state) => $state->withWidths($widths));
-    }
+        $merged = TableViewState::fromArray($view + $this->tableView()->toArray());
 
-    /** Alle Breiten zurück auf die Defaults; Reihenfolge und Sichtbarkeit bleiben. */
-    public function resetColumnWidths(): void
-    {
-        $this->mutateTableView(fn (TableViewState $state) => $state->withDefaultWidths());
+        $this->tableViewState = $this->tableViewService()
+            ->save($this->teamId(), $this->currentUserId(), $this->tableViewKey(), $merged);
+
+        // Der Browser zeigt den neuen Stand bereits — eine HTML-Antwort wäre reine Rechenzeit.
+        $this->skipRender();
     }
 
     /** Spalte `$column` vor `$target` einsortieren; `$target = null` heißt „ganz nach hinten". */
@@ -72,40 +83,12 @@ trait CustomizesTableView
     {
         $keys = $this->tableViewColumnKeys();
 
-        $this->mutateTableView(
-            fn (TableViewState $state) => $state->withColumnMovedBefore($keys, $column, $target),
+        $this->tableViewState = $this->tableViewService()->save(
+            $this->teamId(),
+            $this->currentUserId(),
+            $this->tableViewKey(),
+            $this->tableView()->withColumnMovedBefore($keys, $column, $target),
         );
-    }
-
-    public function toggleColumn(string $column): void
-    {
-        $this->mutateTableView(fn (TableViewState $state) => $state->withColumnToggled($column));
-    }
-
-    public function showAllColumns(): void
-    {
-        $this->mutateTableView(fn (TableViewState $state) => $state->withAllColumnsVisible());
-    }
-
-    public function hideRow(string $row): void
-    {
-        $this->mutateTableView(fn (TableViewState $state) => $state->withRowHidden($row));
-    }
-
-    public function showAllRows(): void
-    {
-        $this->mutateTableView(fn (TableViewState $state) => $state->withAllRowsVisible());
-    }
-
-    public function toggleRowGroup(string $row): void
-    {
-        $this->mutateTableView(fn (TableViewState $state) => $state->withRowGroupToggled($row));
-    }
-
-    /** Schnellfilter: `hide_empty_columns` | `hide_empty_rows`. */
-    public function toggleTableFlag(string $flag): void
-    {
-        $this->mutateTableView(fn (TableViewState $state) => $state->withFlagToggled($flag));
     }
 
     /** Komplett zurück auf Werkszustand. */
@@ -113,34 +96,6 @@ trait CustomizesTableView
     {
         $this->tableViewState = $this->tableViewService()
             ->reset($this->teamId(), $this->currentUserId(), $this->tableViewKey());
-
-        $this->announceTableView();
-    }
-
-    // --- intern -------------------------------------------------------------------------------
-
-    /**
-     * Zustand ändern, speichern, den geprüften Stand behalten und dem Browser mitteilen.
-     *
-     * Das Event ist nötig, weil die Breiten im Browser gespiegelt liegen (fürs flüssige Ziehen):
-     * setzt der Server sie zurück, muss Alpine seinen Spiegel nachziehen — sonst zeigt die Tabelle
-     * weiter die alten Breiten, bis die Seite neu geladen wird.
-     *
-     * @param  callable(TableViewState): TableViewState  $mutation
-     */
-    protected function mutateTableView(callable $mutation): void
-    {
-        $next = $mutation($this->tableView());
-
-        $this->tableViewState = $this->tableViewService()
-            ->save($this->teamId(), $this->currentUserId(), $this->tableViewKey(), $next);
-
-        $this->announceTableView();
-    }
-
-    protected function announceTableView(): void
-    {
-        $this->dispatch('am-table-view-updated', widths: $this->tableView()->widths);
     }
 
     protected function tableViewService(): TableViewService

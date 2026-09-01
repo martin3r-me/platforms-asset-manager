@@ -71,18 +71,57 @@ nicht im Blade: `tests/local/table-view-state.php` prüft sie **ohne Host-App un
 Der Zustand liegt **nicht** als Livewire-Property auf dem Draht, sondern wird pro Request gelesen
 (memoisiert, eine Query). Sonst wäre der Payload Ballast in jeder Interaktion der Seite.
 
-### 4. Im Browser lebt nur der Spiegel der Breiten
+### 4. Der Server rendert alles, der Browser versteckt — als eine CSS-Regel
 
-Das Ziehen einer Spaltenbreite läuft in Alpine gegen ein lokales Breiten-Modell und `<colgroup>`;
-gespeichert wird **einmal beim Loslassen** (`setColumnWidths`). Ein Server-Roundtrip pro Mausbewegung
-wäre unbenutzbar. Damit ein serverseitiges Zurücksetzen nicht am Spiegel vorbeiläuft, schickt jede
-Mutation ein `am-table-view-updated`-Event, das Alpine nachzieht.
+Die erste Fassung liess jede Aenderung serverseitig rendern. Das war unbenutzbar: `render()` ruft
+`CostAggregationService::costCenterByType()`, und dessen `normalizedLines()` laedt die Kostenzeilen,
+**alle** Asset-Traeger, **alle** Items, das Lizenz-Preisbuch und die Geraetekosten — dazu je Knoten
+die Rollups ueber seine Nachfahren. Ein Klick auf „Spalte ausblenden" kostete damit die Rechenzeit
+einer ganzen Auswertung, und die Seite ruckelte bei jedem Handgriff.
 
-Alles Übrige — Verschieben, Aus-/Einblenden, Einklappen — ist ein normaler Livewire-Call: dort
-entscheidet der Server, was gerendert wird, und es gibt keinen zweiten Zustand.
+Deshalb jetzt: der Server rendert **immer alle** Spalten und **alle** Zeilen und markiert sie
+(`data-col`, `data-row`, `data-ancestors`, `data-empty-row`). Der Browser haelt den Zustand und
+erzeugt daraus **eine** CSS-Regel in einem `<style x-text="css">`:
 
-Kein Bundling, kein npm-Paket: das Modul bringt keine Asset-Pipeline mit, das Skript steht inline im
-Partial und ist idempotent (`window.amPivotGrid || function …`).
+```
+.am-grid--costs-allocation thead th[data-col="12"]{width:140px}
+.am-grid--costs-allocation [data-col="17"]{display:none}
+.am-grid--costs-allocation [data-ancestors~="cc:100"]{display:none}
+.am-grid--costs-allocation [data-empty-row="1"]{display:none}
+.am-grid--costs-allocation table{width:1408px}
+```
+
+Aus-/Einblenden, Falten und Breiten kosten damit **keinen** Roundtrip und **kein** Neu-Rendern.
+Gespeichert wird im Hintergrund (`syncTableView` + `skipRender()`): der Aufruf rendert nichts und
+kostet nur Laden und Schreiben. Bewusst **ohne** Sammelfenster — ein Timer kann von einem Voll-Render
+ueberholt werden (Klick auf „Quartal" direkt nach dem Ausblenden), und dann rendert der Server den
+noch nicht gespeicherten Stand, die Ansicht springt zurueck. Mehrere Aufrufe im selben Tick fasst
+Livewire selbst zusammen.
+
+Zwei Details, die dabei entschieden wurden:
+
+- **Die Breite steht auf der Kopfzelle, nicht im `<colgroup>`.** Die `col`-Zuordnung ist positionell,
+  die Kopfzelle traegt ihren Schluessel selbst. Am statischen Prototyp geprueft: eine per
+  `display:none` ausgeblendete Spalte kollabiert sauber, die uebrigen Breiten bleiben exakt
+  (Spaltengrenzen auf 200/260/320/420 px). Ebenso geprueft, dass `[data-ancestors~="cc:100"]` Kind
+  **und** Enkel trifft.
+- **`wire:ignore` am `<style>`**, sonst ueberschreibt ein Morph den erzeugten Regel-Text mit dem
+  leeren Server-HTML, und `x-text` feuert erst bei der naechsten Zustandsaenderung wieder — die
+  Ansicht spraenge fuer einen Moment auf den Server-Stand zurueck.
+- **Ein `wire:key`-Fingerprint** aus (Zustand × Spaltenreihenfolge × Zeilenzahl) haengt am Wrapper.
+  Eine gemorphte Alpine-Komponente wertet ihr `x-data` nicht neu aus; ohne den Schluessel behielte
+  der Browser nach „Spalte verschieben" oder „Ansicht zuruecksetzen" seinen alten Spiegel. Aendert
+  sich der Fingerprint, ersetzt Livewire das Element und Alpine startet mit dem gepruefen Zustand.
+
+Serverseitig bleiben genau drei Aktionen: `syncTableView` (speichert, rendert nicht),
+`moveColumn` und `resetTableView` (rendern, weil sich das DOM aendern muss — CSS kann Tabellenzellen
+nicht umsortieren).
+
+**Der Preis:** die Sichtbarkeitsregeln leben jetzt im Browser, nicht in PHP. Damit sie nicht
+ungetestet sind, liest `tests/local/pivot-grid.mjs` die Factory **direkt aus dem Blade** und prueft
+sie unter Node ohne Alpine (55 Pruefungen: erzeugtes CSS, Zaehler, Faltung, Drop-Ziel-Berechnung).
+Der Shaper wird dadurch schlanker — er filtert nichts mehr, sondern liefert Reihenfolge, Breiten,
+Flags und die Vorfahren-Kette.
 
 ### 5. Die gespeicherte Reihenfolge ist ein Wunsch, keine Wahrheit
 
@@ -115,6 +154,10 @@ fälschlich als Geschwister behandeln.
 - **Kein Gate.** Die Anpassung ändert keine Daten, nur den eigenen Blick darauf; jede Aktion arbeitet
   ausschließlich auf (aktueller User × aktuelles Team). Ein `asset-manager.manage`-Gate würde Membern
   das Lesen erschweren, ohne etwas zu schützen.
+- Die Tabelle hat einen **eigenen Scrollbereich** (max. 70 vh) mit festgehaltener Kopfzeile,
+  Kostenstellen-Spalte und Summenzeile. Dafuer musste `border-collapse` auf `border-separate` +
+  `border-spacing: 0` weichen: mit `collapse` zeichnen Browser die Rahmen sticky-positionierter
+  Zellen nicht zuverlaessig. Optisch identisch, weil die Rahmen an den Zellen sitzen.
 - Offen und absichtlich nicht mitgebaut: **Sortieren nach Spaltenwert** (die Zeilen sind ein Baum —
   eine Sortierung müsste erst beantworten, was mit den Ebenen passiert), **benannte Ansichten/Presets**
   und **Spaltenbreiten je Zeitraum-Umschalter** (monatlich/quartal teilen heute eine Ansicht).
