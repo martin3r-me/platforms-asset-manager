@@ -27,8 +27,13 @@ final class PivotTableShaper
     public const LABEL_KEY = 'label';
     public const TOTAL_KEY = 'total';
 
-    /** Default-Breiten in px. Bewusst schmal: die Tabelle hat viele Spalten. */
-    public const DEFAULT_LABEL_WIDTH  = 240;
+    /**
+     * Default-Breiten in px. Die Kostenart-Spalten bewusst schmal (die Tabelle hat viele davon), die
+     * Kostenstellen-Spalte dagegen breit genug für den längsten echten Fall („verwaltung BROICH -
+     * VERWALTUNG" braucht mit Einrückung und Klapp-Pfeil rund 240 px Text): ein abgeschnittener
+     * Kostenstellen-Name macht die Zeile unlesbar, eine abgeschnittene Spaltenüberschrift nicht.
+     */
+    public const DEFAULT_LABEL_WIDTH  = 280;
     public const DEFAULT_COLUMN_WIDTH = 96;
     public const DEFAULT_TOTAL_WIDTH  = 112;
 

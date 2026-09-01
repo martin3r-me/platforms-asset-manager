@@ -403,9 +403,10 @@
                 </button>
             </div>
 
-            {{-- Eigener Scrollbereich: so bleiben Kopfzeile, Kostenstellen-Spalte und Summenzeile beim
-                 Blättern stehen — bei ~70 Zeilen der Unterschied zwischen Lesen und Suchen. --}}
-            <div class="overflow-auto" style="max-height: 70vh"
+            {{-- Nur horizontal eigener Scroll: vertikal scrollt die Seite, wie überall im Modul. Ein
+                 eigener Höhen-Deckel hier hatte zwei Scrollbalken und Scroll-Trapping zur Folge — die
+                 Panels unter der Tabelle waren kaum noch erreichbar. --}}
+            <div class="overflow-x-auto"
                  x-show="visibleCols.length > 0 && visibleRowCount > 0">
                 <table class="text-xs table-fixed border-separate border-spacing-0"
                        style="width: {{ $initialWidth }}px">
@@ -413,7 +414,7 @@
                         <tr>
                             <th data-col="{{ $labelKey }}"
                                 style="width: {{ $grid['labelWidth'] }}px"
-                                class="sticky left-0 top-0 z-30 bg-[var(--am-bg)] text-left px-3 py-2 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)] border-r border-b border-[color:var(--am-border)] relative overflow-hidden">
+                                class="sticky left-0 z-30 bg-[var(--am-bg)] text-left px-3 py-2 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)] border-r border-b border-[color:var(--am-border)] relative overflow-hidden">
                                 <span data-measure class="invisible absolute whitespace-nowrap">Kostenstelle</span>
                                 <span class="block truncate">Kostenstelle</span>
                                 <span class="am-grip absolute inset-y-0 right-0 cursor-col-resize"
@@ -430,7 +431,7 @@
                                     x-on:dragleave="dropTarget === '{{ $column['key'] }}' ? dropTarget = null : null"
                                     x-on:drop.prevent="drop()"
                                     x-bind:class="dropMark('{{ $column['key'] }}')"
-                                    class="sticky top-0 z-20 bg-[var(--am-bg)] text-right px-3 py-2 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)] border-b border-[color:var(--am-border)] relative overflow-hidden">
+                                    class="z-20 bg-[var(--am-bg)] text-right px-3 py-2 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)] border-b border-[color:var(--am-border)] relative overflow-hidden">
                                     {{-- Unsichtbarer Zwilling: trägt den vollen Text für den Autofit. --}}
                                     <span data-measure class="invisible absolute whitespace-nowrap">{{ $column['name'] }}</span>
                                     <span draggable="true"
@@ -453,7 +454,7 @@
                                 x-on:dragleave="dropTarget === 'END' ? dropTarget = null : null"
                                 x-on:drop.prevent="drop()"
                                 x-bind:class="dragged && dropTarget === 'END' ? 'am-drop-before' : ''"
-                                class="sticky top-0 z-20 text-right px-3 py-2 text-xs font-semibold uppercase tracking-wider text-[var(--am-text)] bg-[var(--am-accent-surface)] border-b border-[color:var(--am-border)] relative overflow-hidden">
+                                class="z-20 text-right px-3 py-2 text-xs font-semibold uppercase tracking-wider text-[var(--am-text)] bg-[var(--am-accent-surface)] border-b border-[color:var(--am-border)] relative overflow-hidden">
                                 <span data-measure class="invisible absolute whitespace-nowrap">Summe</span>
                                 <span class="block truncate">Summe</span>
                                 <span class="am-grip absolute inset-y-0 left-0 cursor-col-resize"
@@ -507,7 +508,7 @@
                                     <div class="flex items-center gap-1" style="padding-left: {{ $row['indent'] }}px">
                                         @if($row['isGroup'])
                                             <button type="button" x-on:click="toggleGroup('{{ $row['key'] }}')"
-                                                    x-bind:title="isCollapsed('{{ $row['key'] }}') ? 'Untergeordnete einblenden' : 'Untergeordnete einklappen'"
+                                                    x-bind:title="isCollapsed('{{ $row['key'] }}') ? 'Untergeordnete einblenden (Zeile zeigt die Summe des Teilbaums)' : 'Untergeordnete einklappen'"
                                                     class="shrink-0 text-[var(--am-text-muted)] hover:text-[var(--am-text)] transition-colors">
                                                 <span class="block transition-transform duration-150"
                                                       x-bind:class="isCollapsed('{{ $row['key'] }}') ? '-rotate-90' : ''">
@@ -520,18 +521,17 @@
                                             <span class="shrink-0 w-3.5"></span>
                                         @endif
 
-                                        <span class="truncate">
+                                        {{-- flex-1 + min-w-0: der Name bekommt den Rest der Zeile und
+                                             wird erst dann abgeschnitten. Ein weiteres shrink-0-Element
+                                             hier drin quetscht ihn sonst auf wenige Pixel. --}}
+                                        <span class="flex-1 min-w-0 truncate"
+                                              title="{{ trim($row['code'] . ' ' . $row['name']) }}{{ $row['isGroup'] ? ' — inklusive untergeordneter Kostenstellen' : '' }}">
                                             {{ $row['code'] }}@if($row['name'])<span class="text-[var(--am-text-secondary)] font-normal ml-1">{{ $row['name'] }}</span>@endif
                                         </span>
 
-                                        @if($row['isGroup'])
-                                            <span class="shrink-0 text-[9px] uppercase tracking-wider text-[var(--am-text-muted)] font-normal"
-                                                  x-text="isCollapsed('{{ $row['key'] }}') ? 'zusammengefasst' : 'inkl. untergeordnete'">inkl. untergeordnete</span>
-                                        @endif
-
                                         <button type="button" x-on:click="hideRow('{{ $row['key'] }}')"
                                                 title="Zeile ausblenden"
-                                                class="ml-auto shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 text-[var(--am-text-muted)] hover:text-[var(--am-text)] transition-opacity">
+                                                class="shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 text-[var(--am-text-muted)] hover:text-[var(--am-text)] transition-opacity">
                                             @svg('heroicon-o-eye-slash', 'w-3.5 h-3.5')
                                         </button>
                                     </div>
@@ -558,18 +558,18 @@
                              eingeklappte. Eine Ansicht darf keine Auswertung verändern. --}}
                         <tr class="font-semibold">
                             <td data-col="{{ $labelKey }}"
-                                class="sticky left-0 bottom-0 z-20 bg-[var(--am-bg)] px-3 py-2 text-[var(--am-text)] border-r border-t-2 border-[color:var(--am-border)] overflow-hidden">
+                                class="sticky left-0 z-20 bg-[var(--am-bg)] px-3 py-2 text-[var(--am-text)] border-r border-t-2 border-[color:var(--am-border)] overflow-hidden">
                                 <span data-measure class="invisible absolute whitespace-nowrap">Summe (alle Daten)</span>
                                 <span class="block truncate">Summe<span x-show="customized" x-cloak> (alle Daten)</span></span>
                             </td>
                             @foreach($columns as $column)
                                 <td data-col="{{ $column['key'] }}"
-                                    class="sticky bottom-0 z-10 bg-[var(--am-bg)] text-right px-3 py-2 tabular-nums whitespace-nowrap overflow-hidden border-t-2 border-[color:var(--am-border)] text-[var(--am-text)]">
+                                    class="bg-[var(--am-bg)] text-right px-3 py-2 tabular-nums whitespace-nowrap overflow-hidden border-t-2 border-[color:var(--am-border)] text-[var(--am-text)]">
                                     <span data-measure>{{ number_format($pivot['colTotals'][$column['id']] ?? 0, 2, ',', '.') }}</span>
                                 </td>
                             @endforeach
                             <td data-col="{{ $totalKey }}"
-                                class="sticky bottom-0 z-10 text-right px-3 py-2 tabular-nums whitespace-nowrap overflow-hidden border-t-2 border-[color:var(--am-border)] text-[var(--am-accent)] bg-[var(--am-accent-surface)]">
+                                class="text-right px-3 py-2 tabular-nums whitespace-nowrap overflow-hidden border-t-2 border-[color:var(--am-border)] text-[var(--am-accent)] bg-[var(--am-accent-surface)]">
                                 <span data-measure>{{ number_format($pivot['grandTotal'], 2, ',', '.') }}</span>
                             </td>
                         </tr>
