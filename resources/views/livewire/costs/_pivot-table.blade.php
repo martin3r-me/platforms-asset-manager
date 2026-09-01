@@ -368,7 +368,11 @@
              * Mehrere Aufrufe im selben Tick fasst Livewire selbst zusammen.
              */
             save: function () {
-                this.$wire.syncTableView(this.view);
+                // Klon, kein Verweis: Livewire serialisiert den Payload erst beim Absenden. Wer den
+                // reaktiven Zustand direkt uebergibt, schickt womoeglich einen spaeteren Stand als den
+                // gemeinten — live beobachtet, als zwischen Aufruf und Absenden eine Breite gesetzt
+                // wurde. Der Klon macht den Aufruf vorhersehbar und haelt Alpine-Proxies vom Draht.
+                this.$wire.syncTableView(JSON.parse(JSON.stringify(this.view)));
             },
         };
     };
