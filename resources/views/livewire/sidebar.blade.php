@@ -56,10 +56,6 @@
         <x-asset-manager-nav-item :href="route('asset-manager.internet.index')" :active="request()->routeIs('asset-manager.internet.*')" icon="heroicon-o-wifi" label="Internet" />
     </x-ui-sidebar-list>
 
-    <x-ui-sidebar-list label="Sicherheit">
-        <x-asset-manager-nav-item :href="route('asset-manager.compliance.index')" :active="request()->routeIs('asset-manager.compliance.*')" icon="heroicon-o-shield-check" label="Compliance-Cockpit" />
-    </x-ui-sidebar-list>
-
     <x-ui-sidebar-list label="Asset-Träger">
         <x-asset-manager-nav-item :href="route('asset-manager.holders.index')" :active="request()->routeIs('asset-manager.holders.*')" icon="heroicon-o-users" label="Alle Asset-Träger" />
     </x-ui-sidebar-list>
@@ -109,9 +105,6 @@
             </a>
             <a href="{{ route('asset-manager.internet.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.internet.*') ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)]' : 'text-[var(--am-text-secondary)] hover:bg-[var(--am-bg)]' }}">
                 @svg('heroicon-o-wifi', 'w-5 h-5')
-            </a>
-            <a href="{{ route('asset-manager.compliance.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.compliance.*') ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)]' : 'text-[var(--am-text-secondary)] hover:bg-[var(--am-bg)]' }}">
-                @svg('heroicon-o-shield-check', 'w-5 h-5')
             </a>
             <a href="{{ route('asset-manager.holders.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.holders.*') ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)]' : 'text-[var(--am-text-secondary)] hover:bg-[var(--am-bg)]' }}">
                 @svg('heroicon-o-users', 'w-5 h-5')

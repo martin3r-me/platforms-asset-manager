@@ -227,6 +227,7 @@
             @php
                 $columnDefs = [
                     'device'      => ['label' => 'Gerät',           'sortField' => 'device_name'],
+                    'serial'      => ['label' => 'Seriennr.',       'sortField' => 'serial_number'],
                     'user'        => ['label' => 'Nutzer',          'sortField' => null],
                     'os'          => ['label' => 'Betriebssystem',  'sortField' => null],
                     'status'      => ['label' => 'Status',          'sortField' => 'compliance_state'],
@@ -322,6 +323,14 @@
                                                             @endif
                                                         </div>
                                                     @endif
+                                                </td>
+                                            @break
+                                            @case('serial')
+                                                {{-- Seriennummer wie in der Inventar-Liste: die Serie ist die
+                                                     Geräte-Identität (ADR 0006) und der Schlüssel zum Leasingvertrag,
+                                                     also gehört sie in beide Übersichten. --}}
+                                                <td class="px-5 py-3 text-xs text-[var(--am-text-muted)]">
+                                                    {{ $device->serial_number ?: '—' }}
                                                 </td>
                                             @break
                                             @case('user')

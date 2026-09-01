@@ -42,7 +42,7 @@ class Index extends Component
 
     public array $columnOrder = ['device', 'user', 'os', 'status', 'lastCheckIn'];
 
-    public const COLUMN_KEYS = ['device', 'user', 'os', 'status', 'lastCheckIn'];
+    public const COLUMN_KEYS = ['device', 'serial', 'user', 'os', 'status', 'lastCheckIn'];
 
     /** Schwellwert (Tage ohne Check-in), ab dem ein Gerät als inaktiv gilt. */
     public const INACTIVE_DAYS = 30;
@@ -87,12 +87,16 @@ class Index extends Component
         );
         $valid = array_values(array_intersect($flat, self::COLUMN_KEYS));
 
-        // Fehlende Spalten ans Ende anhängen, damit nichts verschwindet
-        foreach (self::COLUMN_KEYS as $key) {
+        // Fehlende Spalten einsortieren, damit nichts verschwindet — und zwar an ihrer in
+        // COLUMN_KEYS definierten Position, nicht am Ende. Sonst landet eine neu hinzugefügte
+        // Spalte bei jedem, der die Reihenfolge schon einmal angefasst hat (Session), hinter
+        // allen anderen: der Umbau wäre für genau die Nutzer unsichtbar, die die Tabelle nutzen.
+        foreach (self::COLUMN_KEYS as $index => $key) {
             if (!in_array($key, $valid, true)) {
-                $valid[] = $key;
+                array_splice($valid, min($index, count($valid)), 0, [$key]);
             }
         }
+
         return $valid;
     }
 
