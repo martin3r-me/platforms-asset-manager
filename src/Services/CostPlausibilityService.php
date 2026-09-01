@@ -5,8 +5,10 @@ namespace Platform\AssetManager\Services;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetCostType;
+use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Support\CostBootstrap;
+use Platform\AssetManager\Support\DeviceCostResolver;
 
 /**
  * Plausibilitätsprüfung der Kostenpositionen — die Kostenaufteilung rechnet, aber sie prüft sich nicht.
@@ -55,6 +57,7 @@ class CostPlausibilityService
             $this->undividedBlocks($lines),
             $this->mixedFrequencies($lines),
             $this->duplicates($lines),
+            $this->devicesWithSilentCost($teamId),
         ]));
 
         return [
@@ -269,6 +272,85 @@ class CostPlausibilityService
             explanation: 'Gleiche Kostenart, gleicher Träger, gleicher Betrag, gleiche Frequenz — mehrfach vorhanden. '
                 . 'Kann legitim sein (zwei Geräte, zwei Anschlüsse), ist aber häufig ein doppelter Import.',
         );
+    }
+
+    /**
+     * Geräte, die einen Preis tragen, dessen aufgelöste Kostenart aber nicht `asset_device` ist —
+     * ihre Kosten erscheinen in KEINER Auswertung.
+     *
+     * Die einzige Regel hier, die nicht auf Kostenpositionen schaut. Sie existiert, weil dieser Fall
+     * **stumm** ist: {@see CostAggregationService::deviceCostRows()} zählt ein Gerät nur, wenn seine
+     * aufgelöste Kostenart `aggregation_source='asset_device'` hat (das verhindert Doppelzählung mit
+     * den importierten Positionen derselben Kostenart). Fehlt diese Quelle, bleibt der Hardware-Bucket
+     * bei 0 — ohne Fehler, ohne Hinweis, obwohl an jedem Gerät ein Preis steht. Genau so lagen 69
+     * Laptops mit hinterlegter Leasingrate monatelang mit 0 € in der Kostenaufteilung.
+     *
+     * Das Gegenstück (Kostenart ist `asset_device`, aber kein Gerät trägt einen Preis) braucht keine
+     * Regel: dort fällt die fehlende Summe sofort auf.
+     */
+    protected function devicesWithSilentCost(int $teamId): ?array
+    {
+        $deviceTypeIds = AssetCostType::where('team_id', $teamId)
+            ->where('aggregation_source', AssetCostType::SOURCE_ASSET_DEVICE)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id);
+
+        $resolver  = DeviceCostResolver::for($teamId);
+        $typeNames = AssetCostType::where('team_id', $teamId)->pluck('name', 'id');
+
+        // Feldnamen wie bei den cost_line-Befunden (label/cost_type/holder/hint/monthly) — die Anzeige
+        // rendert für alle Befunde dieselbe Tabelle, ein eigenes Vokabular ergäbe dort leere Spalten.
+        $hits = AssetDevice::where('team_id', $teamId)->get()
+            ->map(function (AssetDevice $d) use ($resolver, $deviceTypeIds, $typeNames) {
+                $monthly = $resolver->monthlyCost($d);
+                if ($monthly <= 0) {
+                    return null;
+                }
+
+                $typeId = $resolver->costTypeId($d);
+                if ($typeId !== null && $deviceTypeIds->contains($typeId)) {
+                    return null; // zählt korrekt mit
+                }
+
+                $model = trim($d->manufacturer . ' ' . $d->model);
+
+                return [
+                    'device_id' => $d->id,
+                    'label'     => $d->device_name ?: ($d->serial_number ?: ('Gerät #' . $d->id)),
+                    'cost_type' => $typeId !== null ? ($typeNames[$typeId] ?? null) : null,
+                    'holder'    => $d->user_principal_name,
+                    'monthly'   => round($monthly, 2),
+                    'hint'      => ($typeId === null
+                        ? 'keine Kostenart hinterlegt'
+                        : 'Quelle der Kostenart ist nicht „Geräte-Kosten"')
+                        . ($model !== '' ? ' · ' . $model : ''),
+                ];
+            })
+            ->filter()
+            ->values();
+
+        if ($hits->isEmpty()) {
+            return null;
+        }
+
+        return [
+            'key'         => 'device_cost_not_aggregated',
+            'severity'    => 'high',
+            'title'       => 'Geräte tragen einen Preis, der in keiner Auswertung landet',
+            'explanation' => 'Diese Geräte haben eine Monatsrate (eigener Override oder Modell-Default), ihre '
+                . 'Kostenart hat aber nicht die Quelle „Geräte-Kosten" — oder es ist keine hinterlegt. '
+                . 'Gerätekosten werden nur mit dieser Quelle gezählt, sonst bleiben sie stumm außen vor. '
+                . 'Zu prüfen: Quelle der Kostenart in den Stammdaten umstellen (Vorsicht: importierte '
+                . 'Positionen derselben Kostenart fallen dann bewusst aus der Summe) oder dem Gerät die '
+                . 'richtige Kostenart geben.',
+            'count'       => $hits->count(),
+            // Summe der Beträge, die aktuell NICHT in der Kostenaufteilung stehen.
+            'monthly'     => round($hits->sum('monthly'), 2),
+            // Bewusst leer: das sind Geräte, keine Kostenpositionen — sie dürfen nicht in
+            // total_monthly_flagged einfließen, das über cost_line-IDs summiert.
+            'line_ids'    => [],
+            'examples'    => $hits->sortByDesc('monthly')->take(self::MAX_EXAMPLES)->values()->all(),
+        ];
     }
 
     // ---- Aufbereitung ----------------------------------------------------------------------

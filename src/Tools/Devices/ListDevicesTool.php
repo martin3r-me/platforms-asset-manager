@@ -2,7 +2,10 @@
 
 namespace Platform\AssetManager\Tools\Devices;
 
+use Platform\AssetManager\Models\AssetCostCenter;
+use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetDevice;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Support\DeviceCostResolver;
 use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
@@ -34,7 +37,9 @@ class ListDevicesTool implements ToolContract, ToolMetadataContract
             . 'device_name, operating_system, os_version, compliance_state, management_state, manufacturer, '
             . 'model, serial_number, user_principal_name, device_type, source. Tipp: nicht zugewiesene '
             . 'Geräte via filters [{"field":"user_principal_name","op":"is_null"}]. Nutze search, sort, '
-            . 'limit/offset. Antwort enthält aufgelöste Monatskosten + Kostenquelle + Assignee.';
+            . 'limit/offset. Antwort enthält aufgelöste Monatskosten + Kostenquelle + Assignee. Kostenart und '
+            . 'Kostenstelle sind ebenfalls aufgelöst (Geräte-Override → Modell-Default bzw. Kostenstelle des '
+            . 'Trägers), also identisch zu dem, was die Kostenaufteilung dem Gerät zuordnet.';
     }
 
     public function getSchema(): array
@@ -62,7 +67,7 @@ class ListDevicesTool implements ToolContract, ToolMetadataContract
             $allowed = ['device_name', 'operating_system', 'os_version', 'compliance_state', 'management_state',
                 'manufacturer', 'model', 'serial_number', 'user_principal_name', 'device_type', 'source'];
 
-            $query = AssetDevice::where('team_id', $teamId)->with(['assignee', 'costType', 'costCenter']);
+            $query = AssetDevice::where('team_id', $teamId)->with('assignee');
             $this->applyStandardFilters($query, $arguments, $allowed);
             $this->applyStandardSearch($query, $arguments, ['device_name', 'serial_number', 'model', 'user_principal_name']);
             $this->applyStandardSort($query, $arguments, array_merge($allowed, ['last_check_in_at', 'enrolled_at', 'monthly_cost']), 'device_name', 'asc');
@@ -73,10 +78,23 @@ class ListDevicesTool implements ToolContract, ToolMetadataContract
             // Gerät den ganzen Katalog neu (N+1). Muster: InventoryService.
             $resolver = DeviceCostResolver::for($teamId);
 
-            $rows = $result['data']->map(function (AssetDevice $d) use ($resolver) {
+            // Kostenart und Kostenstelle werden AUFGELÖST ausgegeben, nicht bloß der Geräte-Override:
+            // `monthly_cost` löst über den Resolver auf (Override → Modell-Default), und ein Gerät ohne
+            // eigenen cost_center_id erbt die Kostenstelle seines Trägers über den UPN — genau so rechnet
+            // CostAggregationService::deviceCostRows(). Nur den Override zu melden hieß, ein Gerät mit
+            // Modell-Preis als „ohne Kostenart" auszuweisen, obwohl die Auswertung es einer zuordnet.
+            $typeNames  = AssetCostType::where('team_id', $teamId)->pluck('name', 'id');
+            $ccLabels   = AssetCostCenter::where('team_id', $teamId)->get()->mapWithKeys(
+                fn (AssetCostCenter $c) => [$c->id => $c->label],
+            );
+            $ccIdByUpn  = AssetHolder::where('team_id', $teamId)->pluck('cost_center_id', 'user_principal_name');
+
+            $rows = $result['data']->map(function (AssetDevice $d) use ($resolver, $typeNames, $ccLabels, $ccIdByUpn) {
                 $own       = AssetDevice::computeMonthlyFrom($d->monthly_cost, $d->purchase_price, $d->depreciation_months, $d->purchase_date);
                 $fromModel = $resolver->modelMonthlyCost($d);
                 $source    = $own !== null ? 'override' : ($fromModel !== null ? 'model' : 'none');
+                $typeId    = $resolver->costTypeId($d);
+                $ccId      = $d->cost_center_id ?? ($ccIdByUpn[$d->user_principal_name] ?? null);
 
                 return [
                     'id'                  => $d->id,
@@ -92,8 +110,8 @@ class ListDevicesTool implements ToolContract, ToolMetadataContract
                     'assignee'            => $d->assignee?->name,
                     'monthly_cost'        => round($own ?? $fromModel ?? 0.0, 2),
                     'cost_source'         => $source,
-                    'cost_type'           => $d->costType?->name,
-                    'cost_center'         => $d->costCenter?->label,
+                    'cost_type'           => $typeId !== null ? ($typeNames[$typeId] ?? null) : null,
+                    'cost_center'         => $ccId !== null ? ($ccLabels[$ccId] ?? null) : null,
                     'last_check_in_at'    => $d->last_check_in_at?->toIso8601String(),
                 ];
             })->values()->all();
