@@ -144,6 +144,7 @@ class AssetManagerServiceProvider extends ServiceProvider
             $registry->register(new \Platform\AssetManager\Tools\Holders\UpdateHolderTool());
             $registry->register(new \Platform\AssetManager\Tools\Holders\BulkAssignCostCenterTool());
             $registry->register(new \Platform\AssetManager\Tools\Holders\BulkSetHolderTypeTool());
+            $registry->register(new \Platform\AssetManager\Tools\Holders\MergeDeletedHoldersTool());
 
             // Alte `…employees…`-Namen als Alias (ADR 0017): Tool-Namen sind über den Live-Connector
             // nach außen sichtbar. Ohne Alias bräche ein bestehender LLM-Aufruf mit „unbekanntes Tool"
