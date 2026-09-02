@@ -53,8 +53,12 @@ Schema::create('asset_team_settings', function (Blueprint $t) {
     $t->timestamps();
 });
 
+// Spaltennamen exakt wie live NACH der Umbenennung Mitarbeiter -> Asset-Traeger (ADR 0017):
+// asset_assignments/asset_handovers tragen `holder_id`, asset_cost_lines behielt `assignee_id`.
+// Der erste scharfe Lauf scheiterte genau hier — der Test hatte zuvor die Annahme des Codes
+// nachgebaut statt die Wirklichkeit und konnte den Fehler deshalb nicht finden.
 foreach ([['asset_items', 'assignee_id'], ['asset_cost_lines', 'assignee_id'],
-          ['asset_assignments', 'employee_id'], ['asset_handovers', 'employee_id']] as [$table, $column]) {
+          ['asset_assignments', 'holder_id'], ['asset_handovers', 'holder_id']] as [$table, $column]) {
     Schema::create($table, function (Blueprint $t) use ($column) {
         $t->id();
         $t->unsignedBigInteger('team_id');
@@ -135,8 +139,8 @@ $duplicate = holder([
 // An der Dublette haengt Historie — genau die darf beim Aufraeumen nicht verlorengehen.
 DB::table('asset_items')->insert(['team_id' => TEAM, 'tenant_id' => TENANT, 'assignee_id' => $duplicate->id]);
 DB::table('asset_cost_lines')->insert(['team_id' => TEAM, 'tenant_id' => TENANT, 'assignee_id' => $duplicate->id]);
-DB::table('asset_assignments')->insert(['team_id' => TEAM, 'tenant_id' => TENANT, 'employee_id' => $duplicate->id]);
-DB::table('asset_handovers')->insert(['team_id' => TEAM, 'tenant_id' => TENANT, 'employee_id' => $duplicate->id]);
+DB::table('asset_assignments')->insert(['team_id' => TEAM, 'tenant_id' => TENANT, 'holder_id' => $duplicate->id]);
+DB::table('asset_handovers')->insert(['team_id' => TEAM, 'tenant_id' => TENANT, 'holder_id' => $duplicate->id]);
 
 // Ein Geraet und zwei Lizenzen haengen an der Papierkorb-UPN — sie finden ihren Traeger ueber die
 // Adresse, nicht ueber einen Fremdschluessel. Genau das uebersieht ein Merge, der nur FKs umhaengt.

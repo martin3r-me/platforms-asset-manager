@@ -26,17 +26,24 @@ use Platform\AssetManager\Models\AssetHolder;
 class HolderMergeService
 {
     /**
-     * Tabellen und Spalten, die auf einen Träger zeigen. Vollständig aus den Migrationen abgeleitet;
-     * kommt eine Referenz dazu, gehört sie hierher — sonst bliebe sie beim Zusammenführen zurück und
-     * liefe beim Löschen der Dublette entweder auf `null` oder ins Leere.
+     * Tabellen und die Spalten, die auf einen Träger zeigen — je Tabelle als **Kandidatenliste**,
+     * erster Treffer gewinnt.
      *
-     * @var array<string, string>
+     * Warum nicht ein fester Name: die Umbenennung „Mitarbeiter → Asset-Träger" (ADR 0017) hat
+     * `employee_id` in `asset_assignments` und `asset_handovers` zu `holder_id` gemacht, in
+     * `asset_cost_lines` aber `assignee_id` gelassen — „assignee" war schon neutral. Ein fest
+     * verdrahteter Name traf deshalb je nach Tabelle und Migrationsstand ins Leere; genau daran ist
+     * der erste scharfe Lauf gescheitert. Aufgelöst wird zur Laufzeit gegen das echte Schema.
+     *
+     * Kommt eine Referenz dazu, gehört sie hierher — sonst bliebe sie beim Zusammenführen zurück.
+     *
+     * @var array<string, list<string>>
      */
     protected const REFERENCES = [
-        'asset_items'       => 'assignee_id',
-        'asset_cost_lines'  => 'assignee_id',
-        'asset_assignments' => 'employee_id',
-        'asset_handovers'   => 'employee_id',
+        'asset_items'       => ['assignee_id'],
+        'asset_cost_lines'  => ['assignee_id'],
+        'asset_assignments' => ['holder_id', 'employee_id'],
+        'asset_handovers'   => ['holder_id', 'employee_id'],
     ];
 
     /**
@@ -51,6 +58,9 @@ class HolderMergeService
         'asset_devices'       => 'user_principal_name',
         'asset_user_licenses' => 'user_principal_name',
     ];
+
+    /** @var array<string, string|null> Aufgelöste Spaltennamen je Tabelle, request-lokal. */
+    protected array $columnCache = [];
 
     /** Felder, die von der Dublette übernommen werden, wenn das Ziel dort nichts stehen hat. */
     protected const FILLABLE_GAPS = [
@@ -166,8 +176,9 @@ class HolderMergeService
     public function mergeInto(AssetHolder $duplicate, AssetHolder $target): void
     {
         DB::transaction(function () use ($duplicate, $target): void {
-            foreach (self::REFERENCES as $table => $column) {
-                if (! DB::getSchemaBuilder()->hasTable($table)) {
+            foreach (self::REFERENCES as $table => $candidates) {
+                $column = $this->resolveColumn($table, $candidates);
+                if ($column === null) {
                     continue;
                 }
 
@@ -252,6 +263,36 @@ class HolderMergeService
     }
 
     /**
+     * Erste vorhandene Spalte aus der Kandidatenliste — oder null, wenn die Tabelle fehlt oder keine
+     * davon trägt.
+     *
+     * Das Ergebnis wird gemerkt: `hasColumn()` fragt je Aufruf das Informationsschema ab, und der
+     * Merge läuft je Dublette einmal durch alle Tabellen.
+     *
+     * @param  list<string>  $candidates
+     */
+    protected function resolveColumn(string $table, array $candidates): ?string
+    {
+        if (array_key_exists($table, $this->columnCache)) {
+            return $this->columnCache[$table];
+        }
+
+        $schema = DB::getSchemaBuilder();
+
+        if (! $schema->hasTable($table)) {
+            return $this->columnCache[$table] = null;
+        }
+
+        foreach ($candidates as $candidate) {
+            if ($schema->hasColumn($table, $candidate)) {
+                return $this->columnCache[$table] = $candidate;
+            }
+        }
+
+        return $this->columnCache[$table] = null;
+    }
+
+    /**
      * Wie viele Datensätze hängen an diesem Träger? Für die Vorschau — inklusive der UPN-gebundenen,
      * denn genau die übersieht man sonst.
      */
@@ -259,8 +300,9 @@ class HolderMergeService
     {
         $counts = [];
 
-        foreach (self::REFERENCES as $table => $column) {
-            if (! DB::getSchemaBuilder()->hasTable($table)) {
+        foreach (self::REFERENCES as $table => $candidates) {
+            $column = $this->resolveColumn($table, $candidates);
+            if ($column === null) {
                 continue;
             }
 
