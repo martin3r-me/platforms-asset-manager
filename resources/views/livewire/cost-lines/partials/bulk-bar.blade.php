@@ -22,7 +22,10 @@
 
         <div class="flex items-center gap-2">
             <label class="text-xs text-[var(--am-text-secondary)]">Umbuchen auf</label>
-            <select wire:model="bulkCenter"
+            {{-- `.live`: der Vorschau-Knopf haengt per :disabled an $bulkCenter. Deferred gebunden
+                 erfuhr der Server die Auswahl erst beim naechsten Roundtrip — bis dahin blieb der
+                 Knopf gesperrt und der Klick wirkungslos. --}}
+            <select wire:model.live="bulkCenter"
                     class="px-2 py-1.5 text-xs rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border-strong)] text-[var(--am-text)] cursor-pointer focus:outline-none focus:border-[color:var(--am-accent)] focus:shadow-[var(--am-focus)]">
                 <option value="">– Kostenstelle wählen –</option>
                 @foreach($costCenters as $c)

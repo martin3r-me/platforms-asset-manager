@@ -33,7 +33,10 @@
 
         <div class="flex items-center gap-2">
             <label class="text-xs text-[var(--am-text-secondary)]">Typ setzen auf</label>
-            <select wire:model="bulkType"
+            {{-- `.live` ist Pflicht, nicht Geschmack: der Vorschau-Knopf daneben haengt per
+                 :disabled an $bulkType. Deferred gebunden erfaehrt der Server die Auswahl erst beim
+                 naechsten Roundtrip — der Knopf bliebe gesperrt und der Klick wirkungslos. --}}
+            <select wire:model.live="bulkType"
                     class="px-2 py-1.5 text-xs rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border-strong)] text-[var(--am-text)] cursor-pointer focus:outline-none focus:border-[color:var(--am-accent)] focus:shadow-[var(--am-focus)]">
                 <option value="">– Träger-Typ wählen –</option>
                 @foreach($holderTypes as $type)

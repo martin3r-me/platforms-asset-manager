@@ -28,6 +28,11 @@
     $classes = implode(' ', [
         'inline-flex items-center justify-center rounded-lg font-medium whitespace-nowrap select-none',
         'transition-colors focus:outline-none focus-visible:shadow-[var(--am-focus)]',
+        // Gesperrte Buttons muessen gesperrt AUSSEHEN. Ohne diese Klassen ist ein :disabled-Button
+        // optisch nicht von einem aktiven zu unterscheiden — er schluckt den Klick wortlos, und der
+        // Bedienende sucht den Fehler bei sich. `pointer-events-none` nimmt zusaetzlich den
+        // Hover-Effekt der Variante, der sonst weiter Klickbarkeit suggeriert.
+        'disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none disabled:shadow-none',
         $variantClasses,
         $sizeClasses,
     ]);
