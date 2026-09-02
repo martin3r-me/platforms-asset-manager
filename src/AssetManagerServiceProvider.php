@@ -24,6 +24,14 @@ class AssetManagerServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/asset-manager.php', 'asset-manager');
 
+        // Weg zum Rechnungssystem (docs/adr/0021). Als Binding und nicht als direkte Instanziierung,
+        // damit die lokalen Prüfskripte und Tests einen Doppelgänger einsetzen können, ohne dass ein
+        // Beleg in einem fremden System entsteht.
+        $this->app->bind(
+            \Platform\AssetManager\Services\BillingGateway::class,
+            \Platform\AssetManager\Services\EasybillBillingGateway::class,
+        );
+
         if ($this->app->runningInConsole()) {
             $this->commands([
                 \Platform\AssetManager\Console\Commands\SyncIntuneDevicesCommand::class,

@@ -67,6 +67,7 @@
         <x-asset-manager-nav-item :href="route('asset-manager.cost-lines.index')" :active="request()->routeIs('asset-manager.cost-lines.*')" icon="heroicon-o-list-bullet" label="Kostenpositionen" />
         <x-asset-manager-nav-item :href="route('asset-manager.costs')" :active="request()->routeIs('asset-manager.costs')" icon="heroicon-o-banknotes" label="Kosten (pro MA)" />
         <x-asset-manager-nav-item :href="route('asset-manager.reports.device-models')" :active="request()->routeIs('asset-manager.reports.*')" icon="heroicon-o-chart-bar" label="Geräte nach Modell" />
+        <x-asset-manager-nav-item :href="route('asset-manager.billing.index')" :active="request()->routeIs('asset-manager.billing.*')" icon="heroicon-o-document-currency-euro" label="Weiterberechnung" />
     </x-ui-sidebar-list>
     @endif
 

@@ -18,6 +18,7 @@ use Platform\AssetManager\Livewire\Costs\Dashboard as CostsDashboard;
 use Platform\AssetManager\Livewire\Costs\Allocation as CostsAllocation;
 use Platform\AssetManager\Livewire\Costs\Import as CostsImport;
 use Platform\AssetManager\Livewire\CostLines\Index as CostLinesIndex;
+use Platform\AssetManager\Livewire\Billing\Index as BillingIndex;
 use Platform\AssetManager\Livewire\Reports\DeviceModels as DeviceModelsReport;
 use Platform\AssetManager\Livewire\MasterData\Index as MasterDataIndex;
 use Platform\AssetManager\Livewire\DeviceModels\Index as DeviceModelsIndex;
@@ -91,6 +92,11 @@ Route::middleware(EnsureControllingEnabled::class)->group(function () {
     Route::get('/cost-lines', CostLinesIndex::class)->name('asset-manager.cost-lines.index');
     Route::get('/reports/device-models', DeviceModelsReport::class)->name('asset-manager.reports.device-models');
     Route::get('/costs/import', CostsImport::class)->name('asset-manager.costs.import');
+
+    // Weiterberechnung (ADR 0021): aus dem Bestand wird ein Rechnungsentwurf beim Kunden. Liegt in
+    // der Controlling-Gruppe, weil es eine kaufmännische Auswertung ist — ein Team, das den
+    // Asset Manager rein für IT-Lifecycle nutzt, hat damit nichts zu tun.
+    Route::get('/billing', BillingIndex::class)->name('asset-manager.billing.index');
 
     // Stammdaten: alle vier Bereiche auf EINER Seite
     Route::get('/master-data', MasterDataIndex::class)->name('asset-manager.master-data.index');
