@@ -39,6 +39,19 @@ class HolderMergeService
         'asset_handovers'   => 'employee_id',
     ];
 
+    /**
+     * Tabellen, die einen Träger **über die UPN** statt über einen Fremdschlüssel finden. Sie fehlen
+     * in {@see REFERENCES} und wären beim Zusammenführen sonst lautlos verlorengegangen: das Gerät
+     * eines gelöschten Kontos zeigte nach dem Löschen der Dublette auf eine UPN, die es nicht mehr
+     * gibt — und verschwände aus jeder Auswertung, ohne dass etwas fehlschlägt.
+     *
+     * @var array<string, string>
+     */
+    protected const UPN_REFERENCES = [
+        'asset_devices'       => 'user_principal_name',
+        'asset_user_licenses' => 'user_principal_name',
+    ];
+
     /** Felder, die von der Dublette übernommen werden, wenn das Ziel dort nichts stehen hat. */
     protected const FILLABLE_GAPS = [
         'cost_center', 'cost_center_id', 'department', 'job_title', 'display_name', 'email',
@@ -89,7 +102,7 @@ class HolderMergeService
                 'duplicate_id'  => $duplicate->id,
                 'duplicate_upn' => $duplicate->user_principal_name,
                 'original_upn'  => $originalUpn,
-                'references'    => $this->countReferences($duplicate->id),
+                'references'    => $this->countReferences($duplicate->id, (string) $duplicate->user_principal_name),
             ];
 
             if ($target === null) {
@@ -100,13 +113,24 @@ class HolderMergeService
                 $renamed++;
 
                 if (! $dryRun) {
-                    $duplicate->user_principal_name = $originalUpn;
-                    if ($duplicate->email && HolderService::isDeletedUpn((string) $duplicate->email)) {
-                        $duplicate->email = HolderService::normalizeUpn((string) $duplicate->email);
-                    }
-                    // Das Konto ist im Verzeichnis gelöscht — aktiv ist hier nichts mehr.
-                    $duplicate->is_active = false;
-                    $duplicate->save();
+                    DB::transaction(function () use ($duplicate, $originalUpn, $teamId): void {
+                        // Geräte und Lizenzzuweisungen finden ihren Träger über die UPN. Ohne diesen
+                        // Schritt zeigten sie nach dem Umbenennen auf eine Adresse, die es nicht mehr
+                        // gibt — sie fielen aus jeder Auswertung, ohne dass etwas fehlschlägt.
+                        $this->moveUpnReferences(
+                            (string) $duplicate->user_principal_name,
+                            $originalUpn,
+                            $teamId,
+                        );
+
+                        $duplicate->user_principal_name = $originalUpn;
+                        if ($duplicate->email && HolderService::isDeletedUpn((string) $duplicate->email)) {
+                            $duplicate->email = HolderService::normalizeUpn((string) $duplicate->email);
+                        }
+                        // Das Konto ist im Verzeichnis gelöscht — aktiv ist hier nichts mehr.
+                        $duplicate->is_active = false;
+                        $duplicate->save();
+                    });
                 }
 
                 $results[] = $row;
@@ -153,6 +177,12 @@ class HolderMergeService
                 DB::table($table)->where($column, $duplicate->id)->update([$column => $target->id]);
             }
 
+            $this->moveUpnReferences(
+                (string) $duplicate->user_principal_name,
+                (string) $target->user_principal_name,
+                (int) $target->team_id,
+            );
+
             // Lücken im Ziel aus der Dublette füllen — sie trägt oft die Kostenstelle aus dem Import,
             // die dem Verzeichnis-Datensatz fehlt. Vorhandene Werte im Ziel bleiben unangetastet.
             $filled = false;
@@ -175,8 +205,57 @@ class HolderMergeService
         });
     }
 
-    /** Wie viele Datensätze hängen an diesem Träger? Für die Vorschau. */
-    public function countReferences(int $holderId): array
+    /**
+     * Geräte und Lizenzzuweisungen von der Papierkorb-UPN auf die richtige umschreiben.
+     *
+     * Zwei verschiedene Fälle, weil die Indizes verschieden sind:
+     *
+     * - **Geräte** tragen keinen Unique auf der UPN (eine Person kann mehrere haben) — ein reines
+     *   Umschreiben genügt.
+     * - **Lizenzzuweisungen** sind über `(team_id, user_principal_name, sku_id)` eindeutig. Trägt
+     *   das Ziel dieselbe Lizenz bereits, liefe das Umschreiben in den Index. Solche Zeilen sind der
+     *   veraltete Doppelgänger und werden vorher entfernt; alles Übrige wandert mit.
+     */
+    public function moveUpnReferences(string $trashUpn, string $realUpn, int $teamId): void
+    {
+        if ($trashUpn === '' || $realUpn === '' || $trashUpn === $realUpn) {
+            return;
+        }
+
+        if (DB::getSchemaBuilder()->hasTable('asset_devices')) {
+            DB::table('asset_devices')
+                ->where('user_principal_name', $trashUpn)
+                ->update(['user_principal_name' => $realUpn]);
+        }
+
+        if (! DB::getSchemaBuilder()->hasTable('asset_user_licenses')) {
+            return;
+        }
+
+        $targetSkus = DB::table('asset_user_licenses')
+            ->where('team_id', $teamId)
+            ->where('user_principal_name', $realUpn)
+            ->pluck('sku_id')
+            ->all();
+
+        if ($targetSkus !== []) {
+            DB::table('asset_user_licenses')
+                ->where('team_id', $teamId)
+                ->where('user_principal_name', $trashUpn)
+                ->whereIn('sku_id', $targetSkus)
+                ->delete();
+        }
+
+        DB::table('asset_user_licenses')
+            ->where('user_principal_name', $trashUpn)
+            ->update(['user_principal_name' => $realUpn]);
+    }
+
+    /**
+     * Wie viele Datensätze hängen an diesem Träger? Für die Vorschau — inklusive der UPN-gebundenen,
+     * denn genau die übersieht man sonst.
+     */
+    public function countReferences(int $holderId, ?string $upn = null): array
     {
         $counts = [];
 
@@ -186,6 +265,18 @@ class HolderMergeService
             }
 
             $counts[$table] = DB::table($table)->where($column, $holderId)->count();
+        }
+
+        if ($upn === null || $upn === '') {
+            return $counts;
+        }
+
+        foreach (self::UPN_REFERENCES as $table => $column) {
+            if (! DB::getSchemaBuilder()->hasTable($table)) {
+                continue;
+            }
+
+            $counts[$table] = DB::table($table)->where($column, $upn)->count();
         }
 
         return $counts;

@@ -64,6 +64,26 @@ foreach ([['asset_items', 'assignee_id'], ['asset_cost_lines', 'assignee_id'],
     });
 }
 
+// Geraete und Lizenzen finden ihren Traeger ueber die UPN, nicht ueber einen Fremdschluessel.
+Schema::create('asset_devices', function (Blueprint $t) {
+    $t->id();
+    $t->unsignedBigInteger('team_id');
+    $t->unsignedBigInteger('tenant_id')->nullable();
+    $t->string('user_principal_name')->nullable();
+    $t->timestamps();
+});
+
+Schema::create('asset_user_licenses', function (Blueprint $t) {
+    $t->id();
+    $t->unsignedBigInteger('team_id');
+    $t->unsignedBigInteger('tenant_id')->nullable();
+    $t->string('user_principal_name');
+    $t->string('sku_id')->nullable();
+    $t->timestamps();
+    // Wie live: eine Zuweisung je Team, UPN und SKU.
+    $t->unique(['team_id', 'user_principal_name', 'sku_id']);
+});
+
 TenantContext::forceTenant(1);
 
 const TEAM   = 7;
@@ -118,10 +138,21 @@ DB::table('asset_cost_lines')->insert(['team_id' => TEAM, 'tenant_id' => TENANT,
 DB::table('asset_assignments')->insert(['team_id' => TEAM, 'tenant_id' => TENANT, 'employee_id' => $duplicate->id]);
 DB::table('asset_handovers')->insert(['team_id' => TEAM, 'tenant_id' => TENANT, 'employee_id' => $duplicate->id]);
 
+// Ein Geraet und zwei Lizenzen haengen an der Papierkorb-UPN — sie finden ihren Traeger ueber die
+// Adresse, nicht ueber einen Fremdschluessel. Genau das uebersieht ein Merge, der nur FKs umhaengt.
+DB::table('asset_devices')->insert(['team_id' => TEAM, 'tenant_id' => TENANT, 'user_principal_name' => TRASH_UPN]);
+DB::table('asset_user_licenses')->insert([
+    ['team_id' => TEAM, 'tenant_id' => TENANT, 'user_principal_name' => TRASH_UPN, 'sku_id' => 'e3'],
+    // Diese SKU traegt das Original bereits — beim Umschreiben liefe sie in den Unique-Index.
+    ['team_id' => TEAM, 'tenant_id' => TENANT, 'user_principal_name' => TRASH_UPN, 'sku_id' => 'e1'],
+    ['team_id' => TEAM, 'tenant_id' => TENANT, 'user_principal_name' => REAL_UPN,  'sku_id' => 'e1'],
+]);
+
 $merger = app(HolderMergeService::class);
 
 check('Dublette wird gefunden', 1, $merger->findDeletedUpnHolders(TEAM, TENANT)->count());
-check('Referenzen werden gezaehlt', 4, array_sum($merger->countReferences($duplicate->id)));
+check('Referenzen zaehlen FK und UPN zusammen', 7,
+    array_sum($merger->countReferences($duplicate->id, TRASH_UPN)));
 
 $preview = $merger->mergeDeletedUpnHolders(TEAM, TENANT, true);
 check('Probelauf meldet 1 Zusammenfuehrung', 1, $preview['merged']);
@@ -141,6 +172,20 @@ $original->refresh();
 check('Kostenstelle wurde aus der Dublette uebernommen', '5000', $original->cost_center);
 check('Kostenstellen-FK ebenso', 180, (int) $original->cost_center_id);
 
+// UPN-gebundene Verweise: das Geraet muss mitwandern, sonst zeigt es ins Leere.
+check('Geraet zeigt jetzt auf die richtige UPN', 1,
+    DB::table('asset_devices')->where('user_principal_name', REAL_UPN)->count());
+check('Keine Geraete mehr auf der Papierkorb-UPN', 0,
+    DB::table('asset_devices')->where('user_principal_name', TRASH_UPN)->count());
+
+// Die kollidierende SKU wurde entfernt, die andere umgeschrieben — kein Unique-Verstoss.
+check('Lizenzen liegen jetzt beim Original', 2,
+    DB::table('asset_user_licenses')->where('user_principal_name', REAL_UPN)->count());
+check('Keine Lizenz mehr auf der Papierkorb-UPN', 0,
+    DB::table('asset_user_licenses')->where('user_principal_name', TRASH_UPN)->count());
+check('Die doppelte SKU wurde nicht zweimal angelegt', 1,
+    DB::table('asset_user_licenses')->where('user_principal_name', REAL_UPN)->where('sku_id', 'e1')->count());
+
 // --- Dublette ohne Gegenstueck: umbenennen, nicht loeschen ---------------
 $orphan = holder([
     'user_principal_name' => '11112222333344445555666677778888A.WAISE@FIRMA.DE',
@@ -148,10 +193,17 @@ $orphan = holder([
     'source'              => 'derived',
 ]);
 
+DB::table('asset_devices')->insert([
+    'team_id' => TEAM, 'tenant_id' => TENANT,
+    'user_principal_name' => '11112222333344445555666677778888A.WAISE@FIRMA.DE',
+]);
+
 $result = $merger->mergeDeletedUpnHolders(TEAM, TENANT, false);
 $orphan->refresh();
 
 check('Ohne Gegenstueck: umbenannt statt geloescht', 1, $result['renamed']);
+check('Auch beim Umbenennen wandert das Geraet mit', 1,
+    DB::table('asset_devices')->where('user_principal_name', 'A.WAISE@FIRMA.DE')->count());
 check('UPN ist bereinigt', 'A.WAISE@FIRMA.DE', $orphan->user_principal_name);
 check('E-Mail ebenfalls', 'A.WAISE@FIRMA.DE', $orphan->email);
 check('Und stillgelegt — das Konto ist im Verzeichnis geloescht', false, (bool) $orphan->is_active);
