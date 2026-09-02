@@ -97,6 +97,19 @@
                     </x-asset-manager-filter-section>
                 @endif
 
+                <x-asset-manager-filter-section title="Anzeige">
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--am-text-secondary)]">Pro Seite</span>
+                        <x-asset-manager-select size="sm" wire:model.live="perPage" class="w-24">
+                            @foreach($perPageOptions as $option)
+                                <option value="{{ $option }}">
+                                    {{ $option === \Platform\AssetManager\Livewire\Holders\Index::PER_PAGE_ALL ? 'Alle' : $option }}
+                                </option>
+                            @endforeach
+                        </x-asset-manager-select>
+                    </div>
+                </x-asset-manager-filter-section>
+
                 @if($preset !== 'active' || $search || $filterDept || $filterSku || $filterSource || $filterCostCenter || $filterHasLicense || $filterHasDevice || $filterHasAsset)
                     <x-asset-manager-button variant="secondary" size="sm" class="w-full" wire:click="resetFilters">
                         @svg('heroicon-o-arrow-uturn-left', 'w-3.5 h-3.5 mr-1')
@@ -283,11 +296,18 @@
                             </tbody>
                         </table>
                     </div>
-                    @if($holders->hasPages())
-                        <div class="px-5 py-3 border-t border-[color:var(--am-border)]">
+                    <div class="px-5 py-3 border-t border-[color:var(--am-border)]">
+                        @if($holders->hasPages())
                             {{ $holders->links() }}
-                        </div>
-                    @endif
+                        @else
+                            {{-- Ohne Blätterleiste (etwa bei „Alle") bliebe sonst unsichtbar, wie viele
+                                 Zeilen die Filter überhaupt treffen. --}}
+                            <div class="text-xs text-[var(--am-text-secondary)]">
+                                {{ number_format($holders->total(), 0, ',', '.') }}
+                                {{ $holders->total() === 1 ? 'Eintrag' : 'Einträge' }}
+                            </div>
+                        @endif
+                    </div>
                 @endif
             </div>
         </div>

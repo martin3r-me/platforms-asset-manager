@@ -30,6 +30,16 @@ class Index extends Component
      */
     protected const BULK_MAX = 500;
 
+    /**
+     * Sentinel für „Alle anzeigen". Bewusst `0` und keine große Zahl: ein Grenzwert wie 99999 wäre
+     * eine stille Lüge, sobald ein Team mehr Träger hat. Die tatsächliche Seitengröße rechnet
+     * {@see effectivePerPage()} aus dem Treffer-Zähler aus.
+     */
+    public const PER_PAGE_ALL = 0;
+
+    /** Auswahlmöglichkeiten des Seitengrößen-Umschalters. */
+    public const PER_PAGE_OPTIONS = [25, 50, 100, self::PER_PAGE_ALL];
+
     public string $preset           = 'active'; // all|active|with_license|with_device|with_asset|unassigned|inactive
     public string $search           = '';
     public string $filterDept       = '';
@@ -111,6 +121,30 @@ class Index extends Component
      * zusammensammeln können.
      */
     public function updatingPage(): void { $this->selectPage = false; }
+
+    /**
+     * Seitengröße wechseln. Die Auswahl bleibt bewusst stehen — es ändert sich nur, wie viel man
+     * gleichzeitig sieht, nicht *welche* Träger die Filter treffen. Das Kopf-Häkchen fällt zurück,
+     * weil es sich auf die nun anders geschnittene Seite bezieht.
+     */
+    public function updatingPerPage(): void
+    {
+        $this->resetPage();
+        $this->selectPage = false;
+    }
+
+    /**
+     * Tatsächliche Seitengröße. Bei „Alle" so groß wie die Treffermenge — die Zahl kommt vom
+     * Aufrufer, der sie ohnehin zählen muss.
+     */
+    protected function effectivePerPage(?int $total = null): int
+    {
+        if ($this->perPage !== self::PER_PAGE_ALL) {
+            return $this->perPage;
+        }
+
+        return max($total ?? 0, 1);
+    }
 
     public function setPreset(string $preset): void
     {
@@ -293,9 +327,15 @@ class Index extends Component
      */
     public function updatedSelectPage($value): void
     {
-        $pageIds = $this->filteredQuery($this->teamId())
-            ->orderBy($this->sortField, $this->sortDirection)
-            ->forPage($this->getPage(), $this->perPage)
+        $query = $this->filteredQuery($this->teamId())
+            ->orderBy($this->sortField, $this->sortDirection);
+
+        // Bei „Alle" ist die Seite die ganze Treffermenge — dann greift derselbe Deckel wie beim
+        // ausdrücklichen „alle gefilterten auswählen". Sonst könnte ein einziges Häkchen tausende
+        // IDs in den Livewire-State schieben.
+        $pageIds = ($this->perPage === self::PER_PAGE_ALL
+                ? (clone $query)->limit(self::BULK_MAX)
+                : (clone $query)->forPage($this->getPage(), $this->perPage))
             ->pluck('id')
             ->map(fn ($id) => (string) $id)
             ->all();
@@ -408,9 +448,14 @@ class Index extends Component
         // Nicht-Personen zaehlen — fuer den Hinweis „x Funktions-/Admin-Accounts ausgeblendet".
         $nonPersonCount = (clone $base)->nonPersons()->count();
 
-        $holders = $this->filteredQuery($teamId)
-            ->orderBy($this->sortField, $this->sortDirection)
-            ->paginate($this->perPage);
+        $listQuery = $this->filteredQuery($teamId)
+            ->orderBy($this->sortField, $this->sortDirection);
+
+        // Bei „Alle" braucht die Seitengröße die Treffermenge. Der Zähler kostet eine eigene Query —
+        // aber nur in diesem Fall, und `paginate()` zählt anschließend ohnehin.
+        $holders = $listQuery->paginate(
+            $this->effectivePerPage($this->perPage === self::PER_PAGE_ALL ? (clone $listQuery)->count() : null)
+        );
 
         // --- Counts pro angezeigtem Asset-Träger ---
         $pageEmpIds = $holders->pluck('id')->toArray();
@@ -467,6 +512,7 @@ class Index extends Component
             // und `currentTeam` ist ein ungecachter Accessor mit eigener Query.
             'canManage'      => Gate::allows('asset-manager.manage'),
             'bulkMax'        => self::BULK_MAX,
+            'perPageOptions' => self::PER_PAGE_OPTIONS,
         ])->layout('platform::layouts.app');
     }
 }

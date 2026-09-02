@@ -249,6 +249,29 @@ $component->selectAllFiltered();
 check('selectAllFiltered folgt dem Filter', 6, count($component->selected));
 check('selectionCapped: unter dem Deckel false', false, $component->selectionCapped());
 
+// --- Seitengroesse „Alle" -------------------------------------------------
+$AM_ALL = Platform\AssetManager\Livewire\Holders\Index::PER_PAGE_ALL;
+
+check('effectivePerPage: fester Wert bleibt', 3, $call('effectivePerPage', null));
+
+$component->perPage = $AM_ALL;
+check('effectivePerPage: Alle nimmt die Treffermenge', 6, $call('effectivePerPage', 6));
+check('effectivePerPage: Alle bei 0 Treffern bleibt >= 1', 1, $call('effectivePerPage', 0));
+
+// Bei „Alle" waehlt das Kopf-Haekchen die ganze Treffermenge, nicht nur eine Seite.
+$component->selected   = [];
+$component->selectPage = false;
+$component->updatedSelectPage(true);
+check('Alle: Kopf-Haekchen waehlt die ganze Menge', 6, count($component->selected));
+
+$component->selected = ['1', '2'];
+$component->updatingPerPage();
+check('Seitengroesse-Wechsel behaelt die Auswahl', 2, count($component->selected));
+check('Seitengroesse-Wechsel loest das Kopf-Haekchen', false, $component->selectPage);
+
+$component->perPage  = 3;
+$component->selected = [];
+
 // --- Auswahl und Filterwechsel -------------------------------------------
 foreach (['updatingSearch', 'updatingFilterDept', 'updatingFilterHolderType', 'updatingFilterSku',
           'updatingFilterSource', 'updatingFilterCostCenter', 'updatingPreset',
