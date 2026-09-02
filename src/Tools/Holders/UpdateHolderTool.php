@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Services\CostBootstrapService;
+use Platform\AssetManager\Services\HolderTypeService;
 use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
 use Platform\AssetManager\Tools\Concerns\ResolvesTenant;
@@ -124,7 +125,7 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('VALIDATION_ERROR', 'holder_type muss einer von person|function|admin|service|external sein.');
             }
 
-            foreach (['department', 'job_title', 'holder_type'] as $field) {
+            foreach (['department', 'job_title'] as $field) {
                 if (array_key_exists($field, $arguments)) {
                     $emp->{$field} = $arguments[$field] !== '' ? $arguments[$field] : null;
                 }
@@ -134,6 +135,26 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
             }
 
             $emp->save();
+
+            // Der Typ läuft NICHT über die Feldschleife: an ihm hängt die Lizenz-Verteilungskaskade
+            // (ADR 0019). Ein direktes Setzen ließ hier bis zur Sammelaktion ein totes
+            // `function_system` und eine Verteilung zurück, die die Stammdaten nicht mehr hergaben.
+            // Der Service ist die gemeinsame Wahrheit von UI, Detailseite und Sammelaktion.
+            if (array_key_exists('holder_type', $arguments) && $arguments['holder_type'] !== '') {
+                $result = app(HolderTypeService::class)->setType(
+                    $teamId,
+                    (int) $emp->tenant_id,
+                    [$emp->id],
+                    (string) $arguments['holder_type'],
+                );
+
+                if (! $result['ok']) {
+                    return ToolResult::error($result['code'] ?? 'VALIDATION_ERROR', $result['message']);
+                }
+
+                $emp->refresh();
+            }
+
             $emp->load('costCenter');
 
             return ToolResult::success([

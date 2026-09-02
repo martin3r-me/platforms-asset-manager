@@ -189,6 +189,16 @@
                 </div>
             @endif
 
+            @if($flash)
+                <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                    {{ $flash }}
+                </div>
+            @endif
+
+            @if($canManage)
+                @include('asset-manager::livewire.holders.partials.bulk-bar')
+            @endif
+
             {{-- Tabelle --}}
             <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm overflow-hidden">
                 @if($holders->isEmpty())
@@ -202,6 +212,12 @@
                         <table class="w-full text-sm">
                             <thead>
                                 <tr class="bg-[var(--am-bg)] border-b border-[color:var(--am-border)]">
+                                    @if($canManage)
+                                        <th class="w-10 px-5 py-3">
+                                            <input type="checkbox" wire:model.live="selectPage" class="rounded"
+                                                   title="Alle auf dieser Seite auswählen">
+                                        </th>
+                                    @endif
                                     <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">
                                         <button wire:click="sortBy('display_name')" class="flex items-center gap-1 hover:text-[var(--am-text-secondary)]">
                                             Name
@@ -221,7 +237,15 @@
                                     {{-- Der Zeilenklick öffnete früher ein rechtes Vorschau-Panel, dessen Inhalt
                                          (Abteilung, Kostenstelle, Quelle, Zähler) in dieser Tabelle bereits steht
                                          und dessen Rest das Profil zeigt. Seit S8b führt nur noch der Name dorthin. --}}
-                                    <tr wire:key="emp-{{ $emp->id }}" class="transition-colors hover:bg-[var(--am-bg)]">
+                                    @php $isSelected = $canManage && in_array((string) $emp->id, $selected, true); @endphp
+                                    <tr wire:key="emp-{{ $emp->id }}" class="transition-colors {{ $isSelected ? 'bg-[var(--am-accent-surface)]' : 'hover:bg-[var(--am-bg)]' }}">
+                                        {{-- Eigene Zelle, bewusst NICHT innerhalb des <a wire:navigate> der Namensspalte:
+                                             sonst würde jeder Klick auf die Checkbox zur Detailseite navigieren. --}}
+                                        @if($canManage)
+                                            <td class="px-5 py-3">
+                                                <input type="checkbox" value="{{ $emp->id }}" wire:model.live="selected" class="rounded">
+                                            </td>
+                                        @endif
                                         <td class="px-5 py-3">
                                             <a href="{{ route('asset-manager.holders.show', $emp) }}" wire:navigate class="flex items-center gap-2">
                                                 <div class="w-7 h-7 rounded-full bg-[var(--am-accent-surface)] text-[var(--am-accent)] flex items-center justify-center text-[10px] font-semibold flex-shrink-0">
@@ -268,4 +292,9 @@
             </div>
         </div>
     </div>
+
+    {{-- Vorschau der Sammelaktion. Muss innerhalb von <x-ui-page> liegen. --}}
+    @if($canManage)
+        @include('asset-manager::livewire.holders.partials.modal-bulk-type')
+    @endif
 </x-ui-page>

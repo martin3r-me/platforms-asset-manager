@@ -17,6 +17,7 @@ use Platform\AssetManager\Models\AssetUserLicense;
 use Platform\AssetManager\Services\ControllingContext;
 use Platform\AssetManager\Services\CostAggregationService;
 use Platform\AssetManager\Services\HolderService;
+use Platform\AssetManager\Services\HolderTypeService;
 
 class Show extends Component
 {
@@ -106,7 +107,7 @@ class Show extends Component
             ? AssetCostCenter::where('team_id', $this->holder->team_id)->where('code', $code)->first()
             : null;
 
-        $wasFunction  = $this->holder->isFunctionAccount();
+        $typeBefore   = $this->holder->holder_type;
         $isFunction   = $this->holderType === AssetHolder::TYPE_FUNCTION;
         $systemBefore = $this->holder->function_system;
 
@@ -128,36 +129,16 @@ class Show extends Component
         // Typ und System steuern die Lizenz-Verteilung (ADR 0019, Schritt 1). Ändert sich einer der
         // beiden, verschieben sich Mengen zwischen Trägern und Sammel-Kostenstellen — ohne erneute
         // Verteilung stünde in der Kostenaufteilung ein Stand, den die Stammdaten nicht mehr hergeben.
-        if ($wasFunction !== $isFunction || $systemBefore !== $this->holder->function_system) {
-            $this->redistributeLicenses();
+        // Die Regel selbst liegt im HolderTypeService, damit Detailseite, Sammelaktion und MCP-Tool
+        // sie teilen — sie stand hier einmal allein und fehlte den beiden anderen Pfaden.
+        $types = app(HolderTypeService::class);
+
+        if ($types->affectsAllocation($typeBefore, $this->holderType)
+            || $systemBefore !== $this->holder->function_system) {
+            $types->redistribute((int) $this->holder->team_id, (int) $this->holder->tenant_id);
         }
 
         $this->saved = true;
-    }
-
-    /**
-     * Lizenzmengen des jüngsten Abrechnungsmonats neu verteilen.
-     *
-     * Läuft nur, wenn überhaupt Vertragszeilen existieren — ohne Rechnungsimport gibt es nichts zu
-     * verteilen, und ein Lauf ins Leere würde nur Zeit kosten.
-     */
-    protected function redistributeLicenses(): void
-    {
-        $period = \Platform\AssetManager\Models\AssetLicenseContractLine::where('team_id', $this->holder->team_id)
-            ->max('period_label');
-
-        if ($period === null) {
-            return;
-        }
-
-        app(\Platform\AssetManager\Services\LicenseSeatAllocator::class)->allocateForPeriod(
-            (int) $this->holder->team_id,
-            (int) $this->holder->tenant_id,
-            (string) $period,
-            false,
-        );
-
-        \Platform\AssetManager\Support\LicensePriceBook::flush();
     }
 
     /**

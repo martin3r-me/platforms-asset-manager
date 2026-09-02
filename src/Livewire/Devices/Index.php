@@ -10,6 +10,7 @@ use Platform\AssetManager\Concerns\AuthorizesTeamRole;
 use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetDevice;
+use Platform\AssetManager\Models\AssetDeviceEvent;
 use Platform\AssetManager\Models\AssetDeviceSyncLog;
 use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetHandoverLine;

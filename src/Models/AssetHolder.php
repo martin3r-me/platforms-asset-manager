@@ -143,7 +143,16 @@ class AssetHolder extends Model
     /** Anzeigename des Träger-Typs. */
     public function holderTypeLabel(): string
     {
-        return match ($this->holder_type) {
+        return self::holderTypeLabelFor($this->holder_type);
+    }
+
+    /**
+     * Anzeigename eines Träger-Typs ohne Instanz — für Auswahllisten und Sammelaktionen, die einen
+     * Zieltyp beschriften, bevor es einen Träger dazu gibt (Muster: {@see AssetDevice::lifecycleLabelFor()}).
+     */
+    public static function holderTypeLabelFor(?string $type): string
+    {
+        return match ($type) {
             self::TYPE_FUNCTION => 'Funktionskonto',
             self::TYPE_ADMIN    => 'Admin-Account',
             self::TYPE_SERVICE  => 'Service-/Technik-Account',
