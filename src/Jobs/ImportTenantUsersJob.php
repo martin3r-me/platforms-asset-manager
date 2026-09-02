@@ -67,7 +67,9 @@ class ImportTenantUsersJob implements ShouldQueue
             return;
         }
 
-        $count = 0;
+        $count    = 0;
+        $seenUpns = [];
+
         foreach ($users as $u) {
             if (empty($u['userPrincipalName'])) continue;
             $holder = $holders->findOrCreateByUpn(
@@ -84,16 +86,88 @@ class ImportTenantUsersJob implements ShouldQueue
             // Graph-Profil (department/jobTitle/Rufnummern) anreichern — gemeinsame Precedence-Logik (ADR 0014).
             $holders->applyGraphProfile($holder, $u);
 
+            // Kontostatus übernehmen. Fehlt das Feld (alter Graph-Cache, eingeschränkte Berechtigung),
+            // bleibt der bisherige Wert stehen — lieber nichts wissen als fälschlich deaktivieren.
+            if (array_key_exists('accountEnabled', $u)) {
+                $holder->is_active = (bool) $u['accountEnabled'];
+            }
+
             $holder->graph_id  = $u['id'] ?? $holder->graph_id;
             $holder->synced_at = now();
             $holder->save();
+
+            $seenUpns[] = mb_strtolower((string) $holder->user_principal_name);
             $count++;
         }
+
+        $deactivated = $this->reconcileHolders($teamId, $tenantId, $seenUpns);
 
         Log::info('AssetManager: Tenant-User-Import abgeschlossen', [
             'connector_id' => $this->connectorId,
             'tenant_id'    => $tenantId,
             'count'        => $count,
+            'deactivated'  => $deactivated,
         ]);
+    }
+
+    /**
+     * Träger stilllegen, die das Verzeichnis nicht mehr kennt.
+     *
+     * **Deaktivieren, nicht löschen.** Ein ausgeschiedener Mensch bleibt Teil der Historie: an ihm
+     * hängen Übergabeprotokolle, Zuordnungsverläufe und Kostenzeilen vergangener Monate. Gelöscht
+     * wären die Auswertungen der Vorjahre still falsch.
+     *
+     * Drei Sicherungen, weil ein falsch laufender Reconcile schlimmer ist als gar keiner:
+     *
+     * 1. **Leere Antwort tut nichts.** Ein erfolgreicher Abruf mit `value: []` ist syntaktisch
+     *    gültig, aber fachlich ein Tenant-Glitch — er würde sonst den ganzen Bestand stilllegen.
+     *    (Fehlerhafte Abrufe sind oben schon abgefangen: `$users === null`.)
+     * 2. **Nur `source = 'graph'`.** Abgeleitete Träger stammen aus Excel-Import, Gerätezuordnung
+     *    oder Rechnungen — das Verzeichnis hat sie nie gekannt und kann sie nicht bestätigen.
+     * 3. **Nur bereits aktive.** Wer schon inaktiv ist, wird nicht erneut angefasst.
+     *
+     * Der Abgleich läuft in PHP und nicht als `whereNotIn`: UPNs kommen in gemischter Schreibweise,
+     * und MySQL vergleicht ohne Rücksicht darauf, SQLite aber schon — derselbe Lauf käme lokal und
+     * live sonst auf verschiedene Ergebnisse.
+     *
+     * @param  list<string>  $seenUpns  kleingeschriebene UPNs aus der Graph-Antwort
+     * @return int Anzahl stillgelegter Träger
+     */
+    protected function reconcileHolders(int $teamId, int $tenantId, array $seenUpns): int
+    {
+        if ($seenUpns === []) {
+            Log::warning('AssetManager: Reconcile übersprungen — Graph lieferte keine Benutzer', [
+                'connector_id' => $this->connectorId,
+                'tenant_id'    => $tenantId,
+            ]);
+
+            return 0;
+        }
+
+        $seen = array_flip($seenUpns);
+
+        $stale = \Platform\AssetManager\Models\AssetHolder::withoutTenantScope()
+            ->forTenant($tenantId)
+            ->where('team_id', $teamId)
+            ->where('source', 'graph')
+            ->where('is_active', true)
+            ->get(['id', 'user_principal_name'])
+            ->reject(fn ($holder) => isset($seen[mb_strtolower((string) $holder->user_principal_name)]))
+            ->pluck('id');
+
+        if ($stale->isEmpty()) {
+            return 0;
+        }
+
+        \Platform\AssetManager\Models\AssetHolder::withoutTenantScope()
+            ->whereIn('id', $stale)
+            ->update(['is_active' => false]);
+
+        Log::info('AssetManager: Träger stillgelegt (nicht mehr im Verzeichnis)', [
+            'tenant_id' => $tenantId,
+            'count'     => $stale->count(),
+        ]);
+
+        return $stale->count();
     }
 }

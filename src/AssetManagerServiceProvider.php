@@ -38,6 +38,7 @@ class AssetManagerServiceProvider extends ServiceProvider
                 \Platform\AssetManager\Console\Commands\SyncLicensesCommand::class,
                 \Platform\AssetManager\Console\Commands\BackfillHoldersCommand::class,
                 \Platform\AssetManager\Console\Commands\ClassifyHoldersCommand::class,
+                \Platform\AssetManager\Console\Commands\MergeDeletedHoldersCommand::class,
                 \Platform\AssetManager\Console\Commands\ImportCostExcelCommand::class,
             ]);
         }

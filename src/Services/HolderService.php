@@ -12,11 +12,41 @@ use Platform\AssetManager\Models\AssetUserLicense;
 class HolderService
 {
     /**
+     * Präfix, das Entra beim Löschen vor die UPN setzt: die objectId ohne Bindestriche, gefolgt von
+     * der ursprünglichen UPN (`0b521d5646ee4b158a9c13727799dbd0F.MUSTER@firma.de`). So heißt das
+     * Konto, solange es im Papierkorb liegt — standardmäßig 30 Tage.
+     *
+     * Warum das hier steht: die UPN ist der Identitätsanker (ADR 0017). Ohne Normalisierung ist die
+     * umbenannte UPN eine *andere* Person, und jeder Pfad, der sie sieht, legt einen zweiten Träger
+     * an. Ein Löschen in Entra hat den Bestand hier dadurch nicht bereinigt, sondern verdoppelt.
+     *
+     * Der Lookahead verlangt nach dem Präfix einen **nicht leeren** Lokalteil und erst dann das `@`.
+     * Ohne das `+` würde eine echte Adresse, deren Lokalteil aus genau 32 Hex-Zeichen besteht
+     * (`0b521d…@firma.de` — etwa ein Dienstkonto), auf `@firma.de` zusammengestrichen.
+     */
+    public const DELETED_UPN_PREFIX = '/^[0-9a-f]{32}(?=[^@]+@)/i';
+
+    /** Papierkorb-Präfix entfernen. Alles andere bleibt unverändert. */
+    public static function normalizeUpn(string $upn): string
+    {
+        return preg_replace(self::DELETED_UPN_PREFIX, '', trim($upn)) ?: trim($upn);
+    }
+
+    /** Trägt diese UPN das Papierkorb-Präfix? */
+    public static function isDeletedUpn(string $upn): bool
+    {
+        return preg_match(self::DELETED_UPN_PREFIX, trim($upn)) === 1;
+    }
+
+    /**
      * Findet einen Asset-Träger anhand UPN (tenant-skopiert) oder legt ihn an (source=derived).
      * Aktualisiert display_name nur, wenn der bestehende leer ist.
      *
      * tenant_id ist die Identitäts-Achse (Unique (tenant_id, user_principal_name)); team_id wird
      * für Team-weite Auswertungen/Kostenmodell mitgeführt.
+     *
+     * Die UPN wird vorher normalisiert: ein Konto im Entra-Papierkorb soll auf denselben Träger
+     * zeigen wie vor der Löschung, nicht auf einen zweiten.
      */
     public function findOrCreateByUpn(
         int $teamId,
@@ -25,6 +55,7 @@ class HolderService
         ?string $displayName = null,
         string $source = 'derived'
     ): AssetHolder {
+        $upn = self::normalizeUpn($upn);
         // withoutTenantScope() ist hier PFLICHT, nicht Kosmetik: der Tenant kommt als Parameter, und
         // der Global Scope würde zusätzlich auf den *aktiven* Tenant filtern. Weichen beide ab (Job
         // ohne gesetzten Kontext, Aufruf aus einer anderen Sicht), findet firstOrNew den bestehenden

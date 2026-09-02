@@ -289,7 +289,10 @@ class IntuneGraphService
         }
 
         $users = [];
-        $url   = "{$this->graphBase}/users?\$select=id,displayName,userPrincipalName,department,jobTitle,mobilePhone,businessPhones,assignedLicenses&\$top=999";
+        // `accountEnabled` ist die einzige Auskunft darüber, ob ein Konto noch benutzt wird. Ohne das
+        // Feld blieb jeder Träger für immer aktiv — auch Jahre nach dem Austritt (siehe
+        // ImportTenantUsersJob::reconcileHolders()).
+        $url   = "{$this->graphBase}/users?\$select=id,displayName,userPrincipalName,department,jobTitle,mobilePhone,businessPhones,assignedLicenses,accountEnabled&\$top=999";
 
         $retried        = false;
         $throttleRetries = 0;
