@@ -48,13 +48,11 @@ class BillingAttachmentPdfController
             'countedAt'    => $this->countedAt($run),
         ])->render();
 
-        $slug = preg_replace('/[^A-Za-z0-9]+/', '_', (string) ($run->profile?->name ?? 'Kunde'));
+        // Namensschema wie bisher von Hand vergeben (`User_pauschale_07_2026.pdf`) — der Anhang soll
+        // in easybill neben den älteren stehen, ohne dass jemand zweimal hinsehen muss.
+        [$year, $month] = array_pad(explode('-', $run->period), 2, '');
 
-        $filename = sprintf(
-            'Leistungsnachweis_%s_%s.pdf',
-            trim($slug, '_') ?: 'Kunde',
-            $run->period,
-        );
+        $filename = sprintf('User_pauschale_%s_%s.pdf', $month, $year);
 
         return Pdf::loadHTML($html)->setPaper('a4')->download($filename);
     }
