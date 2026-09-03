@@ -120,7 +120,7 @@ class Index extends Component
         $this->showForm = false;
     }
 
-    public function saveProfile(): void
+    public function saveProfile(BillingGateway $gateway): void
     {
         abort_unless($this->canManage(), 403);
 
@@ -140,6 +140,27 @@ class Index extends Component
             'fVat'           => 'Steuersatz',
         ]);
 
+        // Eingegeben wird meist die Kundennummer vom easybill-Kundenblatt (6010200), gebraucht wird
+        // die interne ID (2636491004). Hier aufzulösen ist der einzige Moment, in dem ein Mensch
+        // danebensteht — beim Rechnungslauf wäre daraus ein „Kunde nicht gefunden" ohne Hinweis
+        // darauf, welche der beiden Zahlen gemeint war.
+        $customerId   = $this->fCustomerId !== null && $this->fCustomerId !== '' ? (int) $this->fCustomerId : null;
+        $customerName = $this->fCustomerName ?: null;
+
+        if ($customerId !== null && $gateway->isAvailable()) {
+            $customer = $gateway->findCustomer((string) $this->fCustomerId);
+
+            if ($customer === null) {
+                $this->addError('fCustomerId', 'In easybill nicht gefunden — weder als Kunden-ID noch als Kundennummer.');
+
+                return;
+            }
+
+            $customerId = $customer['id'];
+            // Bezeichnung nur füllen, wenn nichts eingetragen ist: eine bewusst gewählte behält Vorrang.
+            $customerName ??= $customer['name'] ?: null;
+        }
+
         $domains = collect(preg_split('/[\s,;]+/', $this->fExcludeDomains) ?: [])
             ->map(fn ($d) => strtolower(trim($d)))
             ->filter()
@@ -149,10 +170,8 @@ class Index extends Component
 
         $attributes = [
             'name'                   => $this->fName,
-            'easybill_customer_id'   => $this->fCustomerId !== null && $this->fCustomerId !== ''
-                ? (int) $this->fCustomerId
-                : null,
-            'easybill_customer_name' => $this->fCustomerName ?: null,
+            'easybill_customer_id'   => $customerId,
+            'easybill_customer_name' => $customerName,
             'commerce_sku'           => $this->fSku ?: null,
             // Der Rückfallpreis wird in Euro eingegeben und in Cent gehalten — die Umrechnung
             // gehört an die Eingabe, damit im Rest des Ablaufs nur noch Cent vorkommt.

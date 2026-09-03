@@ -182,7 +182,21 @@ $gateway = new class implements BillingGateway {
         return 999001;
     }
     public function documentUrl(int $documentId): ?string { return null; }
+
+    /** Kennt genau einen Kunden — unter interner ID UND Kundennummer, wie easybill selbst. */
+    public function findCustomer(string $idOrNumber): ?array
+    {
+        return match (trim($idOrNumber)) {
+            '2636491004', '6010200' => ['id' => 2636491004, 'name' => 'BHG.BROICHCATERING GMBH', 'number' => '6010200'],
+            default                 => null,
+        };
+    }
 };
+
+check('Gateway findet den Kunden ueber die interne ID', 2636491004, $gateway->findCustomer('2636491004')['id']);
+check('Gateway findet ihn auch ueber die Kundennummer', 2636491004, $gateway->findCustomer('6010200')['id']);
+check('Gateway liefert den Namen mit', 'BHG.BROICHCATERING GMBH', $gateway->findCustomer('6010200')['name']);
+check('Unbekannte Nummer -> null', null, $gateway->findCustomer('999'));
 
 $runs    = new BillingRunService($resolver, new BillingUnitPriceResolver(), $gateway);
 $preview = $runs->preview($profile, '2026-09');

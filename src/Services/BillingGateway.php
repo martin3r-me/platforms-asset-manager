@@ -33,4 +33,16 @@ interface BillingGateway
 
     /** Direktlink auf den Beleg im Zielsystem, sofern konstruierbar. */
     public function documentUrl(int $documentId): ?string;
+
+    /**
+     * Einen Rechnungsempfänger auflösen — wahlweise über die interne ID **oder** die Kundennummer.
+     *
+     * Beides zuzulassen ist kein Komfort, sondern eine Fehlerquelle weniger: in easybill sieht man
+     * die **Kundennummer** (`6010200`), die API verlangt aber die **interne ID** (`2636491004`).
+     * Wer die sichtbare Zahl einträgt, bekäme sonst erst beim Rechnungslauf ein „Kunde nicht
+     * gefunden" — Wochen später und ohne Hinweis darauf, welche der beiden Zahlen gemeint war.
+     *
+     * @return array{id: int, name: string, number: string|null}|null
+     */
+    public function findCustomer(string $idOrNumber): ?array;
 }

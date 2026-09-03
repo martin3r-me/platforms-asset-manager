@@ -76,4 +76,59 @@ class EasybillBillingGateway implements BillingGateway
     {
         return 'https://app.easybill.de/documents/' . $documentId;
     }
+
+    /**
+     * Kunden über die interne ID oder die Kundennummer finden.
+     *
+     * Erst der direkte Zugriff über die ID — trifft er, ist man fertig. Sonst der server-seitige
+     * Filter auf `number`; das ist die Zahl, die in easybill auf dem Kundenblatt steht und die ein
+     * Mensch zur Hand hat. Ein Fehlschlag der ID-Suche ist hier **kein** Fehler, sondern der
+     * Normalfall bei einer Kundennummer, deshalb wird er verschluckt.
+     */
+    public function findCustomer(string $idOrNumber): ?array
+    {
+        $needle = trim($idOrNumber);
+
+        if ($needle === '' || ! $this->isAvailable()) {
+            return null;
+        }
+
+        $api  = app(self::API_SERVICE);
+        $user = Auth::user();
+
+        if (ctype_digit($needle)) {
+            try {
+                $customer = $api->getCustomer($user, (int) $needle);
+
+                if (! empty($customer['id'])) {
+                    return $this->shape($customer);
+                }
+            } catch (Throwable) {
+                // Keine ID — gleich als Kundennummer versuchen.
+            }
+        }
+
+        try {
+            $result = $api->listCustomers($user, ['number' => $needle, 'limit' => 2]);
+        } catch (Throwable $e) {
+            $this->reason = 'easybill: ' . $e->getMessage();
+
+            return null;
+        }
+
+        $items = $result['items'] ?? $result['data'] ?? [];
+
+        // Genau ein Treffer oder keiner: bei mehreren gleicher Nummer wäre jede Wahl geraten.
+        return count($items) === 1 ? $this->shape($items[0]) : null;
+    }
+
+    /** @return array{id: int, name: string, number: string|null} */
+    protected function shape(array $customer): array
+    {
+        return [
+            'id'     => (int) $customer['id'],
+            'name'   => (string) ($customer['display_name'] ?? $customer['company_name'] ?? ''),
+            'number' => isset($customer['number']) ? (string) $customer['number'] : null,
+        ];
+    }
 }

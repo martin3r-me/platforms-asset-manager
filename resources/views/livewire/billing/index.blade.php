@@ -249,15 +249,20 @@
                 <span class="text-[10px] font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Empfänger in easybill</span>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Kundennummer</label>
-                        <x-asset-manager-input size="sm" type="text" wire:model="fCustomerId" placeholder="z. B. 2636491004" />
+                        <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Kundennummer oder Kunden-ID</label>
+                        <x-asset-manager-input size="sm" type="text" wire:model="fCustomerId" placeholder="z. B. 6010200" />
                         @error('fCustomerId') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
                     </div>
                     <div>
                         <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Bezeichnung</label>
-                        <x-asset-manager-input size="sm" type="text" wire:model="fCustomerName" placeholder="Lesehilfe für diese Seite" />
+                        <x-asset-manager-input size="sm" type="text" wire:model="fCustomerName" placeholder="wird beim Speichern gefüllt" />
                     </div>
                 </div>
+                <p class="text-[10px] text-[var(--am-text-muted)]">
+                    Beides geht: die Kundennummer vom easybill-Kundenblatt (6010200) oder die interne Kunden-ID.
+                    Beim Speichern wird der Kunde nachgeschlagen, die Bezeichnung übernommen — und ein Tippfehler
+                    fällt sofort auf statt erst beim Rechnungslauf.
+                </p>
             </div>
 
             <div class="rounded-lg border border-[color:var(--am-border)] p-3 space-y-3">
