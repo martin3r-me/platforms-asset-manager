@@ -183,6 +183,11 @@ $gateway = new class implements BillingGateway {
     }
     public function documentUrl(int $documentId): ?string { return null; }
 
+    /** null = konnte nicht nachsehen, false = nachweislich weg, true = da. */
+    public ?bool $exists = true;
+
+    public function documentExists(int $documentId): ?bool { return $this->exists; }
+
     /** Kennt genau einen Kunden — unter interner ID UND Kundennummer, wie easybill selbst. */
     public function findCustomer(string $idOrNumber): ?array
     {
@@ -232,6 +237,28 @@ check('Gateway: genau ein Beleg gesendet', 1, count($gateway->sent));
 $second = $runs->preview($profile, '2026-09');
 check('Zweiter Lauf desselben Monats wird beanstandet', 1, count($second['problems']));
 check('Anderer Monat bleibt moeglich', [], $runs->preview($profile, '2026-10')['problems']);
+
+// --- Beleg in easybill geloescht -----------------------------------------
+// Die gefaehrliche Verwechslung: "konnte nicht nachsehen" darf NICHT wie "geloescht" wirken,
+// sonst entstuende fuer denselben Monat eine zweite Rechnung.
+$gateway->exists = null;
+check('Unerreichbares easybill gibt die Periode NICHT frei', 1,
+    count($runs->preview($profile, '2026-09')['problems']));
+
+$gateway->exists = false;
+check('Geloeschter Beleg gibt die Periode frei', [], $runs->preview($profile, '2026-09')['problems']);
+
+$discarded = AssetBillingRun::withoutTenantScope()->where('period', '2026-09')->latest('id')->first();
+check('Lauf ist als verworfen markiert', AssetBillingRun::STATUS_DISCARDED, $discarded->status);
+check('Beleg-ID bleibt zur Nachvollziehbarkeit stehen', 999001, $discarded->easybill_document_id);
+check('Grund ist vermerkt', true, str_contains((string) $discarded->error, 'gelöscht'));
+
+// Ein verworfener Lauf blockiert auch spaeter nicht mehr — auch dann nicht, wenn easybill
+// zwischenzeitlich wieder erreichbar ist.
+$gateway->exists = true;
+check('Verworfener Lauf blockiert dauerhaft nicht mehr', [], $runs->preview($profile, '2026-09')['problems']);
+
+$gateway->exists = true;
 
 // --- Fehlschlag wird protokolliert ---------------------------------------
 $gateway->explode = true;

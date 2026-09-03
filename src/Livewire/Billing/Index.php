@@ -39,6 +39,9 @@ class Index extends Component
     /** Übersprungene Träger sind standardmäßig eingeklappt — sie sind eine Begründung, kein Inhalt. */
     public bool $showSkipped = false;
 
+    /** Aufstellung der abzurechnenden Träger — hinter der Kachel, nicht daneben. */
+    public bool $showBillable = false;
+
     public ?string $flash = null;
 
     public ?string $error = null;
@@ -204,7 +207,8 @@ class Index extends Component
     public function selectProfile(int $id): void
     {
         $this->selectedProfileId = $this->profileOrFail($id)->id;
-        $this->showSkipped = false;
+        $this->showSkipped  = false;
+        $this->showBillable = false;
         $this->flash = null;
         $this->error = null;
     }

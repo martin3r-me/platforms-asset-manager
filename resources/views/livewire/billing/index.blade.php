@@ -117,12 +117,19 @@
                         </div>
 
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            {{-- Klickbar: die Zahl allein beantwortet nicht, WER dahintersteckt — und
+                                 genau das will man wissen, bevor eine Rechnung rausgeht. --}}
                             <x-asset-manager-stat-card
                                 label="Abzurechnende Träger"
                                 :value="number_format($preview['quantity'], 0, ',', '.')"
-                                :sub="$preview['skipped'] ? count($preview['skipped']) . ' nicht gezählt' : 'keine Ausschlüsse'"
+                                :sub="$preview['quantity'] > 0 ? 'Aufstellung anzeigen' : ($preview['skipped'] ? count($preview['skipped']) . ' nicht gezählt' : 'keine Ausschlüsse')"
                                 icon="heroicon-o-users"
-                                accent="navy" />
+                                accent="navy"
+                                wire:click="$set('showBillable', true)"
+                                class="cursor-pointer hover:border-[color:var(--am-accent)] transition-colors"
+                                role="button"
+                                tabindex="0"
+                                title="Alle abzurechnenden Asset-Träger anzeigen" />
 
                             <x-asset-manager-stat-card
                                 label="Stückpreis netto"
@@ -214,7 +221,13 @@
                                             <td class="px-4 py-2.5 text-right tabular-nums text-[var(--am-text-secondary)]">{{ number_format($run->unitPrice(), 2, ',', '.') }} €</td>
                                             <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-[var(--am-accent)]">{{ number_format($run->totalNet(), 2, ',', '.') }} €</td>
                                             <td class="px-4 py-2.5">
-                                                @if($run->easybill_document_id)
+                                                @if($run->status === \Platform\AssetManager\Models\AssetBillingRun::STATUS_DISCARDED)
+                                                    {{-- Der Lauf bleibt sichtbar, blockiert die Periode aber nicht mehr. --}}
+                                                    <span class="text-xs text-[var(--am-text-muted)] line-through" title="{{ $run->error }}">
+                                                        #{{ $run->easybill_document_id }}
+                                                    </span>
+                                                    <span class="text-xs text-[var(--am-text-muted)]">in easybill gelöscht</span>
+                                                @elseif($run->easybill_document_id)
                                                     <a href="https://app.easybill.de/documents/{{ $run->easybill_document_id }}" target="_blank" rel="noopener"
                                                        class="text-xs text-[var(--am-accent)] hover:underline">
                                                         Entwurf #{{ $run->easybill_document_id }}
@@ -233,6 +246,64 @@
             @endif
         </div>
     </div>
+
+    {{-- ---- Aufstellung der abzurechnenden Träger ------------------------------------------- --}}
+    <x-ui-modal model="showBillable" size="lg">
+        <x-slot name="header">
+            Abzurechnende Asset-Träger{{ $preview ? ' — ' . $preview['period_label'] : '' }}
+        </x-slot>
+
+        @if($preview && $preview['billable'] !== [])
+            <div class="space-y-3">
+                <p class="text-sm text-[var(--am-text-secondary)]">
+                    <strong class="text-[var(--am-text)]">{{ count($preview['billable']) }}</strong> Träger
+                    à {{ $preview['unit_price_cents'] === null ? '—' : number_format($preview['unit_price_cents'] / 100, 2, ',', '.') . ' €' }}
+                    = <strong class="text-[var(--am-accent)]">{{ number_format($preview['total_net_cents'] / 100, 2, ',', '.') }} €</strong> netto.
+                    Zählregel: {{ $selected?->basisLabel() }}.
+                </p>
+
+                <div class="rounded-lg border border-[color:var(--am-border)] max-h-[26rem] overflow-y-auto">
+                    <table class="w-full text-sm">
+                        <thead class="sticky top-0">
+                            <tr class="bg-[var(--am-bg)] border-b border-[color:var(--am-border)] text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">
+                                <th class="text-right px-3 py-2 w-10">#</th>
+                                <th class="text-left px-3 py-2">Name</th>
+                                <th class="text-left px-3 py-2">UPN</th>
+                                <th class="text-left px-3 py-2">Abteilung</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-[color:var(--am-border)]">
+                            @foreach($preview['billable'] as $row)
+                                <tr wire:key="bill-{{ $loop->index }}" class="hover:bg-[var(--am-bg)] transition-colors">
+                                    <td class="px-3 py-1.5 text-right text-xs tabular-nums text-[var(--am-text-muted)]">{{ $loop->iteration }}</td>
+                                    <td class="px-3 py-1.5 text-[var(--am-text)]">{{ $row['name'] }}</td>
+                                    <td class="px-3 py-1.5 font-mono text-xs text-[var(--am-text-secondary)]">{{ $row['upn'] }}</td>
+                                    <td class="px-3 py-1.5 text-xs text-[var(--am-text-secondary)]">{{ $row['department'] ?: '—' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+
+                @if($preview['skipped'] !== [])
+                    <p class="text-[10px] text-[var(--am-text-muted)]">
+                        {{ count($preview['skipped']) }} weitere Träger werden nicht abgerechnet — die Begründung je
+                        Person steht unter der Kachel-Reihe.
+                    </p>
+                @endif
+            </div>
+        @else
+            <div class="p-8 text-center text-sm text-[var(--am-text-secondary)]">
+                Die Zählregel trifft auf keinen Asset-Träger zu.
+            </div>
+        @endif
+
+        <x-slot name="footer">
+            <x-asset-manager-button variant="secondary" size="sm" wire:click="$set('showBillable', false)">
+                Schließen
+            </x-asset-manager-button>
+        </x-slot>
+    </x-ui-modal>
 
     {{-- ---- Profil-Formular (Modal muss innerhalb von x-ui-page liegen) ---------------------- --}}
     <x-ui-modal model="showForm" size="lg">

@@ -26,6 +26,13 @@ class AssetBillingRun extends Model
     /** Lauf ist nicht bis zum Beleg gekommen — der Grund steht in `error`. */
     public const STATUS_FAILED = 'failed';
 
+    /**
+     * Der Beleg wurde in easybill gelöscht. Der Lauf bleibt als Vorgang stehen (wer wann welche
+     * Menge erzeugt hat, ist auch dann eine Auskunft), gibt die Periode aber wieder frei — sonst
+     * ließe sich für diesen Monat nie wieder eine Rechnung erzeugen.
+     */
+    public const STATUS_DISCARDED = 'discarded';
+
     /** Stückpreis kam aus dem Commerce-Artikel. */
     public const PRICE_SOURCE_COMMERCE = 'commerce';
 

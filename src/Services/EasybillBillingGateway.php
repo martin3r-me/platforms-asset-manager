@@ -78,6 +78,36 @@ class EasybillBillingGateway implements BillingGateway
     }
 
     /**
+     * Existiert der Beleg noch?
+     *
+     * Nur ein **404** gilt als Beweis für „gelöscht". Jeder andere Fehler — Token abgelaufen,
+     * Netzwerk weg, easybill drosselt — liefert `null`; daraus eine Löschung zu folgern würde die
+     * Periode freigeben und eine zweite Rechnung ermöglichen. Der HTTP-Status kommt per
+     * `method_exists()` von der Connector-Ausnahme, damit hier kein harter Verweis auf deren Klasse
+     * entsteht.
+     */
+    public function documentExists(int $documentId): ?bool
+    {
+        if (! $this->isAvailable()) {
+            return null;
+        }
+
+        try {
+            $document = app(self::API_SERVICE)->getDocument(Auth::user(), $documentId);
+
+            return ! empty($document['id']);
+        } catch (Throwable $e) {
+            if (method_exists($e, 'getHttpStatusCode') && $e->getHttpStatusCode() === 404) {
+                return false;
+            }
+
+            $this->reason = 'easybill: ' . $e->getMessage();
+
+            return null;
+        }
+    }
+
+    /**
      * Kunden über die interne ID oder die Kundennummer finden.
      *
      * Erst der direkte Zugriff über die ID — trifft er, ist man fertig. Sonst der server-seitige

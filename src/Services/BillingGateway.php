@@ -35,6 +35,17 @@ interface BillingGateway
     public function documentUrl(int $documentId): ?string;
 
     /**
+     * Gibt es diesen Beleg im Zielsystem noch?
+     *
+     * Dreiwertig, und das ist der Punkt: `true` vorhanden, `false` **nachweislich** weg (404),
+     * `null` **unbekannt** — kein Rechnungssystem angebunden, Netzwerkfehler, Token abgelaufen.
+     * `null` darf niemals wie `false` behandelt werden: aus „ich konnte nicht nachsehen" eine
+     * gelöschte Rechnung zu folgern, gäbe die Periode frei und ließe eine zweite Rechnung für
+     * denselben Monat entstehen.
+     */
+    public function documentExists(int $documentId): ?bool;
+
+    /**
      * Einen Rechnungsempfänger auflösen — wahlweise über die interne ID **oder** die Kundennummer.
      *
      * Beides zuzulassen ist kein Komfort, sondern eine Fehlerquelle weniger: in easybill sieht man

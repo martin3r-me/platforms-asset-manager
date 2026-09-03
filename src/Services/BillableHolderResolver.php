@@ -22,7 +22,11 @@ use Platform\AssetManager\Models\AssetUserLicense;
 class BillableHolderResolver
 {
     /**
-     * @return array{principals: string[], skipped: array<int, array{upn: string, reason: string}>}
+     * @return array{
+     *     principals: string[],
+     *     rows: array<int, array{upn: string, name: string, department: string|null}>,
+     *     skipped: array<int, array{upn: string, reason: string}>
+     * }
      */
     public function resolve(AssetBillingProfile $profile): array
     {
@@ -34,8 +38,8 @@ class BillableHolderResolver
 
         $excludedDomains = $profile->normalizedExcludeDomains();
 
-        $principals = [];
-        $skipped    = [];
+        $rows    = [];
+        $skipped = [];
 
         foreach ($holders as $holder) {
             $upn = trim((string) $holder->user_principal_name);
@@ -67,18 +71,29 @@ class BillableHolderResolver
                 continue;
             }
 
-            $principals[] = $upn;
+            $rows[] = [
+                'upn'        => $upn,
+                'name'       => (string) ($holder->display_name ?: $upn),
+                'department' => $holder->department,
+            ];
         }
 
         // Derselbe Mensch darf nicht zweimal auf der Rechnung stehen, auch wenn er zweimal im
         // Verzeichnis steht. Der Vergleich läuft case-insensitiv, weil die UPNs aus verschiedenen
         // Quellen unterschiedlich geschrieben ankommen (Graph liefert sie teils in Großbuchstaben).
-        $principals = collect($principals)
-            ->unique(fn (string $upn) => strtolower($upn))
+        $rows = collect($rows)
+            ->unique(fn (array $row) => strtolower($row['upn']))
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
             ->values()
             ->all();
 
-        return ['principals' => $principals, 'skipped' => $skipped];
+        // `principals` bleibt die schlanke UPN-Liste: sie geht in den Snapshot des Laufs und soll
+        // dort nicht mit Anzeigedaten aufgebläht werden, die sich ohnehin ändern können.
+        return [
+            'principals' => array_column($rows, 'upn'),
+            'rows'       => $rows,
+            'skipped'    => $skipped,
+        ];
     }
 
     /**
@@ -96,7 +111,7 @@ class BillableHolderResolver
             ->where('team_id', $profile->team_id)
             ->where('is_active', true)
             ->orderBy('user_principal_name')
-            ->get(['id', 'user_principal_name', 'display_name', 'holder_type', 'is_active']);
+            ->get(['id', 'user_principal_name', 'display_name', 'department', 'holder_type', 'is_active']);
     }
 
     /**

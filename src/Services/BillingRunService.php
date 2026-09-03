@@ -86,6 +86,9 @@ class BillingRunService
             'price_label'      => $price['label'],
             'price_note'       => $price['note'],
             'principals'       => $counted['principals'],
+            // Dieselbe Menge wie `principals`, nur mit Name und Abteilung — für die Liste hinter der
+            // Kachel. Eine Aufstellung aus 135 nackten UPNs liest niemand gegen.
+            'billable'         => $counted['rows'],
             'skipped'          => $counted['skipped'],
             'period_label'     => $this->periodLabel($period),
             'problems'         => $problems,
@@ -149,16 +152,42 @@ class BillingRunService
         ]);
     }
 
-    /** Der erfolgreiche Lauf dieser Periode, falls es einen gibt. */
+    /**
+     * Der noch gültige Beleg dieser Periode, falls es einen gibt.
+     *
+     * Gleicht mit dem Rechnungssystem ab: wird der Entwurf dort gelöscht, darf er die Periode nicht
+     * weiter blockieren — sonst ließe sich für diesen Monat nie wieder eine Rechnung erzeugen, und
+     * das ohne erkennbaren Grund, weil in easybill ja nichts mehr liegt.
+     *
+     * Nur ein **nachgewiesenes** Fehlen zählt (`false`). Bei `null` — nicht angebunden, Netzwerk weg,
+     * Token abgelaufen — bleibt der Lauf blockierend: aus „ich konnte nicht nachsehen" eine Löschung
+     * zu folgern hieße, eine zweite Rechnung für denselben Monat zu riskieren.
+     */
     public function existingDraft(AssetBillingProfile $profile, string $period): ?AssetBillingRun
     {
-        return AssetBillingRun::query()
+        $run = AssetBillingRun::query()
             ->withoutTenantScope()
             ->where('billing_profile_id', $profile->id)
             ->where('period', $this->normalizePeriod($period))
+            ->where('status', AssetBillingRun::STATUS_DRAFT)
             ->whereNotNull('easybill_document_id')
             ->latest('id')
             ->first();
+
+        if ($run === null) {
+            return null;
+        }
+
+        if ($this->gateway->documentExists((int) $run->easybill_document_id) === false) {
+            $run->update([
+                'status' => AssetBillingRun::STATUS_DISCARDED,
+                'error'  => 'Beleg in easybill gelöscht — festgestellt am ' . Carbon::now()->format('d.m.Y H:i') . '.',
+            ]);
+
+            return null;
+        }
+
+        return $run;
     }
 
     /**
