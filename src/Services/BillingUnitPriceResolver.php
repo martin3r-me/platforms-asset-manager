@@ -29,7 +29,8 @@ class BillingUnitPriceResolver
     protected const COMMERCE_ARTICLE = '\Platform\Commerce\Models\CommerceArticle';
 
     /**
-     * @return array{cents: int|null, source: string|null, label: string|null, booking_account: string|null, note: string|null}
+     * @return array{cents: int|null, source: string|null, label: string|null, number: string|null,
+     *     booking_account: string|null, vat_percent: float|null, unit: string|null, note: string|null}
      */
     public function resolve(AssetBillingProfile $profile): array
     {
@@ -46,7 +47,12 @@ class BillingUnitPriceResolver
                 'cents'           => (int) $profile->fallback_unit_price_cents,
                 'source'          => AssetBillingRun::PRICE_SOURCE_FALLBACK,
                 'label'           => $profile->name,
+                // Ohne Artikel keine Artikelnummer: der Suchbegriff aus dem Profil waere hier eine
+                // Nummer, zu der es nachweislich keinen Artikel gibt.
+                'number'          => null,
                 'booking_account' => null,
+                'vat_percent'     => null,
+                'unit'            => null,
                 'note'            => $profile->commerce_sku
                     ? 'Artikel ' . $profile->commerce_sku . ' nicht gefunden — Rückfallpreis verwendet.'
                     : null,
@@ -57,13 +63,17 @@ class BillingUnitPriceResolver
             'cents'           => null,
             'source'          => null,
             'label'           => null,
+            'number'          => null,
             'booking_account' => null,
+            'vat_percent'     => null,
+            'unit'            => null,
             'note'            => 'Kein Preis ermittelbar: weder ein auffindbarer Commerce-Artikel noch ein Rückfallpreis.',
         ];
     }
 
     /**
-     * @return array{cents: int, source: string, label: string|null, booking_account: string|null, note: string|null}|null
+     * @return array{cents: int, source: string, label: string|null, number: string|null,
+     *     booking_account: string|null, vat_percent: float|null, unit: string|null, note: string|null}|null
      */
     protected function fromCommerce(AssetBillingProfile $profile): ?array
     {
@@ -107,11 +117,23 @@ class BillingUnitPriceResolver
             'cents'  => $cents,
             'source' => AssetBillingRun::PRICE_SOURCE_COMMERCE,
             'label'  => $article->name ?: $profile->name,
-            // Erlöskonto des Artikels. easybill erwartet es an der Position (`booking_account`) und
-            // schreibt es in den DATEV-Export; ohne diesen Durchstich landet der Umsatz auf dem
-            // Sammelkonto und muss in der Buchhaltung von Hand umgesetzt werden.
-            'booking_account' => $article->revenue_account ?: null,
-            'note'            => null,
+            // Die Artikelnummer kommt aus dem **gefundenen Artikel**, nicht aus dem Profilfeld.
+            // Beides sieht gleich aus, ist es aber nicht: das Profilfeld ist der Suchbegriff, die
+            // hier zurückgegebene Nummer die des Treffers. Stünde auf dem Beleg der Suchbegriff,
+            // wäre eine Rechnung mit einer Artikelnummer möglich, die es so nicht gibt.
+            'number' => $article->sku ?: null,
+            // Erlöskonto des Artikels — bewusst `effective_…`, das die Vererbung von der
+            // Steuerkategorie einschließt. Das rohe `revenue_account` ist am Artikel oft leer,
+            // obwohl über die Kategorie eines gilt; der Umsatz landete dann auf dem Sammelkonto.
+            'booking_account' => $article->effective_revenue_account ?: ($article->revenue_account ?: null),
+            // Steuersatz aus der Steuerkategorie des Artikels. Nur wenn dort einer hinterlegt ist —
+            // sonst bleibt der Wert am Profil maßgeblich.
+            'vat_percent' => $article->taxCategory?->default_rate !== null
+                ? (float) $article->taxCategory->default_rate
+                : null,
+            // Mengeneinheit („Pauschale", „Stück") — steht in easybill neben der Menge.
+            'unit' => $article->base_price_unit ?: null,
+            'note' => null,
         ];
     }
 }

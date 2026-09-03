@@ -254,20 +254,33 @@ class BillingRunService
         $start = Carbon::createFromFormat('Y-m-d', $period . '-01')->startOfMonth();
         $label = $this->periodLabel($period);
 
+        // Die Position spiegelt den Commerce-Artikel: Bezeichnung, Artikelnummer, Einheit,
+        // Erlöskonto und Steuersatz kommen von dort. Der Abrechnungsmonat steht bewusst NICHT in
+        // der Bezeichnung — dafür ist der Leistungszeitraum da, und die Bezeichnung soll die des
+        // Artikels bleiben, so wie auf den von Hand erstellten Rechnungen.
         $item = [
             'type'             => 'POSITION',
-            'description'      => ($price['label'] ?: $profile->name) . ' — ' . $label,
+            'description'      => $price['label'] ?: $profile->name,
             'quantity'         => $quantity,
             'single_price_net' => $unitPriceCents,
         ];
 
-        if ($profile->commerce_sku) {
-            $item['number'] = $profile->commerce_sku;
+        // Artikelnummer nur aus dem gefundenen Artikel. Beim Rückfallpreis gibt es keinen — dann
+        // bleibt das Feld leer, statt eine Nummer zu behaupten, zu der kein Artikel existiert.
+        if (! empty($price['number'])) {
+            $item['number'] = (string) $price['number'];
         }
 
-        // Nur setzen, wenn bekannt: ein leeres Feld würde in easybill den Kundendefault überschreiben.
-        if ($profile->vat_percent !== null) {
-            $item['vat_percent'] = (int) $profile->vat_percent;
+        if (! empty($price['unit'])) {
+            $item['unit'] = (string) $price['unit'];
+        }
+
+        // Der Artikel führt, das Profil ist der Rückfall. Bleibt beides leer, wird nichts gesendet
+        // und die Einstellung des easybill-Kunden gilt.
+        $vat = $price['vat_percent'] ?? $profile->vat_percent;
+
+        if ($vat !== null) {
+            $item['vat_percent'] = (float) $vat;
         }
 
         if ($price['booking_account']) {

@@ -232,12 +232,41 @@ check('Beleg: Typ', 'INVOICE', $doc['type']);
 check('Beleg: Kunde', 2636491004, $doc['customer_id']);
 check('Beleg: Stueckpreis als Integer-Cent', 8000, $doc['items'][0]['single_price_net']);
 check('Beleg: Menge', 2, $doc['items'][0]['quantity']);
-check('Beleg: Steuersatz', 19, $doc['items'][0]['vat_percent']);
-check('Beleg: Artikelnummer', 'IT-5001', $doc['items'][0]['number']);
+check('Beleg: Steuersatz aus dem Profil', 19.0, $doc['items'][0]['vat_percent']);
+// Ohne Commerce greift der Rueckfallpreis — und dann gibt es KEINE Artikelnummer. Sie zu setzen
+// hiesse, eine Nummer zu behaupten, zu der nachweislich kein Artikel existiert.
+check('Rueckfallpreis: keine Artikelnummer', false, isset($doc['items'][0]['number']));
+check('Rueckfallpreis: keine Einheit', false, isset($doc['items'][0]['unit']));
+check('Beleg: Bezeichnung ohne Monat (der steht im Leistungszeitraum)', 'Broich', $doc['items'][0]['description']);
 check('Beleg: Leistungszeitraum von', '2026-09-01', $doc['service_date']['date_from']);
 check('Beleg: Leistungszeitraum bis', '2026-09-30', $doc['service_date']['date_to']);
 
-// Ungueltige Periode faellt auf den laufenden Monat zurueck statt zu raten.
+// --- Position spiegelt den Commerce-Artikel ------------------------------
+// Der Artikel ist die Wahrheit: Bezeichnung, Nummer, Einheit, Erloeskonto und Steuersatz kommen
+// von dort. Besonders die NUMMER — sie stammt aus dem gefundenen Artikel, nicht aus dem
+// Profilfeld, das nur der Suchbegriff ist.
+$withArticle = new class extends BillingUnitPriceResolver {
+    public function resolve(AssetBillingProfile $profile): array
+    {
+        return [
+            'cents' => 8000, 'source' => AssetBillingRun::PRICE_SOURCE_COMMERCE,
+            'label' => 'Mitarbeiter Servicepauschale', 'number' => 'IT-5001',
+            'booking_account' => '440100', 'vat_percent' => 7.0, 'unit' => 'Pauschale', 'note' => null,
+        ];
+    }
+};
+
+$articleRuns = new BillingRunService($resolver, $withArticle, $gateway);
+$articleDoc  = $articleRuns->preview($profile, '2026-11')['document'];
+$articleItem = $articleDoc['items'][0];
+
+check('Artikel: Bezeichnung kommt vom Artikel', 'Mitarbeiter Servicepauschale', $articleItem['description']);
+check('Artikel: Nummer kommt vom Artikel', 'IT-5001', $articleItem['number']);
+check('Artikel: Einheit wird uebernommen', 'Pauschale', $articleItem['unit']);
+check('Artikel: Erloeskonto wird uebernommen', '440100', $articleItem['booking_account']);
+check('Artikel: Steuersatz des Artikels schlaegt den des Profils', 7.0, $articleItem['vat_percent']);
+
+// --- Ungueltige Periode faellt auf den laufenden Monat zurueck statt zu raten.
 check('Periode: Unsinn faellt auf jetzt zurueck', now()->format('Y-m'), $runs->normalizePeriod('Herbst'));
 
 $run = $runs->createDraft($profile, '2026-09');
