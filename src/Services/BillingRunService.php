@@ -128,6 +128,10 @@ class BillingRunService
             'user_id'            => Auth::id(),
             'snapshot'           => [
                 'principals' => $preview['principals'],
+                // Namen und Abteilung gehören mit in den Snapshot, weil aus ihm der
+                // Leistungsnachweis entsteht: ein Nachweis, der Monate später die heutige
+                // Belegschaft zeigt statt der damals abgerechneten, wäre keiner.
+                'rows'       => $preview['billable'],
                 'skipped'    => $preview['skipped'],
                 'basis'      => $profile->basis,
                 'excluded_domains' => $profile->normalizedExcludeDomains(),

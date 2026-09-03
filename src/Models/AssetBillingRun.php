@@ -92,4 +92,25 @@ class AssetBillingRun extends Model
     {
         return $this->snapshot['principals'] ?? [];
     }
+
+    /**
+     * Die abgerechneten Träger mit Namen — die Vorlage des Leistungsnachweises.
+     *
+     * Läufe von vor der Snapshot-Erweiterung führen nur UPNs. Statt sie aus dem heutigen Bestand
+     * nachzuschlagen — was Monate später andere Namen liefern könnte als damals abgerechnet —
+     * treten sie mit der UPN als Namen auf. Lieber karg und richtig als vollständig und erfunden.
+     *
+     * @return array<int, array{upn: string, name: string, department: string|null}>
+     */
+    public function snapshotRows(): array
+    {
+        if (! empty($this->snapshot['rows'])) {
+            return $this->snapshot['rows'];
+        }
+
+        return array_map(
+            fn (string $upn) => ['upn' => $upn, 'name' => $upn, 'department' => null],
+            $this->snapshotPrincipals(),
+        );
+    }
 }

@@ -28,6 +28,7 @@ use Platform\AssetManager\Livewire\Settings\Index as SettingsIndex;
 use Platform\AssetManager\Http\Middleware\EnsureControllingEnabled;
 use Platform\AssetManager\Livewire\Handovers\Index as HandoversIndex;
 use Platform\AssetManager\Http\Controllers\HandoverPdfController;
+use Platform\AssetManager\Http\Controllers\BillingAttachmentPdfController;
 
 Route::get('/', Dashboard::class)->name('asset-manager.dashboard');
 
@@ -97,6 +98,8 @@ Route::middleware(EnsureControllingEnabled::class)->group(function () {
     // der Controlling-Gruppe, weil es eine kaufmännische Auswertung ist — ein Team, das den
     // Asset Manager rein für IT-Lifecycle nutzt, hat damit nichts zu tun.
     Route::get('/billing', BillingIndex::class)->name('asset-manager.billing.index');
+    // Leistungsnachweis zu einem Lauf — die Aufstellung, die der Rechnung beiliegt.
+    Route::get('/billing/runs/{run}/pdf', BillingAttachmentPdfController::class)->name('asset-manager.billing.run.pdf');
 
     // Stammdaten: alle vier Bereiche auf EINER Seite
     Route::get('/master-data', MasterDataIndex::class)->name('asset-manager.master-data.index');

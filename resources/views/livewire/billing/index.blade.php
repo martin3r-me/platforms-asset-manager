@@ -210,6 +210,7 @@
                                         <th class="text-right px-4 py-3 bg-[var(--am-bg)]">Stückpreis</th>
                                         <th class="text-right px-4 py-3 bg-[var(--am-bg)]">Netto</th>
                                         <th class="text-left px-4 py-3 bg-[var(--am-bg)]">Beleg</th>
+                                        <th class="text-left px-4 py-3 bg-[var(--am-bg)]">Nachweis</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-[color:var(--am-border)]">
@@ -234,6 +235,20 @@
                                                     </a>
                                                 @else
                                                     <span class="text-xs text-red-700" title="{{ $run->error }}">fehlgeschlagen</span>
+                                                @endif
+                                            </td>
+                                            <td class="px-4 py-2.5">
+                                                {{-- Auch für verworfene und fehlgeschlagene Läufe: die Aufstellung
+                                                     steht im Snapshot und bleibt eine Auskunft darüber, was gezählt wurde. --}}
+                                                @if($run->quantity > 0)
+                                                    <a href="{{ route('asset-manager.billing.run.pdf', $run) }}" target="_blank" rel="noopener"
+                                                       class="inline-flex items-center gap-1 text-xs text-[var(--am-accent)] hover:underline"
+                                                       title="Leistungsnachweis mit allen {{ $run->quantity }} Plätzen">
+                                                        @svg('heroicon-o-document-arrow-down', 'w-3.5 h-3.5')
+                                                        PDF
+                                                    </a>
+                                                @else
+                                                    <span class="text-xs text-[var(--am-text-muted)]">—</span>
                                                 @endif
                                             </td>
                                         </tr>

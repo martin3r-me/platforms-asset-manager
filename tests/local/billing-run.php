@@ -229,6 +229,17 @@ $run = $runs->createDraft($profile, '2026-09');
 check('Lauf: Beleg-ID gespeichert', 999001, $run->easybill_document_id);
 check('Lauf: Status', AssetBillingRun::STATUS_DRAFT, $run->status);
 check('Lauf: Snapshot friert die Traeger ein', 2, count($run->snapshotPrincipals()));
+
+// Der Leistungsnachweis entsteht aus dem Snapshot — er muss die Namen mitfuehren, sonst zeigte er
+// Monate spaeter die heutige Belegschaft statt der damals abgerechneten.
+check('Snapshot fuehrt Namen mit', 2, count($run->snapshotRows()));
+check('Snapshot-Zeile hat UPN', true, isset($run->snapshotRows()[0]['upn']));
+check('Snapshot-Zeile hat Namen', true, isset($run->snapshotRows()[0]['name']));
+
+// Aelterer Lauf ohne `rows`: faellt auf die UPN als Namen zurueck, statt heutige Daten zu erfinden.
+$legacy = new AssetBillingRun(['snapshot' => ['principals' => ['alt@kunde.de']]]);
+check('Alter Snapshot: Rueckfall auf die UPN', 'alt@kunde.de', $legacy->snapshotRows()[0]['name']);
+check('Alter Snapshot: genau eine Zeile', 1, count($legacy->snapshotRows()));
 check('Lauf: Uebersprungene mitgezaehlt', 4, $run->skipped_count);
 check('Lauf: Euro-Betrag fuer die Anzeige', 160.0, $run->totalNet());
 check('Gateway: genau ein Beleg gesendet', 1, count($gateway->sent));
