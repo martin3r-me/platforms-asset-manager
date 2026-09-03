@@ -287,7 +287,7 @@ class BillingRunService
             $item['booking_account'] = (string) $price['booking_account'];
         }
 
-        return [
+        $document = [
             'type'         => 'INVOICE',
             'customer_id'  => (int) $profile->easybill_customer_id,
             'title'        => $profile->name . ' — ' . $label,
@@ -299,6 +299,20 @@ class BillingRunService
             ],
             'items' => [$item],
         ];
+
+        // Auftragsnummer und Zahlungsziel füllt easybill NICHT aus der Kontovorlage — anders als
+        // Einleitungstext, Zahlungsbedingung und Adresse. Auf den von Hand erstellten Rechnungen
+        // standen sie deshalb von Hand drin. Leer heißt hier „nicht mitsenden": dann gilt weiterhin,
+        // was easybill beim Festschreiben selbst einsetzt, statt dass wir einen Wert raten.
+        if (filled($profile->order_number)) {
+            $document['order_number'] = (string) $profile->order_number;
+        }
+
+        if ($profile->due_in_days !== null) {
+            $document['due_in_days'] = (int) $profile->due_in_days;
+        }
+
+        return $document;
     }
 
     /** 'YYYY-MM'; alles andere fällt auf den laufenden Monat zurück. */

@@ -52,6 +52,8 @@ Schema::create('asset_billing_profiles', function (Blueprint $t) {
     $t->string('name');
     $t->unsignedBigInteger('easybill_customer_id')->nullable();
     $t->string('easybill_customer_name')->nullable();
+    $t->string('order_number')->nullable();
+    $t->unsignedSmallInteger('due_in_days')->nullable();
     $t->string('commerce_sku')->nullable();
     $t->unsignedInteger('fallback_unit_price_cents')->nullable();
     $t->string('basis')->default('licensed');
@@ -240,6 +242,21 @@ check('Rueckfallpreis: keine Einheit', false, isset($doc['items'][0]['unit']));
 check('Beleg: Bezeichnung ohne Monat (der steht im Leistungszeitraum)', 'Broich', $doc['items'][0]['description']);
 check('Beleg: Leistungszeitraum von', '2026-09-01', $doc['service_date']['date_from']);
 check('Beleg: Leistungszeitraum bis', '2026-09-30', $doc['service_date']['date_to']);
+
+// Auftragsnummer und Zahlungsziel fuellt easybill NICHT aus der Kontovorlage. Leer heisst
+// "nicht mitsenden" — ein geratener Wert waere schlechter als keiner.
+check('Ohne Auftragsnummer: Feld fehlt im Beleg', false, isset($doc['order_number']));
+check('Ohne Zahlungsziel: Feld fehlt im Beleg', false, isset($doc['due_in_days']));
+
+$profile->order_number = 'KS-1800-1800';
+$profile->due_in_days  = 14;
+$withFields = $runs->preview($profile, '2026-11')['document'];
+
+check('Auftragsnummer wird mitgesendet', 'KS-1800-1800', $withFields['order_number']);
+check('Zahlungsziel wird mitgesendet', 14, $withFields['due_in_days']);
+
+$profile->order_number = null;
+$profile->due_in_days  = null;
 
 // --- Position spiegelt den Commerce-Artikel ------------------------------
 // Der Artikel ist die Wahrheit: Bezeichnung, Nummer, Einheit, Erloeskonto und Steuersatz kommen

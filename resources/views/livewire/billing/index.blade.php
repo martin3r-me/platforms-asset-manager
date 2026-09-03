@@ -379,6 +379,24 @@
                     Beim Speichern wird der Kunde nachgeschlagen, die Bezeichnung übernommen — und ein Tippfehler
                     fällt sofort auf statt erst beim Rechnungslauf.
                 </p>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Auftragsnummer</label>
+                        <x-asset-manager-input size="sm" type="text" wire:model="fOrderNumber" placeholder="z. B. KS-1800-1800" />
+                        @error('fOrderNumber') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Zahlungsziel (Tage)</label>
+                        <x-asset-manager-input size="sm" type="number" min="0" max="365" wire:model="fDueInDays" placeholder="z. B. 14" />
+                        @error('fDueInDays') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
+                    </div>
+                </div>
+                <p class="text-[10px] text-[var(--am-text-muted)]">
+                    Beide Felder füllt easybill <strong>nicht</strong> selbst — anders als Einleitungstext und
+                    Adresse, die aus der Kontovorlage kommen. Leer heißt: nicht mitsenden, dann gilt der
+                    easybill-Standard.
+                </p>
             </div>
 
             <div class="rounded-lg border border-[color:var(--am-border)] p-3 space-y-3">

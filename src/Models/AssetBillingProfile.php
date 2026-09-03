@@ -51,6 +51,8 @@ class AssetBillingProfile extends Model
         'name',
         'easybill_customer_id',
         'easybill_customer_name',
+        'order_number',
+        'due_in_days',
         'commerce_sku',
         'fallback_unit_price_cents',
         'basis',
@@ -66,6 +68,7 @@ class AssetBillingProfile extends Model
         'easybill_customer_id'      => 'integer',
         'fallback_unit_price_cents' => 'integer',
         'vat_percent'               => 'integer',
+        'due_in_days'               => 'integer',
     ];
 
     public function runs(): HasMany

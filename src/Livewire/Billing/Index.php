@@ -54,6 +54,10 @@ class Index extends Component
 
     public string $fCustomerName = '';
 
+    public string $fOrderNumber = '';
+
+    public ?string $fDueInDays = null;
+
     public string $fSku = '';
 
     public ?string $fFallbackPrice = null;
@@ -106,6 +110,8 @@ class Index extends Component
         $this->fName           = $profile->name;
         $this->fCustomerId     = $profile->easybill_customer_id ? (string) $profile->easybill_customer_id : null;
         $this->fCustomerName   = (string) $profile->easybill_customer_name;
+        $this->fOrderNumber    = (string) $profile->order_number;
+        $this->fDueInDays      = $profile->due_in_days !== null ? (string) $profile->due_in_days : null;
         $this->fSku            = (string) $profile->commerce_sku;
         $this->fFallbackPrice  = $profile->fallback_unit_price_cents !== null
             ? number_format($profile->fallback_unit_price_cents / 100, 2, '.', '')
@@ -134,6 +140,8 @@ class Index extends Component
             'fFallbackPrice' => 'nullable|numeric|min:0',
             'fBasis'         => 'required|in:' . implode(',', AssetBillingProfile::BASES),
             'fVat'           => 'nullable|numeric|min:0|max:100',
+            'fOrderNumber'   => 'nullable|string|max:255',
+            'fDueInDays'     => 'nullable|integer|min:0|max:365',
         ], [], [
             'fName'          => 'Name',
             'fCustomerId'    => 'easybill-Kundennummer',
@@ -141,6 +149,8 @@ class Index extends Component
             'fFallbackPrice' => 'Rückfallpreis',
             'fBasis'         => 'Zählregel',
             'fVat'           => 'Steuersatz',
+            'fOrderNumber'   => 'Auftragsnummer',
+            'fDueInDays'     => 'Zahlungsziel',
         ]);
 
         // Eingegeben wird meist die Kundennummer vom easybill-Kundenblatt (6010200), gebraucht wird
@@ -175,6 +185,10 @@ class Index extends Component
             'name'                   => $this->fName,
             'easybill_customer_id'   => $customerId,
             'easybill_customer_name' => $customerName,
+            'order_number'           => $this->fOrderNumber ?: null,
+            'due_in_days'            => $this->fDueInDays !== null && $this->fDueInDays !== ''
+                ? (int) $this->fDueInDays
+                : null,
             'commerce_sku'           => $this->fSku ?: null,
             // Der Rückfallpreis wird in Euro eingegeben und in Cent gehalten — die Umrechnung
             // gehört an die Eingabe, damit im Rest des Ablaufs nur noch Cent vorkommt.
@@ -249,6 +263,8 @@ class Index extends Component
         $this->fName           = '';
         $this->fCustomerId     = null;
         $this->fCustomerName   = '';
+        $this->fOrderNumber    = '';
+        $this->fDueInDays      = null;
         $this->fSku            = '';
         $this->fFallbackPrice  = null;
         $this->fBasis          = AssetBillingProfile::BASIS_LICENSED;
