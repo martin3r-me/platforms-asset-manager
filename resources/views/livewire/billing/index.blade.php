@@ -270,20 +270,38 @@
                                 <th class="text-left px-3 py-2">Name</th>
                                 <th class="text-left px-3 py-2">UPN</th>
                                 <th class="text-left px-3 py-2">Abteilung</th>
+                                <th class="px-3 py-2 w-8"></th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-[color:var(--am-border)]">
                             @foreach($preview['billable'] as $row)
-                                <tr wire:key="bill-{{ $loop->index }}" class="hover:bg-[var(--am-bg)] transition-colors">
+                                <tr wire:key="bill-{{ $row['id'] }}" class="group hover:bg-[var(--am-bg)] transition-colors">
                                     <td class="px-3 py-1.5 text-right text-xs tabular-nums text-[var(--am-text-muted)]">{{ $loop->iteration }}</td>
                                     <td class="px-3 py-1.5 text-[var(--am-text)]">{{ $row['name'] }}</td>
                                     <td class="px-3 py-1.5 font-mono text-xs text-[var(--am-text-secondary)]">{{ $row['upn'] }}</td>
                                     <td class="px-3 py-1.5 text-xs text-[var(--am-text-secondary)]">{{ $row['department'] ?: '—' }}</td>
+                                    <td class="px-3 py-1.5 text-right">
+                                        {{-- Neuer Tab, kein wire:navigate: die Vorschau soll offen bleiben, damit
+                                             man nach der Korrektur weiter durch die Liste gehen kann. --}}
+                                        <a href="{{ route('asset-manager.holders.show', $row['id']) }}"
+                                           target="_blank" rel="noopener"
+                                           class="text-[var(--am-text-muted)] opacity-0 group-hover:opacity-100 transition-opacity hover:text-[var(--am-accent)]"
+                                           title="Träger-Profil öffnen — dort Typ und Status ändern">
+                                            @svg('heroicon-o-arrow-top-right-on-square', 'w-3.5 h-3.5 inline')
+                                        </a>
+                                    </td>
                                 </tr>
                             @endforeach
                         </tbody>
                     </table>
                 </div>
+
+                <p class="text-[10px] text-[var(--am-text-muted)]">
+                    Gehört jemand nicht auf die Rechnung, wird das am Träger korrigiert — Admin-/Dienstkonten
+                    über den Träger-Typ, Ausgeschiedene werden beim nächsten Sync von selbst stillgelegt, eigene
+                    Leute über die ausgeschlossenen Domains. Eine Ausnahme direkt an der Rechnung gibt es
+                    bewusst nicht: sie wäre beim nächsten Lauf nicht mehr erklärbar.
+                </p>
 
                 @if($preview['skipped'] !== [])
                     <p class="text-[10px] text-[var(--am-text-muted)]">

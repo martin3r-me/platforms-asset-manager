@@ -24,7 +24,7 @@ class BillableHolderResolver
     /**
      * @return array{
      *     principals: string[],
-     *     rows: array<int, array{upn: string, name: string, department: string|null}>,
+     *     rows: array<int, array{id: int, upn: string, name: string, department: string|null}>,
      *     skipped: array<int, array{upn: string, reason: string}>
      * }
      */
@@ -72,6 +72,10 @@ class BillableHolderResolver
             }
 
             $rows[] = [
+                // Die Id trägt die Zeile zum Trägerprofil. Stimmt an einer Person etwas nicht, wird
+                // sie dort korrigiert (Typ, Status) — nicht als Ausnahme an der Rechnung vorbei,
+                // die beim nächsten Lauf niemand mehr erklären kann (ADR 0021).
+                'id'         => (int) $holder->id,
                 'upn'        => $upn,
                 'name'       => (string) ($holder->display_name ?: $upn),
                 'department' => $holder->department,
