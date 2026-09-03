@@ -58,16 +58,16 @@ class BillingAttachmentPdfController
     }
 
     /**
-     * Fehlende Namen und Abteilungen aus dem Trägerbestand ergänzen.
+     * Fehlende Namen aus dem Trägerbestand ergänzen.
      *
      * **Wer** abgerechnet wurde, steht unverrückbar im Snapshot — das ist die Menge, auf der die
-     * Rechnung beruht, und daran ändert sich hier nichts. Name und Abteilung sind dagegen bloße
-     * Lesehilfen: sie machen aus einer Liste von Benutzerkonten ein lesbares Dokument.
+     * Rechnung beruht, und daran ändert sich hier nichts. Der Name ist dagegen eine bloße Lesehilfe:
+     * er macht aus einer Liste von Benutzerkonten ein lesbares Dokument.
      *
      * Nötig ist das für Läufe von vor der Snapshot-Erweiterung — die führen nur UPNs, und ohne
-     * Nachschlagen stünde in der Namensspalte eine E-Mail-Adresse und bei der Abteilung ein
-     * Strich. Gefunden wird über die UPN, kleingeschrieben verglichen, weil sie aus verschiedenen
-     * Quellen unterschiedlich geschrieben ankommt.
+     * Nachschlagen stünde in der Namensspalte eine E-Mail-Adresse. Gefunden wird über die UPN,
+     * kleingeschrieben verglichen, weil sie aus verschiedenen Quellen unterschiedlich geschrieben
+     * ankommt.
      *
      * @return array<int, array{upn: string, name: string, department: string|null}>
      */
@@ -78,7 +78,7 @@ class BillingAttachmentPdfController
         // Zeilen, denen ein Name fehlt — erkennbar daran, dass er der UPN entspricht (Fallback).
         $needsLookup = array_filter(
             $rows,
-            fn (array $row) => ($row['name'] ?? '') === ($row['upn'] ?? '') || blank($row['department'] ?? null),
+            fn (array $row) => ($row['name'] ?? '') === ($row['upn'] ?? ''),
         );
 
         if ($needsLookup === []) {
@@ -100,22 +100,14 @@ class BillingAttachmentPdfController
             ->forTenant((int) $run->tenant_id)
             ->where('team_id', $run->team_id)
             ->whereRaw("LOWER(user_principal_name) IN ({$placeholders})", $needles)
-            ->get(['user_principal_name', 'display_name', 'department'])
+            ->get(['user_principal_name', 'display_name'])
             ->keyBy(fn ($holder) => mb_strtolower((string) $holder->user_principal_name));
 
         return array_map(function (array $row) use ($holders) {
             $holder = $holders->get(mb_strtolower((string) $row['upn']));
 
-            if ($holder === null) {
-                return $row;
-            }
-
-            if (($row['name'] ?? '') === $row['upn'] && filled($holder->display_name)) {
+            if ($holder !== null && ($row['name'] ?? '') === $row['upn'] && filled($holder->display_name)) {
                 $row['name'] = $holder->display_name;
-            }
-
-            if (blank($row['department'] ?? null)) {
-                $row['department'] = $holder->department;
             }
 
             return $row;

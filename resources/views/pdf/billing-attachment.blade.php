@@ -25,7 +25,7 @@
     </style>
 </head>
 <body>
-    <h1>Leistungsnachweis</h1>
+    <h1>User-Pauschale</h1>
     <p class="sub">{{ $profileName }} · {{ $periodLabel }}</p>
 
     <div class="box">
@@ -55,7 +55,6 @@
                 <th class="num">#</th>
                 <th>Name</th>
                 <th>Benutzerkonto</th>
-                <th>Abteilung</th>
             </tr>
         </thead>
         <tbody>
@@ -71,7 +70,6 @@
                     <td class="num">{{ $loop->iteration }}</td>
                     <td>{{ $displayName }}</td>
                     <td class="mono">{{ $row['upn'] }}</td>
-                    <td class="muted">{{ $row['department'] ?: '—' }}</td>
                 </tr>
             @endforeach
         </tbody>

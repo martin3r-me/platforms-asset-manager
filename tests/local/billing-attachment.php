@@ -1,15 +1,15 @@
 <?php
 
 /**
- * Leistungsnachweis: Anreicherung der Snapshot-Zeilen für das PDF.
+ * User-Pauschale (PDF): Anreicherung der Snapshot-Zeilen.
  *
  * Hintergrund: Läufe von vor der Snapshot-Erweiterung führen nur UPNs. Ohne Nachschlagen stünde in
- * der Namensspalte des Nachweises eine E-Mail-Adresse und bei der Abteilung ein Strich — genau das
- * war im ersten ausgelieferten PDF zu sehen.
+ * der Namensspalte eine E-Mail-Adresse — genau das war im ersten ausgelieferten PDF zu sehen.
  *
- * Die Grenze dabei: **wer** abgerechnet wurde, kommt unverrückbar aus dem Snapshot. Ergänzt werden
- * ausschließlich Name und Abteilung, und nur dort, wo sie fehlen — ein im Snapshot festgehaltener
- * Name darf sich nicht nachträglich ändern, sonst zeigte ein alter Nachweis neue Daten.
+ * Die Grenze dabei: **wer** abgerechnet wurde, kommt unverrückbar aus dem Snapshot. Ergänzt wird
+ * ausschließlich der Name, und nur dort, wo er fehlt — ein im Snapshot festgehaltener Name darf
+ * sich nicht nachträglich ändern, sonst zeigte ein alter Nachweis neue Daten. Die Abteilung steht
+ * nicht auf dem Dokument und wird deshalb gar nicht erst nachgeschlagen.
  *
  * Aufruf: php tests/local/billing-attachment.php   (siehe tests/local/bootstrap.php)
  */
@@ -84,7 +84,6 @@ $rows = $enrich($legacy);
 
 check('Alter Lauf: beide Zeilen bleiben erhalten', 2, count($rows));
 check('Name wird nachgeschlagen statt E-Mail zu zeigen', 'Anna Muster', $rows[0]['name']);
-check('Abteilung wird nachgeschlagen', 'LOGISTIK', $rows[0]['department']);
 check('Auch bei abweichender Schreibweise', 'Bernd Beispiel', $rows[1]['name']);
 check('UPN bleibt unveraendert — sie ist der Nachweis', 'a.muster@kunde.de', $rows[0]['upn']);
 
@@ -111,9 +110,9 @@ $fresh = AssetBillingRun::create([
 
 $rows = $enrich($fresh);
 check('Eingefrorener Name bleibt stehen', 'Anna Muster-Alt', $rows[0]['name']);
-check('Eingefrorene Abteilung bleibt stehen', 'VERWALTUNG', $rows[0]['department']);
 
-// --- Teilweise gefuellt: nur die Luecke wird geschlossen -----------------
+// --- Die Abteilung wird NICHT mehr angereichert --------------------------
+// Sie steht nicht auf dem Nachweis; ein Nachschlagen waere Arbeit ohne Wirkung.
 $partial = AssetBillingRun::create([
     'team_id' => TEAM, 'tenant_id' => TENANT, 'period' => '2026-06', 'quantity' => 1,
     'snapshot' => [
@@ -123,8 +122,8 @@ $partial = AssetBillingRun::create([
 ]);
 
 $rows = $enrich($partial);
-check('Fehlende Abteilung wird ergaenzt', 'LOGISTIK', $rows[0]['department']);
-check('...der Name aber nicht angetastet', 'Anna Muster-Alt', $rows[0]['name']);
+check('Leere Abteilung bleibt leer', null, $rows[0]['department']);
+check('...der Name bleibt unangetastet', 'Anna Muster-Alt', $rows[0]['name']);
 
 // --- Fremdes Team wird nicht angereichert --------------------------------
 $foreign = AssetBillingRun::create([
