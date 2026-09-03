@@ -75,6 +75,7 @@ Schema::create('asset_billing_runs', function (Blueprint $t) {
     $t->string('price_source')->nullable();
     $t->string('status')->default('draft');
     $t->unsignedBigInteger('easybill_document_id')->nullable();
+    $t->unsignedBigInteger('easybill_attachment_id')->nullable();
     $t->json('snapshot')->nullable();
     $t->unsignedInteger('skipped_count')->default(0);
     $t->text('error')->nullable();
@@ -188,6 +189,21 @@ $gateway = new class implements BillingGateway {
 
     public function documentExists(int $documentId): ?bool { return $this->exists; }
 
+    /** Mitgeschnittene Anhaenge; null als Rueckgabe = Upload gescheitert. */
+    public array $attachments = [];
+    public ?int $attachmentId = 4711;
+
+    public function attachToDocument(int $documentId, string $filename, string $content): ?int
+    {
+        if ($this->attachmentId === null) {
+            return null;
+        }
+
+        $this->attachments[] = ['document_id' => $documentId, 'file_name' => $filename, 'bytes' => strlen($content)];
+
+        return $this->attachmentId;
+    }
+
     /** Kennt genau einen Kunden — unter interner ID UND Kundennummer, wie easybill selbst. */
     public function findCustomer(string $idOrNumber): ?array
     {
@@ -243,6 +259,25 @@ check('Alter Snapshot: genau eine Zeile', 1, count($legacy->snapshotRows()));
 check('Lauf: Uebersprungene mitgezaehlt', 4, $run->skipped_count);
 check('Lauf: Euro-Betrag fuer die Anzeige', 160.0, $run->totalNet());
 check('Gateway: genau ein Beleg gesendet', 1, count($gateway->sent));
+
+// --- Aufstellung haengt am Beleg -----------------------------------------
+check('Anhang wurde hochgeladen', 1, count($gateway->attachments));
+check('Anhang zeigt auf den richtigen Beleg', 999001, $gateway->attachments[0]['document_id']);
+check('Anhang traegt den erwarteten Dateinamen', 'User_pauschale_09_2026.pdf', $gateway->attachments[0]['file_name']);
+check('Anhang ist nicht leer', true, $gateway->attachments[0]['bytes'] > 0);
+check('Anhang-Id ist am Lauf vermerkt', 4711, $run->fresh()->easybill_attachment_id);
+
+// --- Scheiternder Anhang darf den Lauf nicht umwerfen --------------------
+// Der Beleg liegt zu dem Zeitpunkt schon in easybill. Ein Abbruch hinterliesse eine Rechnung, von
+// der unser Lauf nichts weiss — und beim naechsten Versuch entstuende eine zweite.
+$gateway->attachmentId = null;
+$noAttach = $runs->createDraft($profile, '2026-12');
+
+check('Ohne Anhang: Lauf entsteht trotzdem', AssetBillingRun::STATUS_DRAFT, $noAttach->status);
+check('Ohne Anhang: Beleg ist vermerkt', 999001, $noAttach->easybill_document_id);
+check('Ohne Anhang: attachment_id bleibt leer', null, $noAttach->fresh()->easybill_attachment_id);
+
+$gateway->attachmentId = 4711;
 
 // --- Schutz gegen die zweite Rechnung ------------------------------------
 $second = $runs->preview($profile, '2026-09');

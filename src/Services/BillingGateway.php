@@ -35,6 +35,18 @@ interface BillingGateway
     public function documentUrl(int $documentId): ?string;
 
     /**
+     * Eine Datei an einen bestehenden Beleg hängen; gibt deren Id zurück.
+     *
+     * Bewusst mit Rückgabe `null` statt Ausnahme, wenn es nicht klappt: der Anhang ist eine Beigabe
+     * zur Rechnung, nicht ihr Kern. Scheitert er, soll der bereits angelegte Beleg stehenbleiben und
+     * der Vorgang nur vermerken, dass die Aufstellung fehlt — ein Abbruch hinterließe eine Rechnung
+     * in easybill, von der unser Lauf nichts weiß.
+     *
+     * @param string $content Roher Dateiinhalt, nicht base64.
+     */
+    public function attachToDocument(int $documentId, string $filename, string $content): ?int;
+
+    /**
      * Gibt es diesen Beleg im Zielsystem noch?
      *
      * Dreiwertig, und das ist der Punkt: `true` vorhanden, `false` **nachweislich** weg (404),

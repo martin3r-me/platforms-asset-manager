@@ -51,6 +51,7 @@ class AssetBillingRun extends Model
         'price_source',
         'status',
         'easybill_document_id',
+        'easybill_attachment_id',
         'snapshot',
         'skipped_count',
         'error',
@@ -63,7 +64,8 @@ class AssetBillingRun extends Model
         'unit_price_cents'     => 'integer',
         'total_net_cents'      => 'integer',
         'skipped_count'        => 'integer',
-        'easybill_document_id' => 'integer',
+        'easybill_document_id'   => 'integer',
+        'easybill_attachment_id' => 'integer',
     ];
 
     public function profile(): BelongsTo

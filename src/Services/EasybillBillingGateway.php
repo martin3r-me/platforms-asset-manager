@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Services;
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Throwable;
 
@@ -75,6 +76,53 @@ class EasybillBillingGateway implements BillingGateway
     public function documentUrl(int $documentId): ?string
     {
         return 'https://app.easybill.de/documents/' . $documentId;
+    }
+
+    /**
+     * Datei an einen Beleg hängen — über `uploadAttachment()` des Connectors, die als einzige per
+     * multipart sendet. Der JSON-Weg (`createAttachment`) kann für Dateien grundsätzlich nicht
+     * funktionieren; easybill antwortet dort mit „File is missing".
+     *
+     * Fehlschläge werden protokolliert und als `null` gemeldet, nicht geworfen: der Beleg ist zu
+     * diesem Zeitpunkt bereits angelegt, und ein Abbruch hinterließe eine Rechnung in easybill, von
+     * der unser Lauf nichts weiß.
+     */
+    public function attachToDocument(int $documentId, string $filename, string $content): ?int
+    {
+        if (! $this->isAvailable()) {
+            return null;
+        }
+
+        $api = app(self::API_SERVICE);
+
+        if (! method_exists($api, 'uploadAttachment')) {
+            $this->reason = 'Der easybill-Connector kann keine Dateien hochladen '
+                . '(uploadAttachment fehlt) — Integrations-Modul zu alt.';
+
+            return null;
+        }
+
+        try {
+            $result = $api->uploadAttachment(
+                Auth::user(),
+                $content,
+                $filename,
+                ['document_id' => $documentId],
+                'application/pdf',
+            );
+        } catch (Throwable $e) {
+            $this->reason = 'easybill: ' . $e->getMessage();
+
+            Log::warning('[asset-manager] Anhang konnte nicht hochgeladen werden', [
+                'document_id' => $documentId,
+                'file'        => $filename,
+                'error'       => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        return isset($result['id']) ? (int) $result['id'] : null;
     }
 
     /**

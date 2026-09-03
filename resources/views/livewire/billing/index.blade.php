@@ -243,10 +243,22 @@
                                                 @if($run->quantity > 0)
                                                     <a href="{{ route('asset-manager.billing.run.pdf', $run) }}" target="_blank" rel="noopener"
                                                        class="inline-flex items-center gap-1 text-xs text-[var(--am-accent)] hover:underline"
-                                                       title="Leistungsnachweis mit allen {{ $run->quantity }} Plätzen">
+                                                       title="User-Pauschale mit allen {{ $run->quantity }} Plätzen">
                                                         @svg('heroicon-o-document-arrow-down', 'w-3.5 h-3.5')
                                                         PDF
                                                     </a>
+                                                    {{-- Ob die Aufstellung am Beleg hängt, sieht man sonst nur in easybill —
+                                                         und genau daran hängt, ob jemand von Hand nachlegen muss. --}}
+                                                    @if($run->easybill_attachment_id)
+                                                        <span class="ml-1 text-[10px] text-emerald-700" title="Als Anhang am Beleg (easybill #{{ $run->easybill_attachment_id }})">
+                                                            @svg('heroicon-o-paper-clip', 'w-3 h-3 inline')
+                                                            angehängt
+                                                        </span>
+                                                    @elseif($run->isDraft())
+                                                        <span class="ml-1 text-[10px] text-amber-700" title="Die Aufstellung liegt nicht am easybill-Beleg — bitte von Hand anhängen.">
+                                                            nicht angehängt
+                                                        </span>
+                                                    @endif
                                                 @else
                                                     <span class="text-xs text-[var(--am-text-muted)]">—</span>
                                                 @endif

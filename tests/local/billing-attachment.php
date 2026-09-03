@@ -17,7 +17,7 @@
 require __DIR__ . '/bootstrap.php';
 
 use Illuminate\Database\Schema\Blueprint;
-use Platform\AssetManager\Http\Controllers\BillingAttachmentPdfController;
+use Platform\AssetManager\Services\BillingStatementPdf;
 use Platform\AssetManager\Models\AssetBillingRun;
 use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Services\TenantContext;
@@ -65,13 +65,10 @@ AssetHolder::create([
     'department' => 'KUECHE',
 ]);
 
-$controller = new BillingAttachmentPdfController();
-$enrich = function (AssetBillingRun $run) use ($controller) {
-    $m = new ReflectionMethod($controller, 'enrichRows');
-    $m->setAccessible(true);
-
-    return $m->invoke($controller, $run);
-};
+// Die Erzeugung liegt im Service, nicht im Controller: denselben nutzt der Rechnungslauf, der das
+// PDF an den easybill-Beleg haengt. Zwei Erzeugungswege hiessen zwei Dokumente.
+$pdf    = new BillingStatementPdf();
+$enrich = fn (AssetBillingRun $run) => $pdf->enrichRows($run);
 
 // --- Alter Lauf: nur UPNs im Snapshot ------------------------------------
 $legacy = AssetBillingRun::create([

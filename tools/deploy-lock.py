@@ -32,6 +32,11 @@ Aufruf
     python tools/deploy-lock.py --no-push            # patchen + committen, nicht pushen
     python tools/deploy-lock.py --install            # zusaetzlich lokales vendor/ syncen
 
+Fremdes Modul ohne lokalen Klon (Commit + composer.json kommen per GitHub-API ueber die
+`gh`-CLI, es wird nichts geklont):
+
+    python tools/deploy-lock.py --package martin3r/platform-integrations                                 --github martin3r-me/platforms-integrations
+
 Hinweis zu --install: die lokale Host-App kann `composer install` derzeit nicht ausfuehren
 (PHP 8.2 statt 8.3, ext-gd fehlt). Der Schalter ist fuer Umgebungen gedacht, in denen das geht;
 fuer den Deploy ist er nicht noetig — dort installiert der Server.
@@ -40,6 +45,7 @@ fuer den Deploy ist er nicht noetig — dort installiert der Server.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import re
 import subprocess
@@ -72,6 +78,38 @@ def run(cmd: list[str], cwd: Path, check: bool = True) -> str:
     if check and res.returncode != 0:
         die(f"Befehl fehlgeschlagen: {' '.join(cmd)}\n{res.stdout}{res.stderr}")
     return (res.stdout or "").strip()
+
+
+def gh_api(path: str, jq: str | None = None) -> str:
+    """GitHub-API über die `gh`-CLI. Nutzt deren Anmeldung — kein eigener Token nötig."""
+    cmd = ["gh", "api", path]
+    if jq:
+        cmd += ["--jq", jq]
+    res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if res.returncode != 0:
+        die(f"GitHub-API fehlgeschlagen: {' '.join(cmd)}\n{res.stdout}{res.stderr}")
+    return (res.stdout or "").strip()
+
+
+def target_from_github(slug: str, ref: str) -> tuple[str, str, str, dict]:
+    """
+    Ziel-Commit und composer.json direkt von GitHub holen — ohne das Repo zu klonen.
+
+    Gedacht für **fremde** Module: das eigene liegt hier ohnehin, ein Nachbarmodul (integrations,
+    core, ui) aber nicht. Ohne diesen Weg müsste man es erst klonen, nur um zwei Angaben daraus zu
+    lesen — Commit-Zeiger und composer.json für den Drift-Check.
+    """
+    branch = ref.split("/")[-1] if "/" in ref else ref
+    meta = json.loads(gh_api(f"repos/{slug}/commits/{branch}"))
+
+    sha = meta["sha"]
+    subject = (meta["commit"]["message"] or "").splitlines()[0]
+    committed = meta["commit"]["committer"]["date"]
+
+    raw = gh_api(f"repos/{slug}/contents/composer.json?ref={sha}", ".content")
+    module_json = json.loads(base64.b64decode(raw).decode("utf-8"))
+
+    return sha, subject, committed, module_json
 
 
 def find_block(text: str, package: str) -> tuple[int, int]:
@@ -121,6 +159,9 @@ def main() -> None:
     ap.add_argument("--app", type=Path, default=DEFAULT_APP, help="Pfad zur Host-App")
     ap.add_argument("--repo", type=Path, default=REPO_ROOT, help="Pfad zum Modul-Repo")
     ap.add_argument("--package", default=DEFAULT_PACKAGE, help=f"Composer-Paketname (Default: {DEFAULT_PACKAGE})")
+    ap.add_argument("--github", default=None, metavar="owner/repo",
+                    help="Commit und composer.json per GitHub-API holen statt aus --repo. "
+                         "Fuer Nachbarmodule, die hier nicht ausgecheckt sind (z. B. martin3r-me/platforms-integrations).")
     ap.add_argument("--ref", default="origin/main", help="zu deployender Commit/Ref im Modul-Repo")
     ap.add_argument("--message", default=None, help="Commit-Message in der Host-App")
     ap.add_argument("--no-fetch", action="store_true", help="kein git fetch im Modul-Repo")
@@ -129,26 +170,33 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true", help="nur anzeigen, nichts aendern")
     args = ap.parse_args()
 
-    repo, app = args.repo.resolve(), args.app.resolve()
-    if not (repo / ".git").exists():
-        die(f"{repo} ist kein Git-Repo.")
+    app = args.app.resolve()
     lock_path = app / "composer.lock"
     if not lock_path.is_file():
         die(f"composer.lock nicht gefunden: {lock_path}")
 
-    # --- 1. Ziel-Commit ---------------------------------------------------
-    if not args.no_fetch:
-        print("-> git fetch (Modul-Repo)")
-        run(["git", "fetch", "origin", "--quiet"], repo)
-    sha = run(["git", "rev-parse", args.ref], repo)
-    subject = run(["git", "log", "-1", "--format=%s", sha], repo)
-    committed = run(["git", "log", "-1", "--format=%cI", sha], repo)
-    stamp = datetime.fromisoformat(committed).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+    # --- 1. Ziel-Commit + composer.json -----------------------------------
+    if args.github:
+        print(f"-> GitHub: {args.github} ({args.ref})")
+        sha, subject, committed, module_json = target_from_github(args.github, args.ref)
+    else:
+        repo = args.repo.resolve()
+        if not (repo / ".git").exists():
+            die(f"{repo} ist kein Git-Repo. Fuer ein Modul ohne lokalen Klon: --github owner/repo")
+        if not args.no_fetch:
+            print("-> git fetch (Modul-Repo)")
+            run(["git", "fetch", "origin", "--quiet"], repo)
+        sha = run(["git", "rev-parse", args.ref], repo)
+        subject = run(["git", "log", "-1", "--format=%s", sha], repo)
+        committed = run(["git", "log", "-1", "--format=%cI", sha], repo)
+        module_json = json.loads(run(["git", "show", f"{sha}:composer.json"], repo))
+
+    stamp = datetime.fromisoformat(committed.replace("Z", "+00:00")) \
+        .astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
     print(f"-> Ziel: {sha[:7]}  {subject}")
     print(f"         Zeitstempel {stamp}")
 
     # --- 2. Drift-Check ---------------------------------------------------
-    module_json = json.loads(run(["git", "show", f"{sha}:composer.json"], repo))
     lock_data = json.loads(lock_path.read_text(encoding="utf-8"))
     entry = next((p for p in lock_data.get("packages", []) + lock_data.get("packages-dev", [])
                   if p["name"] == args.package), None)

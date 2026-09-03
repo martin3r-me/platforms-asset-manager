@@ -4,6 +4,7 @@ namespace Platform\AssetManager\Services;
 
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Platform\AssetManager\Models\AssetBillingProfile;
 use Platform\AssetManager\Models\AssetBillingRun;
 use RuntimeException;
@@ -150,10 +151,48 @@ class BillingRunService
             throw $e;
         }
 
-        return AssetBillingRun::create($base + [
+        $run = AssetBillingRun::create($base + [
             'status'               => AssetBillingRun::STATUS_DRAFT,
             'easybill_document_id' => $documentId,
         ]);
+
+        $this->attachStatement($run);
+
+        return $run;
+    }
+
+    /**
+     * Die User-Pauschale als PDF an den eben angelegten Beleg hängen.
+     *
+     * **Nach** dem Speichern des Laufs und bewusst ohne Ausnahme: der Beleg liegt zu diesem
+     * Zeitpunkt schon in easybill. Ein Abbruch hier hinterließe eine Rechnung, von der unser Lauf
+     * nichts weiß — und beim nächsten Versuch entstünde eine zweite. Scheitert der Anhang, bleibt
+     * `easybill_attachment_id` leer; genau daran erkennt man in der Historie, dass die Aufstellung
+     * von Hand nachzulegen ist.
+     */
+    protected function attachStatement(AssetBillingRun $run): void
+    {
+        try {
+            $pdf = app(BillingStatementPdf::class);
+
+            $attachmentId = $this->gateway->attachToDocument(
+                (int) $run->easybill_document_id,
+                $pdf->filename($run),
+                $pdf->render($run),
+            );
+        } catch (Throwable $e) {
+            // Auch ein Fehler beim Erzeugen des PDFs darf den Lauf nicht umwerfen.
+            Log::warning('[asset-manager] Aufstellung konnte nicht angehängt werden', [
+                'run_id' => $run->id,
+                'error'  => $e->getMessage(),
+            ]);
+
+            return;
+        }
+
+        if ($attachmentId !== null) {
+            $run->update(['easybill_attachment_id' => $attachmentId]);
+        }
     }
 
     /**
