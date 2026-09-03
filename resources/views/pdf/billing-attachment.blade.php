@@ -34,7 +34,6 @@
                 <td style="width:34%;">
                     <div class="label">Empfänger</div>
                     <div><strong>{{ $customerName ?: '—' }}</strong></div>
-                    @if($customerId)<div class="muted">Kundennummer {{ $customerId }}</div>@endif
                 </td>
                 <td style="width:33%;">
                     <div class="label">Abgerechnete Plätze</div>
@@ -61,9 +60,16 @@
         </thead>
         <tbody>
             @foreach($rows as $row)
+                @php
+                    // Der Name führt. Fehlt er ganz (Träger seither gelöscht), tritt das Benutzerkonto
+                    // an seine Stelle — eine leere Zelle wäre auf einem Nachweis die schlechtere Auskunft.
+                    $displayName = filled($row['name'] ?? null) && $row['name'] !== $row['upn']
+                        ? $row['name']
+                        : $row['upn'];
+                @endphp
                 <tr>
                     <td class="num">{{ $loop->iteration }}</td>
-                    <td>{{ $row['name'] ?? $row['upn'] }}</td>
+                    <td>{{ $displayName }}</td>
                     <td class="mono">{{ $row['upn'] }}</td>
                     <td class="muted">{{ $row['department'] ?: '—' }}</td>
                 </tr>
