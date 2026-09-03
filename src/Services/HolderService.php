@@ -244,6 +244,12 @@ class HolderService
                 'display_name'        => $pseudoName,
                 'email'               => null,
                 'raw_data'            => null,
+                // Der Grund einer Abrechnungs-Ausnahme ist Freitext und trägt regelmäßig Personen-
+                // bezug („Elternzeit", „ausgeschieden 09/2026"). Er fällt damit unter dieselbe
+                // Löschung wie Name und E-Mail (ADR 0005). Der **Zeitstempel bleibt**: dass dieser
+                // Träger nicht berechnet wird, ist eine kaufmännische Tatsache und darf durch eine
+                // Anonymisierung nicht stillschweigend auf eine Rechnung zurückkehren (ADR 0024).
+                'billing_excluded_reason' => null,
             ]);
         });
     }

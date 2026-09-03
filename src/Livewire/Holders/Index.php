@@ -15,6 +15,7 @@ use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetUserLicense;
+use Platform\AssetManager\Services\BillingExclusionService;
 use Platform\AssetManager\Services\HolderTypeService;
 use Platform\AssetManager\Services\TenantContext;
 
@@ -40,7 +41,7 @@ class Index extends Component
     /** Auswahlmöglichkeiten des Seitengrößen-Umschalters. */
     public const PER_PAGE_OPTIONS = [25, 50, 100, self::PER_PAGE_ALL];
 
-    public string $preset           = 'active'; // all|active|with_license|with_device|with_asset|unassigned|inactive
+    public string $preset           = 'active'; // all|active|with_license|with_device|with_asset|unassigned|inactive|billing_excluded
     public string $search           = '';
     public string $filterDept       = '';
     public string $filterSku        = '';
@@ -75,6 +76,18 @@ class Index extends Component
     public bool    $showBulkType = false;
     public ?array  $bulkPreview  = null;
     public ?string $flash        = null;
+
+    /**
+     * Abrechnungs-Ausnahme als Sammelaktion (ADR 0024).
+     *
+     * `$bulkExclude` trägt die Richtung (ausnehmen / Ausnahme aufheben), damit dasselbe Modal beide
+     * Wege zeigen kann — die Vorschau unterscheidet sich nur im Vorzeichen der Mengenwirkung.
+     * `$bulkReason` ist beim Ausnehmen Pflicht; das erzwingt der Service, nicht nur das Formular.
+     */
+    public string  $bulkReason      = '';
+    public bool    $bulkExclude     = true;
+    public bool    $showBulkBilling = false;
+    public ?array  $bulkBillingPreview = null;
 
     /**
      * Request-lokale Memoisierung der drei Zugehörigkeits-Listen. `protected` und damit nicht Teil
@@ -245,6 +258,12 @@ class Index extends Component
             case 'inactive':
                 $query->where('is_active', false);
                 return;
+            // Ausnahmen bewusst OHNE is_active-Filter: eine Ausnahme an einem stillgelegten Träger
+            // wirkt zwar nicht mehr auf die Rechnung, aber sie steht noch da — und diese Ansicht ist
+            // die einzige Stelle, an der man sie aufräumen kann.
+            case 'billing_excluded':
+                $query->billingExcluded();
+                return;
             case 'with_license':
                 $query->where('is_active', true)->whereIn('user_principal_name', $licenseUpns);
                 return;
@@ -314,10 +333,12 @@ class Index extends Component
 
     public function clearSelection(): void
     {
-        $this->selected     = [];
-        $this->selectPage   = false;
-        $this->bulkPreview  = null;
-        $this->showBulkType = false;
+        $this->selected           = [];
+        $this->selectPage         = false;
+        $this->bulkPreview        = null;
+        $this->showBulkType       = false;
+        $this->bulkBillingPreview = null;
+        $this->showBulkBilling    = false;
     }
 
     /**
@@ -412,6 +433,81 @@ class Index extends Component
         }
     }
 
+    // ---- Abrechnungs-Ausnahme als Sammelaktion (ADR 0024) -----------------------------------
+
+    /**
+     * Vorschau rechnen und Modal oeffnen — schreibt nichts.
+     *
+     * Der Weg fuehrt hier zwingend ueber eine Vorschau und nicht ueber `wire:confirm`: die Aktion
+     * veraendert die Menge auf einer Kundenrechnung. Ein Ja/Nein-Dialog koennte die einzige Zahl
+     * nicht nennen, auf die es ankommt — „Menge 152 → 140, −960 € netto".
+     */
+    public function openBulkBilling(bool $exclude): void
+    {
+        Gate::authorize('asset-manager.manage');
+
+        $this->bulkExclude = $exclude;
+
+        // Der Service kommt aus dem Container statt aus der Signatur: Livewire fuellt die Argumente
+        // einer Action positionsweise aus dem Aufruf, und ein gemischtes „erst $exclude, dann eine
+        // Abhaengigkeit" ist genau die Stelle, an der das schiefgeht.
+        $result = app(BillingExclusionService::class)->setExclusion(
+            $this->teamId(),
+            $this->activeTenantId(),
+            array_map('intval', $this->selected),
+            $exclude,
+            $exclude ? $this->bulkReason : null,
+            (int) Auth::id(),
+            true,
+        );
+
+        if (! $result['ok']) {
+            $this->flash = $result['message'];
+
+            return;
+        }
+
+        $this->bulkBillingPreview = $result;
+        $this->showBulkBilling    = true;
+    }
+
+    public function bulkSetBillingExclusion(BillingExclusionService $service): void
+    {
+        Gate::authorize('asset-manager.manage');
+
+        $result = $service->setExclusion(
+            $this->teamId(),
+            $this->activeTenantId(),
+            array_map('intval', $this->selected),
+            $this->bulkExclude,
+            $this->bulkExclude ? $this->bulkReason : null,
+            (int) Auth::id(),
+            false,
+        );
+
+        $this->flash = $result['message'];
+
+        // Bei einer Ablehnung bleibt die Auswahl stehen: der Grund kann zwischen Vorschau und
+        // Bestaetigung geleert worden sein, und die Auswahl noch einmal zusammenzuklicken waere
+        // die Strafe fuer einen Tippfehler.
+        if (! $result['ok']) {
+            $this->showBulkBilling = false;
+
+            return;
+        }
+
+        $this->clearSelection();
+        $this->bulkReason = '';
+    }
+
+    /** Backdrop/ESC verwirft nur die Vorschau — die Auswahl und der eingetippte Grund bleiben. */
+    public function updatedShowBulkBilling(bool $value): void
+    {
+        if (! $value) {
+            $this->bulkBillingPreview = null;
+        }
+    }
+
     protected function activeTenantId(): int
     {
         return TenantContext::resolveForWrite($this->teamId(), (int) Auth::id());
@@ -443,6 +539,9 @@ class Index extends Component
                                 ->whereNotIn('user_principal_name', $allUpns)
                                 ->whereNotIn('id', $assetIds)->count(),
             'inactive'     => (clone $base)->where('is_active', false)->count(),
+            // Die Zahl gehört sichtbar in die Liste: eine Ausnahmeliste, die man nur über den
+            // Rechnungslauf findet, verrottet unbemerkt (ADR 0024).
+            'billing_excluded' => (clone $base)->billingExcluded()->count(),
         ];
 
         // Nicht-Personen zaehlen — fuer den Hinweis „x Funktions-/Admin-Accounts ausgeblendet".

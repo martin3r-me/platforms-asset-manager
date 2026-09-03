@@ -144,6 +144,7 @@ class AssetManagerServiceProvider extends ServiceProvider
             $registry->register(new \Platform\AssetManager\Tools\Holders\UpdateHolderTool());
             $registry->register(new \Platform\AssetManager\Tools\Holders\BulkAssignCostCenterTool());
             $registry->register(new \Platform\AssetManager\Tools\Holders\BulkSetHolderTypeTool());
+            $registry->register(new \Platform\AssetManager\Tools\Holders\BulkSetBillingExclusionTool());
             $registry->register(new \Platform\AssetManager\Tools\Holders\MergeDeletedHoldersTool());
 
             // Alte `…employees…`-Namen als Alias (ADR 0017): Tool-Namen sind über den Live-Connector

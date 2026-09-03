@@ -31,8 +31,16 @@ Schema::create('asset_holders', function (Blueprint $t) {
     $t->unsignedBigInteger('tenant_id')->nullable();
     $t->string('user_principal_name')->nullable();
     $t->string('display_name')->nullable();
+    $t->string('email')->nullable();
+    $t->string('department')->nullable();
     $t->string('holder_type')->default('person');
     $t->boolean('is_active')->default(true);
+    // Abrechnungs-Ausnahme (ADR 0024). Ohne diese Spalten lief das Skript nur durch einen
+    // SQLite-Zufall gruen: ein unbekannter Spaltenname wird dort als String-Literal ausgeliefert
+    // und landet unter einem Schluessel MIT Anfuehrungszeichen — das Attribut bliebe still null.
+    $t->timestamp('billing_excluded_at')->nullable();
+    $t->string('billing_excluded_reason')->nullable();
+    $t->unsignedBigInteger('billing_excluded_by')->nullable();
     $t->timestamps();
 });
 
@@ -57,7 +65,9 @@ Schema::create('asset_billing_profiles', function (Blueprint $t) {
     $t->string('commerce_sku')->nullable();
     $t->unsignedInteger('fallback_unit_price_cents')->nullable();
     $t->string('basis')->default('licensed');
+    $t->boolean('count_external')->default(true);
     $t->json('exclude_domains')->nullable();
+    $t->json('exclude_patterns')->nullable();
     $t->unsignedTinyInteger('vat_percent')->nullable();
     $t->string('currency', 3)->default('EUR');
     $t->boolean('active')->default(true);

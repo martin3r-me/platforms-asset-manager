@@ -164,6 +164,57 @@
                             </div>
                         @endif
 
+                        {{-- Einzelausnahmen (ADR 0024). Sie leben am Träger, werden aber HIER
+                             aggregiert: die Zählregel muss an einer Stelle vollständig lesbar
+                             bleiben. Die Tagezahl ist der Verrottungs-Indikator — eine Ausnahme,
+                             die seit zwei Jahren steht, berechnet dem Kunden seit zwei Jahren
+                             zu wenig, und nichts außer dieser Zahl erinnert daran. --}}
+                        @if($exceptions !== [])
+                            <div class="rounded-lg border border-[color:var(--am-border-strong)] bg-[var(--am-bg)]">
+                                <button type="button" wire:click="$toggle('showExceptions')"
+                                        class="w-full flex flex-wrap items-center gap-2 px-4 py-2.5 text-left text-sm text-[var(--am-text-secondary)] hover:bg-[var(--am-surface)] transition-colors">
+                                    @svg('heroicon-o-chevron-right', 'w-3.5 h-3.5 transition-transform ' . ($showExceptions ? 'rotate-90' : ''))
+                                    <span><strong class="text-[var(--am-text)]">{{ count($exceptions) }}</strong> Einzelausnahmen</span>
+                                    @if($exceptionEffect && $exceptionEffect['relevant'] > 0)
+                                        <span class="text-xs text-[var(--am-text-muted)]">
+                                            davon {{ $exceptionEffect['relevant'] }} abrechnungsrelevant
+                                            @if($exceptionEffect['net_cents'] !== null)
+                                                — ohne sie wären es {{ $exceptionEffect['quantity_without'] }} Köpfe
+                                                (+{{ number_format($exceptionEffect['net_cents'] / 100, 2, ',', '.') }} {{ $exceptionEffect['currency'] }} netto)
+                                            @endif
+                                        </span>
+                                    @elseif($exceptionEffect)
+                                        <span class="text-xs text-[var(--am-text-muted)]">ohne Wirkung auf die Menge</span>
+                                    @endif
+                                    @if($exceptionEffect && $exceptionEffect['oldest_days'] >= 365)
+                                        <span class="text-xs text-amber-700">älteste seit über einem Jahr — prüfen</span>
+                                    @endif
+                                </button>
+
+                                @if($showExceptions)
+                                    <div class="border-t border-[color:var(--am-border)] max-h-72 overflow-y-auto">
+                                        <table class="w-full text-sm">
+                                            <tbody class="divide-y divide-[color:var(--am-border)]">
+                                                @foreach($exceptions as $row)
+                                                    <tr wire:key="exc-{{ $row['id'] }}">
+                                                        <td class="px-4 py-1.5">
+                                                            <a href="{{ route('asset-manager.holders.show', $row['id']) }}" wire:navigate
+                                                               class="text-xs text-[var(--am-accent)] hover:underline">{{ $row['name'] }}</a>
+                                                        </td>
+                                                        <td class="px-4 py-1.5 text-xs text-[var(--am-text-secondary)]">{{ $row['reason'] ?: 'ohne Grund' }}</td>
+                                                        <td class="px-4 py-1.5 text-xs text-[var(--am-text-muted)] text-right whitespace-nowrap">
+                                                            seit {{ $row['since'] ?? '—' }}
+                                                            @if(($row['days'] ?? 0) >= 365) · {{ intdiv($row['days'], 365) }} J. @endif
+                                                        </td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                @endif
+                            </div>
+                        @endif
+
                         {{-- Nicht gezählte Träger. Eingeklappt, aber vorhanden: die Zahl ist der einzige
                              Hinweis darauf, dass eine Rechnung zu niedrig ausfallen könnte. --}}
                         @if($preview['skipped'] !== [])
@@ -442,6 +493,24 @@
                         Kommagetrennt. Typisch die eigene Domain — sonst stehen die eigenen Mitarbeiter auf der Kundenrechnung.
                     </p>
                 </div>
+                <div>
+                    <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Ausschlussmuster</label>
+                    <x-asset-manager-input size="sm" type="text" wire:model="fExcludePatterns" placeholder="test-, schulung, kasse" />
+                    <p class="text-[10px] text-[var(--am-text-muted)] mt-1">
+                        Kommagetrennt. Trifft, wenn die UPN den Baustein enthält — für Test- und technische
+                        Konten. Eine Regel hier ist besser als zwölf Einzelausnahmen an den Trägern.
+                    </p>
+                </div>
+                <label class="inline-flex items-start gap-2 text-xs text-[var(--am-text-secondary)]">
+                    <input type="checkbox" wire:model="fCountExternal" class="rounded mt-0.5">
+                    <span>
+                        Externe mitzählen
+                        <span class="block text-[10px] text-[var(--am-text-muted)] leading-tight">
+                            Träger vom Typ „Extern" (Dienstleister, Aushilfen). Abschalten, wenn der Kunde
+                            sie nicht bezahlt — die Menge sinkt dann entsprechend.
+                        </span>
+                    </span>
+                </label>
                 <label class="inline-flex items-center gap-2 text-xs text-[var(--am-text-secondary)]">
                     <input type="checkbox" wire:model="fActive" class="rounded"> Profil aktiv
                 </label>

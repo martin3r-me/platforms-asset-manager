@@ -35,7 +35,8 @@ class ListHoldersTool implements ToolContract, ToolMetadataContract
     {
         return 'GET /asset-manager/holders - Listet Asset-Träger des aktiven Tenants. Filterbare/'
             . 'durchsuchbare Felder: display_name, user_principal_name, email, department, cost_center, '
-            . 'is_active, holder_type, source. Nutze filters (z.B. {"field":"department","op":"eq",'
+            . 'is_active, holder_type, source, billing_excluded_at (op "is_not_null" liefert die von '
+            . 'der Weiterberechnung ausgenommenen Träger, "is_null" die übrigen — ADR 0024). Nutze filters (z.B. {"field":"department","op":"eq",'
             . '"value":"IT"}), search, sort, limit/offset. Antwort enthält je Asset-Träger Counts '
             . '(devices/licenses/items) und die zugeordnete Kostenstelle. Für ein Voll-Profil eines '
             . 'einzelnen Asset-Trägers → asset-manager.employee.GET.';
@@ -63,7 +64,7 @@ class ListHoldersTool implements ToolContract, ToolMetadataContract
             }
             TenantContext::forceTenant($tenantId);
 
-            $allowed = ['display_name', 'user_principal_name', 'email', 'department', 'cost_center', 'is_active', 'holder_type', 'source'];
+            $allowed = ['display_name', 'user_principal_name', 'email', 'department', 'cost_center', 'is_active', 'holder_type', 'source', 'billing_excluded_at'];
 
             $query = AssetHolder::where('team_id', $teamId)->with('costCenter');
             $this->applyStandardFilters($query, $arguments, $allowed);
@@ -93,6 +94,11 @@ class ListHoldersTool implements ToolContract, ToolMetadataContract
                 'cost_center_id'      => $e->cost_center_id,
                 'cost_center_label'   => $e->costCenter?->label,
                 'is_active'           => (bool) $e->is_active,
+                // Abrechnungs-Ausnahme (ADR 0024). Getrennt von is_active, weil es etwas anderes
+                // aussagt: der Mensch arbeitet, wird aber nicht weiterberechnet.
+                'billing_excluded'    => $e->isBillingExcluded(),
+                'billing_excluded_reason' => $e->billing_excluded_reason,
+                'billing_excluded_at' => $e->billing_excluded_at?->toDateString(),
                 'holder_type'         => $e->holder_type,
                 'holder_type_label'   => $e->holderTypeLabel(),
                 'is_person'           => ! $e->isNonPerson(),

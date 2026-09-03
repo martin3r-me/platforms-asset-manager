@@ -344,6 +344,39 @@
                 </x-asset-manager-panel>
             @endif
 
+            {{-- Weiterberechnung (ADR 0024). Sichtbar auch ohne Schreibrechte: dass ein Mensch nicht
+                 abgerechnet wird, ist eine Aussage über die Kundenrechnung und keine Einstellung,
+                 die man erst beim Bearbeiten entdecken sollte. --}}
+            @if($holder->isBillingExcluded() || $canManage)
+                <x-asset-manager-panel title="Weiterberechnung">
+                    <x-slot name="actions">
+                        @if($canManage)
+                            <button type="button" wire:click="openBillingExclusion" class="text-[11px] text-[var(--am-accent)] hover:underline inline-flex items-center gap-1">@svg('heroicon-o-pencil-square', 'w-3 h-3') {{ $holder->isBillingExcluded() ? 'Ausnahme bearbeiten' : 'Ausnehmen' }}</button>
+                        @endif
+                    </x-slot>
+
+                    @if($holder->isBillingExcluded())
+                        <div class="flex items-start gap-2">
+                            @svg('heroicon-o-receipt-percent', 'w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--am-text-muted)]')
+                            <div class="min-w-0">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <x-asset-manager-badge color="slate" size="xs">nicht berechnet</x-asset-manager-badge>
+                                    <span class="text-xs text-[var(--am-text-secondary)]">
+                                        seit {{ $holder->billing_excluded_at->format('d.m.Y') }}
+                                        @if($holder->billingExcludedBy) · {{ $holder->billingExcludedBy->name }} @endif
+                                    </span>
+                                </div>
+                                <p class="text-sm text-[var(--am-text)] mt-1 mb-0">{{ $holder->billing_excluded_reason ?: 'ohne Grund hinterlegt' }}</p>
+                            </div>
+                        </div>
+                    @else
+                        <p class="text-sm text-[var(--am-text-secondary)] m-0">
+                            Folgt der Zählregel des Abrechnungsprofils — keine Einzelausnahme hinterlegt.
+                        </p>
+                    @endif
+                </x-asset-manager-panel>
+            @endif
+
             @if($devices->isEmpty() && $items->isEmpty() && $licenses->isEmpty())
                 <div class="flex flex-col items-center justify-center py-12 text-center">
                     @svg('heroicon-o-inbox', 'w-10 h-10 text-[var(--am-text-muted)] mb-3')
@@ -353,8 +386,9 @@
         </div>
     </div>
 
-    {{-- Mobilfunk bearbeiten (Modal, innerhalb x-ui-page) — nur Owner/Admin. --}}
+    {{-- Modals innerhalb x-ui-page — nur Owner/Admin. --}}
     @can('asset-manager.manage')
         @include('asset-manager::livewire.holders.partials.modal-mobilfunk')
+        @include('asset-manager::livewire.holders.partials.modal-billing-exclusion')
     @endcan
 </x-ui-page>

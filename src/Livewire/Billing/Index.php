@@ -8,6 +8,7 @@ use Platform\AssetManager\Concerns\AuthorizesTeamRole;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Models\AssetBillingProfile;
 use Platform\AssetManager\Models\AssetBillingRun;
+use Platform\AssetManager\Services\BillableHolderResolver;
 use Platform\AssetManager\Services\BillingGateway;
 use Platform\AssetManager\Services\BillingRunService;
 use Platform\AssetManager\Services\TenantContext;
@@ -42,6 +43,9 @@ class Index extends Component
     /** Aufstellung der abzurechnenden Träger — hinter der Kachel, nicht daneben. */
     public bool $showBillable = false;
 
+    /** Liste der Einzelausnahmen (ADR 0024) — eingeklappt, aber am Profil sichtbar. */
+    public bool $showExceptions = false;
+
     public ?string $flash = null;
 
     public ?string $error = null;
@@ -65,6 +69,21 @@ class Index extends Component
     public string $fBasis = AssetBillingProfile::BASIS_LICENSED;
 
     public string $fExcludeDomains = '';
+
+    /**
+     * Zählen Externe mit (ADR 0024)? Default `true` — das ist das Verhalten jedes vor ADR 0024
+     * angelegten Profils; ein neues Profil soll sich nicht anders verhalten als das bestehende
+     * daneben, nur weil es später entstanden ist.
+     */
+    public bool $fCountExternal = true;
+
+    /**
+     * Ausschlussmuster als kommagetrennte Textbausteine — im UI absichtlich auf „UPN enthält" (die
+     * Fallgruppe Test-/technische Konten) verkürzt. Das gespeicherte Format kann mehr
+     * ({@see AssetBillingProfile::MATCH_MODES}); reichere Muster werden beim Speichern **erhalten**,
+     * nicht von dieser Vereinfachung überschrieben.
+     */
+    public string $fExcludePatterns = '';
 
     public ?string $fVat = '19';
 
@@ -118,6 +137,8 @@ class Index extends Component
             : null;
         $this->fBasis          = $profile->basis;
         $this->fExcludeDomains = implode(', ', $profile->normalizedExcludeDomains());
+        $this->fCountExternal  = $profile->countsExternal();
+        $this->fExcludePatterns = implode(', ', array_column($this->simplePatterns($profile), 'value'));
         $this->fVat            = $profile->vat_percent !== null ? (string) $profile->vat_percent : null;
         $this->fActive         = (bool) $profile->active;
         $this->showForm        = true;
@@ -181,6 +202,27 @@ class Index extends Component
             ->values()
             ->all();
 
+        // Muster: die einfache Form aus dem Feld neu aufbauen, reichere Muster (andere Felder oder
+        // Vergleichsarten) unangetastet stehen lassen. Ohne diese Trennung würde ein Speichern der
+        // Maske eine per Regelpflege eingetragene `email suffix`-Regel stillschweigend löschen.
+        $existing = $this->editingId ? $this->profileOrFail($this->editingId) : null;
+        $keptPatterns = $existing
+            ? array_values(array_filter(
+                $existing->normalizedExcludePatterns(),
+                fn (array $rule) => ! ($rule['field'] === 'upn' && $rule['match'] === 'contains'),
+            ))
+            : [];
+
+        $simplePatterns = collect(preg_split('/[,;]+/', $this->fExcludePatterns) ?: [])
+            ->map(fn ($value) => mb_strtolower(trim((string) $value)))
+            ->filter()
+            ->unique()
+            ->map(fn ($value) => ['field' => 'upn', 'match' => 'contains', 'value' => $value, 'label' => null])
+            ->values()
+            ->all();
+
+        $patterns = array_merge($keptPatterns, $simplePatterns);
+
         $attributes = [
             'name'                   => $this->fName,
             'easybill_customer_id'   => $customerId,
@@ -196,7 +238,9 @@ class Index extends Component
                 ? (int) round(((float) $this->fFallbackPrice) * 100)
                 : null,
             'basis'           => $this->fBasis,
+            'count_external'  => $this->fCountExternal,
             'exclude_domains' => $domains ?: null,
+            'exclude_patterns' => $patterns ?: null,
             'vat_percent'     => $this->fVat !== null && $this->fVat !== '' ? (int) $this->fVat : null,
             'active'          => $this->fActive,
         ];
@@ -250,6 +294,19 @@ class Index extends Component
             . 'Festschreiben und Versenden passieren in easybill.';
     }
 
+    /**
+     * Die im Formular abbildbaren Muster eines Profils — `upn contains`, nichts sonst.
+     *
+     * @return array<int, array{field: string, match: string, value: string, label: string|null}>
+     */
+    protected function simplePatterns(AssetBillingProfile $profile): array
+    {
+        return array_values(array_filter(
+            $profile->normalizedExcludePatterns(),
+            fn (array $rule) => $rule['field'] === 'upn' && $rule['match'] === 'contains',
+        ));
+    }
+
     protected function profileOrFail(int $id): AssetBillingProfile
     {
         return AssetBillingProfile::query()
@@ -269,6 +326,8 @@ class Index extends Component
         $this->fFallbackPrice  = null;
         $this->fBasis          = AssetBillingProfile::BASIS_LICENSED;
         $this->fExcludeDomains = '';
+        $this->fCountExternal  = true;
+        $this->fExcludePatterns = '';
         $this->fVat            = '19';
         $this->fActive         = true;
         $this->resetValidation();
@@ -289,6 +348,32 @@ class Index extends Component
             : null;
 
         $preview = $selected ? $runs->preview($selected, $this->period) : null;
+
+        // Die Einzelausnahmen (ADR 0024) werden am Profil aggregiert, obwohl sie am Träger leben:
+        // die Zählregel soll an EINER Stelle vollständig lesbar bleiben. Dazu gehört die Frage, wie
+        // viele der Ausnahmen überhaupt Geld bewegen — eine Ausnahme an jemandem ohne Lizenz sieht
+        // in der Liste gleich aus, wirkt aber nicht. Gerechnet wird mit derselben Regel wie der
+        // Lauf, mit übersteuerten Ausnahmen.
+        $exceptions      = $preview['exceptions'] ?? [];
+        $exceptionEffect = null;
+
+        if ($selected && $exceptions !== []) {
+            $without = count(app(BillableHolderResolver::class)
+                ->resolve($selected, array_fill_keys(array_column($exceptions, 'id'), false))['principals']);
+
+            $relevant = $without - (int) $preview['quantity'];
+            $cents    = $preview['unit_price_cents'];
+
+            $exceptionEffect = [
+                'relevant'         => $relevant,
+                'quantity_without' => $without,
+                'net_cents'        => $cents === null ? null : $relevant * $cents,
+                'currency'         => $selected->currency ?: 'EUR',
+                // Die älteste Ausnahme ist der Verrottungs-Indikator: steht dort eine dreistellige
+                // Tagezahl, hat sie seit über einem Jahr niemand mehr angesehen.
+                'oldest_days'      => max(array_map(fn ($e) => (int) ($e['days'] ?? 0), $exceptions)),
+            ];
+        }
 
         $recentRuns = $selected
             ? AssetBillingRun::query()
@@ -312,6 +397,8 @@ class Index extends Component
             'gatewayAvailable'  => $gateway->isAvailable(),
             'gatewayReason'     => $gateway->unavailableReason(),
             'periodOptions'     => $this->periodOptions($runs),
+            'exceptions'        => $exceptions,
+            'exceptionEffect'   => $exceptionEffect,
         ])->layout('platform::layouts.app');
     }
 

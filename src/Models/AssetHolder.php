@@ -80,6 +80,11 @@ class AssetHolder extends Model
         'contract_number',
         'data_volume',
         'is_active',
+        // Abrechnungs-Ausnahme (ADR 0024). Bewusst NICHT wie `is_active` ein Zustand, den der Sync
+        // pflegt: Entra kennt diese Felder nicht, sie sind reine Menschenentscheidung.
+        'billing_excluded_at',
+        'billing_excluded_reason',
+        'billing_excluded_by',
         'holder_type',
         // Zugehöriges System eines Funktionskontos — zusammen mit der Kostenstelle die zweite
         // Pflichtangabe, ohne die die Lizenz-Verteilungs-Kaskade ein Funktionskonto nicht
@@ -95,8 +100,9 @@ class AssetHolder extends Model
     ];
 
     protected $casts = [
-        'is_active'        => 'boolean',
-        'phone_overridden' => 'boolean',
+        'is_active'           => 'boolean',
+        'billing_excluded_at' => 'datetime',
+        'phone_overridden'    => 'boolean',
         'raw_data'         => 'array',
         'synced_at'        => 'datetime',
     ];
@@ -186,6 +192,42 @@ class AssetHolder extends Model
     public function scopeNonPersons($query)
     {
         return $query->whereIn('holder_type', self::NON_PERSON_TYPES);
+    }
+
+    /**
+     * Ist dieser Träger von der Weiterberechnung ausgenommen (ADR 0024)?
+     *
+     * Der Zeitstempel ist die Wahrheit, nicht der Grund: ein Grund ohne Datum wäre ein Kommentar,
+     * ein Datum ohne Grund eine Behauptung. Gesetzt werden beide nur gemeinsam, über den
+     * {@see \Platform\AssetManager\Services\BillingExclusionService}.
+     */
+    public function isBillingExcluded(): bool
+    {
+        return $this->billing_excluded_at !== null;
+    }
+
+    /**
+     * Wer die Abrechnungs-Ausnahme gesetzt hat (null, solange keine besteht).
+     *
+     * Muster wie {@see AssetDeviceEvent::actor()}: eine lose `belongsTo`-Beziehung auf den
+     * Core-User, ohne Fremdschlüssel-Zwang — ein gelöschter Benutzer darf die Ausnahme nicht
+     * mitnehmen, sie soll die Entscheidung überleben.
+     */
+    public function billingExcludedBy(): BelongsTo
+    {
+        return $this->belongsTo(\Platform\Core\Models\User::class, 'billing_excluded_by');
+    }
+
+    /** Nur Träger mit gesetzter Abrechnungs-Ausnahme. */
+    public function scopeBillingExcluded($query)
+    {
+        return $query->whereNotNull('billing_excluded_at');
+    }
+
+    /** Nur Träger ohne Ausnahme — die, über die allein die Zählregel entscheidet. */
+    public function scopeBillingIncluded($query)
+    {
+        return $query->whereNull('billing_excluded_at');
     }
 
     public function items(): HasMany

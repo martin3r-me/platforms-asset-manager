@@ -14,6 +14,7 @@ use Platform\AssetManager\Models\AssetHandover;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetUserLicense;
+use Platform\AssetManager\Services\BillingExclusionService;
 use Platform\AssetManager\Services\ControllingContext;
 use Platform\AssetManager\Services\CostAggregationService;
 use Platform\AssetManager\Services\HolderService;
@@ -62,6 +63,18 @@ class Show extends Component
     // Mobilfunk-Bearbeiten-Modal (Trigger am Mobilfunk-Block im Content, nicht mehr in der Profil-Leiste).
     public bool    $showMobilfunk  = false;
 
+    /**
+     * Abrechnungs-Ausnahme (ADR 0024) — bewusst NICHT Teil des allgemeinen Speicherns oben.
+     *
+     * Sie verändert die Menge auf einer Kundenrechnung und braucht einen Pflichtgrund; in derselben
+     * Maske wie Abteilung und Jobtitel wäre sie ein Häkchen, das man beim Korrigieren eines
+     * Schreibfehlers versehentlich mitsetzt.
+     */
+    public bool    $billingExcluded      = false;
+    public string  $billingReason        = '';
+    public bool    $showBillingExclusion = false;
+    public ?array  $billingImpact        = null;
+
     public function mount(AssetHolder $holder): void
     {
         // Team → 403, fremder Tenant → 404 (ADR 0016).
@@ -82,6 +95,9 @@ class Show extends Component
         $this->contractNumber = $holder->contract_number ?? '';
         $this->dataVolume     = $holder->data_volume ?? '';
         $this->phoneFromEntra = ! $holder->phone_overridden;
+
+        $this->billingExcluded = $holder->isBillingExcluded();
+        $this->billingReason   = $holder->billing_excluded_reason ?? '';
     }
 
     public function save(): void
@@ -197,6 +213,81 @@ class Show extends Component
         ]);
 
         $this->showMobilfunk = false;
+    }
+
+    // ---- Abrechnungs-Ausnahme (ADR 0024) -----------------------------------------------------
+
+    /**
+     * Öffnet das Ausnahme-Modal und rechnet die Wirkung auf die Rechnung vor.
+     *
+     * Die Zahl steht schon **vor** der Entscheidung da, nicht erst danach: „Menge 152 → 151,
+     * −80 € netto" ist die Information, um die es hier geht. Gerechnet wird sie vom
+     * {@see BillingExclusionService} mit der Produktionsregel selbst — nicht mit einer zweiten,
+     * hier nachgebauten Zählung, die beim ersten Regelwechsel auseinanderlaufen würde.
+     *
+     * Vorgerechnet wird immer die **Gegenrichtung** des aktuellen Stands: ein ausgenommener Träger
+     * interessiert sich dafür, was die Aufhebung kostet, ein abgerechneter dafür, was die Ausnahme
+     * spart.
+     */
+    public function openBillingExclusion(): void
+    {
+        Gate::authorize('asset-manager.manage');
+
+        $isExcluded = $this->holder->isBillingExcluded();
+
+        $this->billingExcluded = $isExcluded;
+        $this->billingReason   = $this->holder->billing_excluded_reason ?? '';
+        $this->resetValidation();
+
+        $preview = app(BillingExclusionService::class)->setExclusion(
+            (int) $this->holder->team_id,
+            (int) $this->holder->tenant_id,
+            [(int) $this->holder->id],
+            ! $isExcluded,
+            // Beim Ausnehmen ist der Grund Pflicht — für die Vorschau genügt ein Platzhalter, weil
+            // sie nichts schreibt. Ohne ihn lehnte der Service schon die Vorschau ab und die Seite
+            // zeigte eine Fehlermeldung, wo eine Zahl stehen soll.
+            $isExcluded ? null : 'Vorschau',
+            (int) Auth::id(),
+            true,
+        );
+
+        $this->billingImpact        = $preview['ok'] ? $preview['impact'] : null;
+        $this->showBillingExclusion = true;
+    }
+
+    /**
+     * Ausnahme setzen, ihren Grund korrigieren oder sie aufheben.
+     *
+     * Die Regeln liegen im Service, den Detailseite, Sammelaktion und MCP-Tool teilen — hier stünde
+     * sonst eine dritte Kopie von „Zeitstempel, Grund und Urheber gehören zusammen".
+     */
+    public function saveBillingExclusion(bool $excluded): void
+    {
+        Gate::authorize('asset-manager.manage');
+        $this->assertTenantBoundary($this->holder);
+
+        $result = app(BillingExclusionService::class)->setExclusion(
+            (int) $this->holder->team_id,
+            (int) $this->holder->tenant_id,
+            [(int) $this->holder->id],
+            $excluded,
+            $this->billingReason,
+            (int) Auth::id(),
+            false,
+        );
+
+        if (! $result['ok']) {
+            $this->addError('billingReason', $result['message']);
+
+            return;
+        }
+
+        $this->holder->refresh();
+        $this->billingExcluded      = $this->holder->isBillingExcluded();
+        $this->billingReason        = $this->holder->billing_excluded_reason ?? '';
+        $this->showBillingExclusion = false;
+        $this->saved                = true;
     }
 
     public function render()

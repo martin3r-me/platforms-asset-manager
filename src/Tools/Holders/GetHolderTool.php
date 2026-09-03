@@ -183,6 +183,14 @@ class GetHolderTool implements ToolContract, ToolMetadataContract
                     'department'          => $emp->department,
                     'job_title'           => $emp->job_title,
                     'is_active'           => (bool) $emp->is_active,
+                    // Abrechnungs-Ausnahme (ADR 0024) — bewusst neben is_active und nicht darin:
+                    // der Mensch arbeitet, steht aber auf keiner Kundenrechnung.
+                    'billing_excluded'    => $emp->isBillingExcluded(),
+                    'billing_exclusion'   => $emp->isBillingExcluded() ? [
+                        'reason' => $emp->billing_excluded_reason,
+                        'since'  => $emp->billing_excluded_at?->toDateString(),
+                        'by'     => $emp->billingExcludedBy?->name,
+                    ] : null,
                     'holder_type'         => $emp->holder_type,
                     'holder_type_label'   => $emp->holderTypeLabel(),
                     // Explizit, damit ein Modell nicht aus dem Typ-String raten muss, ob es eine

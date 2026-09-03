@@ -132,6 +132,7 @@
                     ['key' => 'with_asset',   'label' => 'Mit Asset',       'count' => $counts['with_asset'],   'color' => 'indigo',  'icon' => 'heroicon-o-cube-transparent', 'hint' => 'mindestens ein manuelles Asset'],
                     ['key' => 'unassigned',   'label' => 'Ohne alles',      'count' => $counts['unassigned'],   'color' => 'amber',   'icon' => 'heroicon-o-exclamation-triangle', 'hint' => 'Karteileichen — keine Zuweisung'],
                     ['key' => 'inactive',     'label' => 'Inaktiv',         'count' => $counts['inactive'],     'color' => 'red',     'icon' => 'heroicon-o-user-minus',       'hint' => 'is_active = false'],
+                    ['key' => 'billing_excluded', 'label' => 'Nicht berechnet', 'count' => $counts['billing_excluded'], 'color' => 'slate', 'icon' => 'heroicon-o-receipt-percent', 'hint' => 'Einzelausnahme von der Weiterberechnung (ADR 0024)'],
                     ['key' => 'all',          'label' => 'Alle',            'count' => $counts['all'],          'color' => 'gray',    'icon' => 'heroicon-o-list-bullet',      'hint' => 'jeder Eintrag in der Tabelle'],
                 ];
             @endphp
@@ -272,6 +273,13 @@
                                                         @unless($emp->holder_type === \Platform\AssetManager\Models\AssetHolder::TYPE_PERSON)
                                                             <x-asset-manager-badge :color="$emp->holderTypeBadgeColor()" size="xs">{{ $emp->holderTypeLabel() }}</x-asset-manager-badge>
                                                         @endunless
+                                                        {{-- Eine Ausnahme, die man nur im Rechnungslauf sieht, verrottet unbemerkt
+                                                             (ADR 0024). Der Grund steht im Titel, damit die Liste schmal bleibt. --}}
+                                                        @if($emp->isBillingExcluded())
+                                                            <span title="Von der Weiterberechnung ausgenommen{{ $emp->billing_excluded_reason ? ': ' . $emp->billing_excluded_reason : '' }} (seit {{ $emp->billing_excluded_at->format('d.m.Y') }})">
+                                                                <x-asset-manager-badge color="slate" size="xs">nicht berechnet</x-asset-manager-badge>
+                                                            </span>
+                                                        @endif
                                                     </div>
                                                     <div class="text-xs text-[var(--am-text-secondary)] truncate max-w-[240px]">{{ $emp->user_principal_name }}</div>
                                                 </div>
@@ -315,6 +323,7 @@
 
     {{-- Vorschau der Sammelaktion. Muss innerhalb von <x-ui-page> liegen. --}}
     @if($canManage)
+        @include('asset-manager::livewire.holders.partials.modal-bulk-billing')
         @include('asset-manager::livewire.holders.partials.modal-bulk-type')
     @endif
 </x-ui-page>

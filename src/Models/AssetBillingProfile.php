@@ -56,7 +56,9 @@ class AssetBillingProfile extends Model
         'commerce_sku',
         'fallback_unit_price_cents',
         'basis',
+        'count_external',
         'exclude_domains',
+        'exclude_patterns',
         'vat_percent',
         'currency',
         'active',
@@ -64,7 +66,9 @@ class AssetBillingProfile extends Model
 
     protected $casts = [
         'exclude_domains'           => 'array',
+        'exclude_patterns'          => 'array',
         'active'                    => 'boolean',
+        'count_external'            => 'boolean',
         'easybill_customer_id'      => 'integer',
         'fallback_unit_price_cents' => 'integer',
         'vat_percent'               => 'integer',
@@ -100,6 +104,56 @@ class AssetBillingProfile extends Model
             ->unique()
             ->values()
             ->all();
+    }
+
+    /**
+     * Vergleichsarten der Ausschlussmuster — identisch zu den `holder_type_rules` des
+     * {@see \Platform\AssetManager\Services\HolderClassifier}. Zwei verschiedene Mustersprachen
+     * in einem Modul wären für den Pflegenden nicht zu merken.
+     */
+    public const MATCH_MODES = ['prefix', 'suffix', 'contains', 'equals'];
+
+    /** Felder, auf die ein Ausschlussmuster zeigen darf. */
+    public const MATCH_FIELDS = ['upn', 'email', 'display_name'];
+
+    /**
+     * Die auszuschließenden Namensmuster, validiert und kleingeschrieben (ADR 0024).
+     *
+     * Validiert und nicht bloß durchgereicht, aus demselben Grund wie beim Classifier: eine kaputt
+     * eingetragene Regel darf den Rechnungslauf nicht abstürzen lassen, sondern nur nichts tun. Ein
+     * abgestürzter Lauf am Monatsersten kostet mehr als eine wirkungslose Regel.
+     *
+     * @return array<int, array{field: string, match: string, value: string, label: string|null}>
+     */
+    public function normalizedExcludePatterns(): array
+    {
+        return collect($this->exclude_patterns ?? [])
+            ->filter(fn ($rule) => is_array($rule)
+                && in_array($rule['field'] ?? null, self::MATCH_FIELDS, true)
+                && in_array($rule['match'] ?? null, self::MATCH_MODES, true)
+                && trim((string) ($rule['value'] ?? '')) !== '')
+            ->map(fn (array $rule) => [
+                'field' => $rule['field'],
+                'match' => $rule['match'],
+                'value' => mb_strtolower(trim((string) $rule['value'])),
+                'label' => isset($rule['label']) && trim((string) $rule['label']) !== ''
+                    ? trim((string) $rule['label'])
+                    : null,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Zählt dieses Profil Externe mit?
+     *
+     * Default `true` — das ist das Verhalten, das jedes vor ADR 0024 angelegte Profil hatte
+     * (`external` steht nicht in {@see AssetHolder::NON_PERSON_TYPES}). Eine Migration darf die Menge
+     * einer laufenden Abrechnung nicht ändern.
+     */
+    public function countsExternal(): bool
+    {
+        return $this->count_external === null ? true : (bool) $this->count_external;
     }
 
     /** Ist das Profil vollständig genug, um daraus einen Beleg zu erzeugen? */

@@ -43,6 +43,7 @@ class BillingRunService
      * @return array{
      *     quantity: int, unit_price_cents: int|null, total_net_cents: int, price_source: string|null,
      *     principals: string[], skipped: array<int, array{upn: string, reason: string}>,
+     *     exceptions: array<int, array<string, mixed>>,
      *     document: array<string, mixed>|null, problems: string[], period_label: string
      * }
      */
@@ -91,6 +92,10 @@ class BillingRunService
             // Kachel. Eine Aufstellung aus 135 nackten UPNs liest niemand gegen.
             'billable'         => $counted['rows'],
             'skipped'          => $counted['skipped'],
+            // Die Einzelausnahmen (ADR 0024) getrennt von `skipped`: dort stehen sie als Grund
+            // unter vielen, hier als das, was sie sind — eine Liste von Entscheidungen, die jemand
+            // getroffen hat und die jemand wieder aufheben muss.
+            'exceptions'       => $counted['exceptions'],
             'period_label'     => $this->periodLabel($period),
             'problems'         => $problems,
             'document'         => $cents === null || $quantity === 0
@@ -136,6 +141,12 @@ class BillingRunService
                 'skipped'    => $preview['skipped'],
                 'basis'      => $profile->basis,
                 'excluded_domains' => $profile->normalizedExcludeDomains(),
+                // Die vollständige Regel gehört in den Snapshot, nicht nur ihr Kern (ADR 0024):
+                // „warum standen da 149?" ist sonst auch mit eingefrorener Trägerliste nicht
+                // beantwortbar, sobald jemand später einen Schalter am Profil umgelegt hat.
+                'count_external'   => $profile->countsExternal(),
+                'exclude_patterns' => $profile->normalizedExcludePatterns(),
+                'exceptions'       => $preview['exceptions'],
                 'counted_at' => Carbon::now()->toIso8601String(),
             ],
         ];

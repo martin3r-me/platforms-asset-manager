@@ -5,6 +5,7 @@ namespace Platform\AssetManager\Tools\Holders;
 use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetHolder;
+use Platform\AssetManager\Services\BillingExclusionService;
 use Platform\AssetManager\Services\CostBootstrapService;
 use Platform\AssetManager\Services\HolderTypeService;
 use Platform\AssetManager\Services\TenantContext;
@@ -17,7 +18,8 @@ use Platform\Core\Contracts\ToolResult;
 
 /**
  * Einzel-Update eines Asset-Trägers (Kostenstelle, Abteilung, Aktiv-Status, Jobtitel, Kontotyp).
- * Für Massenänderungen der Kostenstelle → asset-manager.holders.cost-center.bulk.PUT.
+ * Für Massenänderungen der Kostenstelle → asset-manager.holders.cost-center.bulk.PUT, für die
+ * Abrechnungs-Ausnahme → asset-manager.holders.billing-exclusion.bulk.PUT.
  */
 class UpdateHolderTool implements ToolContract, ToolMetadataContract
 {
@@ -34,8 +36,12 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
         return 'PUT /asset-manager/employee - Aktualisiert EINEN Asset-Träger (per id ODER '
             . 'user_principal_name). Optionale Felder: cost_center (Kostenstellen-Code; setzt Code + '
             . 'cost_center_id konsistent; "" leert die Zuordnung), department, is_active (boolean), '
-            . 'job_title, holder_type (person|function|admin|service|external). Unbekannter Kostenstellen-Code '
-            . 'wird nur mit create_missing=true angelegt, sonst Fehler.';
+            . 'job_title, holder_type (person|function|admin|service|external), billing_excluded '
+            . '(boolean; true nimmt den Träger von der Weiterberechnung aus und verlangt dann '
+            . 'billing_exclusion_reason, ADR 0024). Unbekannter Kostenstellen-Code wird nur mit '
+            . 'create_missing=true angelegt, sonst Fehler. Hinweis: is_active kommt aus Entra und '
+            . 'wird beim nächsten Sync überschrieben — wer jemanden dauerhaft von der Rechnung '
+            . 'nehmen will, nutzt billing_excluded.';
     }
 
     public function getSchema(): array
@@ -50,6 +56,8 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
                 'is_active'           => ['type' => 'boolean', 'description' => 'Aktiv-Status.'],
                 'job_title'           => ['type' => 'string', 'description' => 'Jobtitel.'],
                 'holder_type'         => ['type' => 'string', 'enum' => ['person', 'function', 'admin', 'service', 'external'], 'description' => 'Traeger-Typ (ADR 0017). Nicht-Personen werden gelabelt, nicht gefiltert.'],
+                'billing_excluded'    => ['type' => 'boolean', 'description' => 'true = von der Weiterberechnung ausnehmen (ADR 0024), false = Ausnahme aufheben.'],
+                'billing_exclusion_reason' => ['type' => 'string', 'description' => 'Grund der Ausnahme. Pflicht bei billing_excluded=true.'],
                 'account_type'        => ['type' => 'string', 'description' => 'DEPRECATED - Alias von holder_type.'],
                 'create_missing'      => ['type' => 'boolean', 'description' => 'Wenn true: fehlende Kostenstelle anlegen (Default false).'],
             ], $this->tenantSchemaProperty()),
@@ -136,6 +144,29 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
 
             $emp->save();
 
+            // Die Abrechnungs-Ausnahme läuft NICHT über die Feldschleife: an ihr hängen drei Felder
+            // (Zeitstempel, Grund, Urheber), die nur gemeinsam einen Sinn haben, plus die
+            // Pflichtprüfung des Grundes. Der Service ist die gemeinsame Wahrheit von Detailseite,
+            // Sammelaktion und Tool (ADR 0024).
+            if (array_key_exists('billing_excluded', $arguments)) {
+                $userId = $context->user->id ?? null;
+
+                $result = app(BillingExclusionService::class)->setExclusion(
+                    $teamId,
+                    (int) $emp->tenant_id,
+                    [$emp->id],
+                    (bool) $arguments['billing_excluded'],
+                    $arguments['billing_exclusion_reason'] ?? null,
+                    $userId !== null ? (int) $userId : null,
+                );
+
+                if (! $result['ok']) {
+                    return ToolResult::error($result['code'] ?? 'VALIDATION_ERROR', $result['message']);
+                }
+
+                $emp->refresh();
+            }
+
             // Der Typ läuft NICHT über die Feldschleife: an ihm hängt die Lizenz-Verteilungskaskade
             // (ADR 0019). Ein direktes Setzen ließ hier bis zur Sammelaktion ein totes
             // `function_system` und eine Verteilung zurück, die die Stammdaten nicht mehr hergaben.
@@ -165,6 +196,8 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
                 'cost_center_label' => $emp->costCenter?->label,
                 'department'        => $emp->department,
                 'is_active'         => (bool) $emp->is_active,
+                'billing_excluded'  => $emp->isBillingExcluded(),
+                'billing_excluded_reason' => $emp->billing_excluded_reason,
                 'job_title'         => $emp->job_title,
                 'holder_type'       => $emp->holder_type,
                 'account_type'      => $emp->holder_type, // DEPRECATED - Alias
