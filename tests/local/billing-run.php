@@ -252,6 +252,9 @@ check('Rueckfallpreis: keine Einheit', false, isset($doc['items'][0]['unit']));
 check('Beleg: Bezeichnung ohne Monat (der steht im Leistungszeitraum)', 'Broich', $doc['items'][0]['description']);
 check('Beleg: Leistungszeitraum von', '2026-09-01', $doc['service_date']['date_from']);
 check('Beleg: Leistungszeitraum bis', '2026-09-30', $doc['service_date']['date_to']);
+// Das Belegdatum entscheidet ueber die Buchungsperiode (DATEV zieht es, SOLL-Besteuerung). Es
+// muss der Monatsletzte des Abrechnungsmonats sein — nicht der Tag, an dem der Lauf startet.
+check('Beleg: Belegdatum = Monatsletzter des Abrechnungsmonats', '2026-09-30', $doc['document_date']);
 
 // Auftragsnummer und Zahlungsziel fuellt easybill NICHT aus der Kontovorlage. Leer heisst
 // "nicht mitsenden" — ein geratener Wert waere schlechter als keiner.

@@ -249,7 +249,9 @@ class BillingRunService
      *
      * Alle Beträge als Integer-Cent — das ist die ausdrückliche Anforderung der API. Der
      * Leistungszeitraum wird mitgegeben, weil eine Kopfpauschale sich auf einen Monat bezieht und
-     * das Datum der Belegerstellung darüber nichts aussagt.
+     * das Datum der Belegerstellung darüber nichts aussagt. Aus demselben Grund setzen wir das
+     * Belegdatum selbst auf den Monatsletzten, statt easybill den Erstellungstag einsetzen zu
+     * lassen (siehe ADR 0025).
      *
      * @param array{cents: int|null, source: string|null, label: string|null, booking_account: string|null, note: string|null} $price
      *
@@ -263,6 +265,7 @@ class BillingRunService
         array $price,
     ): array {
         $start = Carbon::createFromFormat('Y-m-d', $period . '-01')->startOfMonth();
+        $end   = $start->copy()->endOfMonth();
         $label = $this->periodLabel($period);
 
         // Die Position spiegelt den Commerce-Artikel: Bezeichnung, Artikelnummer, Einheit,
@@ -299,14 +302,21 @@ class BillingRunService
         }
 
         $document = [
-            'type'         => 'INVOICE',
-            'customer_id'  => (int) $profile->easybill_customer_id,
-            'title'        => $profile->name . ' — ' . $label,
-            'currency'     => $profile->currency ?: 'EUR',
-            'service_date' => [
+            'type'          => 'INVOICE',
+            'customer_id'   => (int) $profile->easybill_customer_id,
+            'title'         => $profile->name . ' — ' . $label,
+            'currency'      => $profile->currency ?: 'EUR',
+            // Das Belegdatum bestimmt die Buchungsperiode — DATEV zieht es, nicht den
+            // Leistungszeitraum. Bei SOLL-Besteuerung ist die Umsatzsteuer im Leistungsmonat
+            // fällig; ein Lauf am 3. des Folgemonats buchte den Umsatz sonst in den falschen
+            // Monat. Deshalb immer der Monatsletzte des Abrechnungsmonats, nie das Datum der
+            // Belegerstellung — auch wenn das beim Lauf für den laufenden Monat ein Datum in
+            // der Zukunft ist. Die Periode muss stimmen, der Erstellungstag sagt nichts.
+            'document_date' => $end->format('Y-m-d'),
+            'service_date'  => [
                 'type'      => 'SERVICE',
                 'date_from' => $start->format('Y-m-d'),
-                'date_to'   => $start->copy()->endOfMonth()->format('Y-m-d'),
+                'date_to'   => $end->format('Y-m-d'),
             ],
             'items' => [$item],
         ];
