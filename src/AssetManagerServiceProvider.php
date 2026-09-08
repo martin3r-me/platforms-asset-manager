@@ -36,6 +36,7 @@ class AssetManagerServiceProvider extends ServiceProvider
             $this->commands([
                 \Platform\AssetManager\Console\Commands\SyncIntuneDevicesCommand::class,
                 \Platform\AssetManager\Console\Commands\SyncLicensesCommand::class,
+                \Platform\AssetManager\Console\Commands\ImportTenantUsersCommand::class,
                 \Platform\AssetManager\Console\Commands\BackfillHoldersCommand::class,
                 \Platform\AssetManager\Console\Commands\ClassifyHoldersCommand::class,
                 \Platform\AssetManager\Console\Commands\MergeDeletedHoldersCommand::class,
@@ -120,6 +121,19 @@ class AssetManagerServiceProvider extends ServiceProvider
 
         $this->callAfterResolving(Schedule::class, function (Schedule $schedule) {
             $schedule->command('asset-manager:sync-intune')->hourly();
+
+            // Verzeichnis-Abgleich der Asset-Träger — MUSS vor dem Lizenz-Sync laufen.
+            //
+            // Er ist der einzige Pfad, der `accountEnabled` übernimmt und ausgeschiedene Träger
+            // stilllegt (docs/adr/0023). Ohne Zeitplan hing das an einem Klick, während die
+            // Zählregel der Weiterberechnung nur aktive Träger sieht — der Kunde zahlte weiter für
+            // Ausgeschiedene, sichtbar erst als falscher Betrag auf seiner Rechnung.
+            //
+            // 01:30 statt stündlich: der Lauf iteriert `/users` vollständig, und ein Austritt
+            // braucht keine Minutenaktualität. Der Abstand zum Lizenz-Sync (02:00) ist bewusst —
+            // der arbeitet danach auf einem Bestand, dessen Ausgeschiedene schon stillgelegt sind.
+            $schedule->command('asset-manager:import-users')->dailyAt('01:30');
+
             $schedule->command('asset-manager:sync-licenses')->dailyAt('02:00');
         });
     }
