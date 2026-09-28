@@ -52,6 +52,7 @@ class AssetBillingProfile extends Model
         'easybill_customer_id',
         'easybill_customer_name',
         'order_number',
+        'buyer_reference',
         'due_in_days',
         'commerce_sku',
         'fallback_unit_price_cents',

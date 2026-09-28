@@ -329,6 +329,14 @@ class BillingRunService
             $document['order_number'] = (string) $profile->order_number;
         }
 
+        // Die Käuferreferenz (E-Rechnung BT-10) füllt easybill dagegen SELBST, aus dem Kundenstamm.
+        // Mitgesendet wird sie nur, wenn diese Rechnung beim Kunden unter einer anderen Referenz
+        // gebucht wird als der Rest. Leer heißt: der Kundenstandard gilt — und den brauchen die
+        // übrigen Rechnungen an denselben Kunden, darum wird er nicht am Kunden umgestellt.
+        if (filled($profile->buyer_reference)) {
+            $document['buyer_reference'] = (string) $profile->buyer_reference;
+        }
+
         if ($profile->due_in_days !== null) {
             $document['due_in_days'] = (int) $profile->due_in_days;
         }

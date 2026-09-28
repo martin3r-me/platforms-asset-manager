@@ -60,6 +60,8 @@ class Index extends Component
 
     public string $fOrderNumber = '';
 
+    public string $fBuyerReference = '';
+
     public ?string $fDueInDays = null;
 
     public string $fSku = '';
@@ -130,6 +132,7 @@ class Index extends Component
         $this->fCustomerId     = $profile->easybill_customer_id ? (string) $profile->easybill_customer_id : null;
         $this->fCustomerName   = (string) $profile->easybill_customer_name;
         $this->fOrderNumber    = (string) $profile->order_number;
+        $this->fBuyerReference = (string) $profile->buyer_reference;
         $this->fDueInDays      = $profile->due_in_days !== null ? (string) $profile->due_in_days : null;
         $this->fSku            = (string) $profile->commerce_sku;
         $this->fFallbackPrice  = $profile->fallback_unit_price_cents !== null
@@ -162,6 +165,7 @@ class Index extends Component
             'fBasis'         => 'required|in:' . implode(',', AssetBillingProfile::BASES),
             'fVat'           => 'nullable|numeric|min:0|max:100',
             'fOrderNumber'   => 'nullable|string|max:255',
+            'fBuyerReference' => 'nullable|string|max:255',
             'fDueInDays'     => 'nullable|integer|min:0|max:365',
         ], [], [
             'fName'          => 'Name',
@@ -171,6 +175,7 @@ class Index extends Component
             'fBasis'         => 'Zählregel',
             'fVat'           => 'Steuersatz',
             'fOrderNumber'   => 'Auftragsnummer',
+            'fBuyerReference' => 'Käuferreferenz',
             'fDueInDays'     => 'Zahlungsziel',
         ]);
 
@@ -228,6 +233,9 @@ class Index extends Component
             'easybill_customer_id'   => $customerId,
             'easybill_customer_name' => $customerName,
             'order_number'           => $this->fOrderNumber ?: null,
+            // Getrimmt, weil die Referenz beim Kunden maschinell zugeordnet wird (E-Rechnung) — ein
+            // mitkopiertes Leerzeichen wäre dort eine andere Referenz.
+            'buyer_reference'        => trim($this->fBuyerReference) ?: null,
             'due_in_days'            => $this->fDueInDays !== null && $this->fDueInDays !== ''
                 ? (int) $this->fDueInDays
                 : null,
@@ -321,6 +329,7 @@ class Index extends Component
         $this->fCustomerId     = null;
         $this->fCustomerName   = '';
         $this->fOrderNumber    = '';
+        $this->fBuyerReference = '';
         $this->fDueInDays      = null;
         $this->fSku            = '';
         $this->fFallbackPrice  = null;

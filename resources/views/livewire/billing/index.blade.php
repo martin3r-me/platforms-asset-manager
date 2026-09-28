@@ -448,6 +448,20 @@
                     Adresse, die aus der Kontovorlage kommen. Leer heißt: nicht mitsenden, dann gilt der
                     easybill-Standard.
                 </p>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Käuferreferenz</label>
+                        <x-asset-manager-input size="sm" type="text" wire:model="fBuyerReference" placeholder="z. B. CW-1520-1520" />
+                        @error('fBuyerReference') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
+                    </div>
+                </div>
+                <p class="text-[10px] text-[var(--am-text-muted)]">
+                    Die Käuferreferenz setzt easybill <strong>selbst</strong> — aus dem Kundenstamm, auf jeder Rechnung
+                    an diesen Kunden. Nur eintragen, wenn diese Abrechnung beim Kunden unter einer anderen Referenz
+                    gebucht wird. Leer heißt: der Kundenstandard gilt. In der E-Rechnung steht sie als
+                    Käuferreferenz (BT-10).
+                </p>
             </div>
 
             <div class="rounded-lg border border-[color:var(--am-border)] p-3 space-y-3">

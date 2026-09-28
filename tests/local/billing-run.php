@@ -61,6 +61,7 @@ Schema::create('asset_billing_profiles', function (Blueprint $t) {
     $t->unsignedBigInteger('easybill_customer_id')->nullable();
     $t->string('easybill_customer_name')->nullable();
     $t->string('order_number')->nullable();
+    $t->string('buyer_reference')->nullable();
     $t->unsignedSmallInteger('due_in_days')->nullable();
     $t->string('commerce_sku')->nullable();
     $t->unsignedInteger('fallback_unit_price_cents')->nullable();
@@ -267,9 +268,26 @@ $withFields = $runs->preview($profile, '2026-11')['document'];
 
 check('Auftragsnummer wird mitgesendet', 'KS-1800-1800', $withFields['order_number']);
 check('Zahlungsziel wird mitgesendet', 14, $withFields['due_in_days']);
+check('Auftragsnummer allein setzt keine Kaeuferreferenz', false, isset($withFields['buyer_reference']));
 
 $profile->order_number = null;
 $profile->due_in_days  = null;
+
+// Die Kaeuferreferenz (E-Rechnung BT-10) fuellt easybill dagegen SELBST aus dem Kundenstamm. Leer
+// heisst "nicht mitsenden", damit der Kundenstandard gilt — gefuellt ueberschreibt sie ihn nur
+// fuer diese eine Rechnung. Ueber update()/fresh() an einer eigenen Kopie, damit $fillable und
+// Spalte mitgeprueft sind, ohne ungespeicherte Aenderungen an $profile mitzuschreiben.
+check('Ohne Kaeuferreferenz: Feld fehlt im Beleg', false, isset($doc['buyer_reference']));
+
+$stored = $profile->fresh();
+$stored->update(['buyer_reference' => 'CW-1520-1520']);
+$stored = $stored->fresh();
+
+check('Kaeuferreferenz wird gespeichert', 'CW-1520-1520', $stored->buyer_reference);
+check('Kaeuferreferenz wird mitgesendet', 'CW-1520-1520', $runs->preview($stored, '2026-11')['document']['buyer_reference'] ?? null);
+
+$stored->update(['buyer_reference' => null]);
+unset($stored);
 
 // --- Position spiegelt den Commerce-Artikel ------------------------------
 // Der Artikel ist die Wahrheit: Bezeichnung, Nummer, Einheit, Erloeskonto und Steuersatz kommen
