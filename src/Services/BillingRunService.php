@@ -358,4 +358,37 @@ class BillingRunService
 
         return (self::MONTHS[(int) $month] ?? $month) . ' ' . $year;
     }
+
+    /**
+     * Die wählbaren Abrechnungsmonate, neuester zuerst: der kommende Monat, der laufende und die elf
+     * davor. Weiter zurück ergibt bei einer Pauschale keinen Sinn.
+     *
+     * Der kommende Monat ist dabei, weil eine Pauschale auch vor Monatsbeginn erstellt wird — dann
+     * zählt der Lauf allerdings den Stand vom Tag des Laufs, siehe {@see isAdvance()}. Weiter voraus
+     * nicht: zwei Monate im Voraus wäre die Menge schon fast sicher falsch.
+     *
+     * @return array<string, string> 'YYYY-MM' => 'Oktober 2026'
+     */
+    public function selectablePeriods(): array
+    {
+        $options = [];
+        $cursor  = Carbon::now()->startOfMonth()->addMonthNoOverflow();
+
+        for ($i = 0; $i < 13; $i++) {
+            $key = $cursor->format('Y-m');
+            $options[$key] = $this->periodLabel($key);
+            $cursor->subMonthNoOverflow();
+        }
+
+        return $options;
+    }
+
+    /**
+     * Liegt der Abrechnungsmonat noch in der Zukunft? Dann rechnet der Lauf im Voraus ab: Er zählt die
+     * Träger von heute, und wer im Abrechnungsmonat ausscheidet, steht trotzdem auf der Rechnung.
+     */
+    public function isAdvance(string $period): bool
+    {
+        return $this->normalizePeriod($period) > Carbon::now()->format('Y-m');
+    }
 }

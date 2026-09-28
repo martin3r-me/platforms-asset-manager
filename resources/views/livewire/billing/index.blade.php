@@ -116,6 +116,13 @@
                             </x-asset-manager-button>
                         </div>
 
+                        @if($periodIsAdvance)
+                            <p class="text-xs text-amber-700">
+                                {{ $preview['period_label'] ?? '' }} hat noch nicht begonnen. Gezählt wird der Stand von heute —
+                                wer im Abrechnungsmonat ausscheidet, steht trotzdem auf der Rechnung.
+                            </p>
+                        @endif
+
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             {{-- Klickbar: die Zahl allein beantwortet nicht, WER dahintersteckt — und
                                  genau das will man wissen, bevor eine Rechnung rausgeht. --}}

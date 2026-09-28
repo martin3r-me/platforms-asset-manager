@@ -400,4 +400,27 @@ check('Fehlschlag: Lauf trotzdem protokolliert', AssetBillingRun::STATUS_FAILED,
 check('Fehlschlag: keine Beleg-ID', null, $failedRun?->easybill_document_id);
 check('Fehlschlag: blockiert den zweiten Versuch nicht', [], $runs->preview($profile, '2026-11')['problems']);
 
+// --- Waehlbare Monate ----------------------------------------------------
+// Der kommende Monat ist waehlbar, damit eine Pauschale auch vor Monatsbeginn erstellt werden
+// kann — mehr aber nicht. Am 28.09. muss also Oktober oben stehen.
+\Illuminate\Support\Carbon::setTestNow('2026-09-28 13:00:00');
+$periods = $runs->selectablePeriods();
+
+check('Monatsauswahl: kommender Monat steht oben', '2026-10', array_key_first($periods));
+check('Monatsauswahl: Bezeichnung des kommenden Monats', 'Oktober 2026', $periods['2026-10'] ?? null);
+check('Monatsauswahl: laufender Monat ist dabei', true, isset($periods['2026-09']));
+check('Monatsauswahl: nicht weiter als einen Monat voraus', false, isset($periods['2026-11']));
+check('Monatsauswahl: 13 Monate (kommender + laufender + elf davor)', 13, count($periods));
+check('Monatsauswahl: aeltester Monat bleibt wie bisher', '2025-10', array_key_last($periods));
+
+check('Im Voraus: kommender Monat', true, $runs->isAdvance('2026-10'));
+check('Im Voraus: laufender Monat nicht', false, $runs->isAdvance('2026-09'));
+check('Im Voraus: vergangener Monat nicht', false, $runs->isAdvance('2026-08'));
+
+// Jahreswechsel: im Dezember ist der kommende Monat der Januar des Folgejahres.
+\Illuminate\Support\Carbon::setTestNow('2026-12-31 23:00:00');
+check('Monatsauswahl: Jahreswechsel', '2027-01', array_key_first($runs->selectablePeriods()));
+
+\Illuminate\Support\Carbon::setTestNow();
+
 check_summary();

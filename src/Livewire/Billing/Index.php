@@ -405,24 +405,10 @@ class Index extends Component
             'canManage'         => $canManage,
             'gatewayAvailable'  => $gateway->isAvailable(),
             'gatewayReason'     => $gateway->unavailableReason(),
-            'periodOptions'     => $this->periodOptions($runs),
+            'periodOptions'     => $runs->selectablePeriods(),
+            'periodIsAdvance'   => $runs->isAdvance($this->period),
             'exceptions'        => $exceptions,
             'exceptionEffect'   => $exceptionEffect,
         ])->layout('platform::layouts.app');
-    }
-
-    /** Laufender Monat und die elf davor — weiter zurück zu rechnen ergibt bei einer Pauschale keinen Sinn. */
-    protected function periodOptions(BillingRunService $runs): array
-    {
-        $options = [];
-        $cursor  = now()->startOfMonth();
-
-        for ($i = 0; $i < 12; $i++) {
-            $key = $cursor->format('Y-m');
-            $options[$key] = $runs->periodLabel($key);
-            $cursor->subMonthNoOverflow();
-        }
-
-        return $options;
     }
 }
