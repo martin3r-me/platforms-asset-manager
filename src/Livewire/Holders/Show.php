@@ -352,8 +352,15 @@ class Show extends Component
                 ->sum('monthly_amount')
             : 0.0;
 
+        // Telefonie-Plätze aus der RingCentral-Benutzerliste (#931) — nur lesend, gepflegt beim Anbieter.
+        $telephonySeats = \Platform\AssetManager\Models\AssetTelephonySeat::where('team_id', $teamId)
+            ->where('holder_id', $this->holder->id)
+            ->orderBy('extension')
+            ->get();
+
         return view('asset-manager::livewire.holders.show', [
             'holder'           => $this->holder,
+            'telephonySeats'     => $telephonySeats,
             'items'              => $items,
             'devices'            => $devices,
             'handovers'          => $handovers,

@@ -25,6 +25,12 @@ class AssetImportRun extends Model
     /** Lizenz-Abrechnung des Wiederverkäufers (ADR 0019). */
     public const SOURCE_LICENSE_INVOICE = 'license_invoice';
 
+    /** RingCentral-Benutzerliste → Telefonie-Plätze (#931). */
+    public const SOURCE_TELEPHONY_SEATS = 'telephony_seats';
+
+    /** Vodafone-Festnetzrechnung: Internet + RingCentral (#931). */
+    public const SOURCE_VODAFONE_FIXEDNET = 'vodafone_fixednet';
+
     /** Durchgelaufen, keine Auffälligkeiten. */
     public const STATUS_OK = 'ok';
 
@@ -79,6 +85,8 @@ class AssetImportRun extends Model
             self::SOURCE_EXCEL           => 'Kostenaufteilung (Excel)',
             self::SOURCE_VODAFONE        => 'Vodafone-Rechnung',
             self::SOURCE_LICENSE_INVOICE => 'Lizenz-Abrechnung',
+            self::SOURCE_TELEPHONY_SEATS => 'RingCentral-Benutzerliste',
+            self::SOURCE_VODAFONE_FIXEDNET => 'Vodafone-Festnetz',
             default                      => $this->source,
         };
     }
@@ -90,6 +98,8 @@ class AssetImportRun extends Model
             self::SOURCE_EXCEL           => 'slate',
             self::SOURCE_VODAFONE        => 'violet',
             self::SOURCE_LICENSE_INVOICE => 'sky',
+            self::SOURCE_TELEPHONY_SEATS => 'indigo',
+            self::SOURCE_VODAFONE_FIXEDNET => 'orange',
             default                      => 'gray',
         };
     }

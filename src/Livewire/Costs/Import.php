@@ -11,8 +11,12 @@ use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Services\CostExcelImportService;
 use Platform\AssetManager\Services\CostResetService;
 use Platform\AssetManager\Models\AssetImportRun;
+use Platform\AssetManager\Models\AssetCategory;
+use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Services\LicenseInvoiceImportService;
+use Platform\AssetManager\Services\TelephonySeatImportService;
 use Platform\AssetManager\Services\TenantContext;
+use Platform\AssetManager\Services\VodafoneFixedNetImportService;
 use Platform\AssetManager\Services\VodafoneInvoiceImportService;
 use Platform\AssetManager\Support\ImportRunRecorder;
 
@@ -40,6 +44,27 @@ class Import extends Component
     public ?array $licenseResult = null;
     public ?string $licenseError = null;
     public bool $licenseWasDryRun = true;
+
+    /** Vierter Upload: RingCentral-Benutzerliste → wer welchen Telefonie-Platz belegt (#931). */
+    public $seatFile;
+    public ?array $seatResult = null;
+    public ?string $seatError = null;
+    public bool $seatWasDryRun = true;
+
+    /** Fünfter Upload: Vodafone-Festnetzrechnung „Rechnung CSV" (#931). */
+    public $fixednetFile;
+    public ?array $fixednetResult = null;
+    public ?string $fixednetError = null;
+    public bool $fixednetWasDryRun = true;
+
+    /**
+     * Erstzuordnung Anschlusskennung → bestehende Internetleitung im Inventar. Nur nötig, solange eine
+     * Leitung ihre Kennung noch nicht trägt (Altbestand aus der Excel); danach findet der Import sie
+     * selbst. Ohne Zuordnung legte er eine neue Leitung an, und die Excel-Zeile zählte doppelt.
+     *
+     * @var array<string, int|string|null>
+     */
+    public array $lineMapping = [];
 
     /** Aufgeklappter Protokoll-Eintrag (Import-Historie unten auf der Seite). */
     public ?int $expandedRunId = null;
@@ -308,6 +333,159 @@ class Import extends Component
         }
     }
 
+    // ---- RingCentral-Benutzerliste + Festnetzrechnung (#931) --------------------------------
+
+    public function updatedSeatFile(): void
+    {
+        $this->seatResult = null;
+        $this->seatError  = null;
+        $this->validateUpload('seatFile', ['xlsx'], self::SEAT_FILE_HINT);
+    }
+
+    public function updatedFixednetFile(): void
+    {
+        $this->fixednetResult = null;
+        $this->fixednetError  = null;
+        $this->lineMapping    = [];
+        $this->validateUpload('fixednetFile', ['csv'], self::FIXEDNET_FILE_HINT);
+    }
+
+    private const SEAT_FILE_HINT     = 'Bitte die RingCentral-Benutzerliste („Download User List") als .xlsx hochladen.';
+    private const FIXEDNET_FILE_HINT = 'Bitte die „Rechnung CSV" des Festnetzkontos hochladen.';
+
+    /** Gemeinsame Upload-Prüfung der beiden Telefonie-Abschnitte; false statt Exception. */
+    protected function validateUpload(string $property, array $extensions, string $message): bool
+    {
+        $this->resetErrorBag($property);
+        $file = $this->{$property};
+
+        if (! $file) {
+            $this->addError($property, 'Bitte eine Datei wählen.');
+            return false;
+        }
+        if ($file->getSize() > 20 * 1024 * 1024) {
+            $this->addError($property, 'Datei zu groß (max. 20 MB).');
+            return false;
+        }
+        if (! in_array(strtolower($file->getClientOriginalExtension() ?? ''), $extensions, true)) {
+            $this->addError($property, $message);
+            return false;
+        }
+
+        return true;
+    }
+
+    public function previewSeats(TelephonySeatImportService $service): void
+    {
+        $this->runSeats($service, true);
+    }
+
+    public function runSeatImport(TelephonySeatImportService $service): void
+    {
+        $this->runSeats($service, false);
+    }
+
+    protected function runSeats(TelephonySeatImportService $service, bool $dryRun): void
+    {
+        // ADR 0004: ersetzt den Platz-Snapshot und verschiebt damit Kosten — Owner/Admin.
+        abort_unless($this->canManage(), 403);
+
+        $this->seatError  = null;
+        $this->seatResult = null;
+
+        if (! $this->validateUpload('seatFile', ['xlsx'], self::SEAT_FILE_HINT)) {
+            return;
+        }
+
+        $this->running       = true;
+        $this->seatWasDryRun = $dryRun;
+        $startedAt = microtime(true);
+        $fileName  = $this->seatFile->getClientOriginalName();
+
+        try {
+            $this->seatResult = $service->import($this->teamId(), $this->seatFile->getRealPath(), $dryRun, $this->activeTenantId());
+            $this->recordRun(AssetImportRun::SOURCE_TELEPHONY_SEATS, $this->seatResult, $fileName, $dryRun, $startedAt);
+        } catch (\Throwable $e) {
+            $this->recordFailure(AssetImportRun::SOURCE_TELEPHONY_SEATS, $e, $fileName, $dryRun, $startedAt);
+            Log::error('AssetManager: RingCentral-Benutzerliste fehlgeschlagen', ['team_id' => $this->teamId(), 'error' => $e->getMessage()]);
+            $this->seatError = $e instanceof \RuntimeException
+                ? $e->getMessage()
+                : 'Der Import ist fehlgeschlagen. Bitte Datei und Format prüfen; Details stehen im Server-Log.';
+        } finally {
+            $this->running = false;
+        }
+    }
+
+    public function previewFixedNet(VodafoneFixedNetImportService $service): void
+    {
+        $this->runFixedNet($service, true);
+    }
+
+    public function runFixedNetImport(VodafoneFixedNetImportService $service): void
+    {
+        $this->runFixedNet($service, false);
+    }
+
+    protected function runFixedNet(VodafoneFixedNetImportService $service, bool $dryRun): void
+    {
+        // ADR 0004: löst Excel-Zeilen hart ab und schreibt Kostenpositionen — Owner/Admin.
+        abort_unless($this->canManage(), 403);
+
+        $this->fixednetError  = null;
+        $this->fixednetResult = null;
+
+        if (! $this->validateUpload('fixednetFile', ['csv'], self::FIXEDNET_FILE_HINT)) {
+            return;
+        }
+
+        $this->running           = true;
+        $this->fixednetWasDryRun = $dryRun;
+        $startedAt = microtime(true);
+        $fileName  = $this->fixednetFile->getClientOriginalName();
+
+        // Nur echte Auswahlen weiterreichen; „— neue Leitung anlegen —" ist ein leerer Wert.
+        $mapping = array_map('intval', array_filter($this->lineMapping, fn ($id) => (int) $id > 0));
+
+        try {
+            $this->fixednetResult = $service->import(
+                $this->teamId(),
+                $this->fixednetFile->getRealPath(),
+                'fixednet-upload',
+                $dryRun,
+                $this->activeTenantId(),
+                $mapping,
+            );
+            $this->recordRun(AssetImportRun::SOURCE_VODAFONE_FIXEDNET, $this->fixednetResult, $fileName, $dryRun, $startedAt);
+        } catch (\Throwable $e) {
+            $this->recordFailure(AssetImportRun::SOURCE_VODAFONE_FIXEDNET, $e, $fileName, $dryRun, $startedAt);
+            Log::error('AssetManager: Festnetz-Import fehlgeschlagen', ['team_id' => $this->teamId(), 'error' => $e->getMessage()]);
+            $this->fixednetError = $e instanceof \RuntimeException
+                ? $e->getMessage()
+                : 'Der Import ist fehlgeschlagen. Bitte Datei und Format prüfen; Details stehen im Server-Log.';
+        } finally {
+            $this->running = false;
+        }
+    }
+
+    /**
+     * Internetleitungen ohne Anschlusskennung — die Kandidaten der Erstzuordnung. Nur geladen, wenn
+     * eine Vorschau unbekannte Kennungen gemeldet hat.
+     */
+    protected function unmappedInternetLines(): \Illuminate\Support\Collection
+    {
+        if (empty($this->fixednetResult['unknown_lines'])) {
+            return collect();
+        }
+
+        $categoryId = AssetCategory::where('key', 'internet')->value('id');
+
+        return AssetItem::where('team_id', $this->teamId())
+            ->where('category_id', $categoryId)
+            ->whereNull('external_id')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+    }
+
     // ---- Import-Protokoll ------------------------------------------------------------------
 
     /**
@@ -393,6 +571,7 @@ class Import extends Component
     {
         return view('asset-manager::livewire.costs.import', [
             'canManage' => $this->canManage(),
+            'internetLines' => $this->unmappedInternetLines(),
             // Import-Historie: die letzten Läufe aller drei Quellen. 25 reichen — der Log ist zum
             // Nachvollziehen der jüngsten Arbeit da, nicht als Archiv.
             'runs'      => AssetImportRun::where('team_id', $this->teamId())

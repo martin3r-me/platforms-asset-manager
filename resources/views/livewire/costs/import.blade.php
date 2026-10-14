@@ -255,6 +255,9 @@
             {{-- ── Lizenz-Abrechnung des Wiederverkäufers (ADR 0019) ──────────────────────── --}}
             @include('asset-manager::livewire.costs._license-invoice')
 
+            {{-- ── Telefonie & Festnetz: RingCentral-Benutzerliste + Vodafone-Festnetz (#931) ── --}}
+            @include('asset-manager::livewire.costs._telephony')
+
             {{-- ── Import-Protokoll (alle Quellen) ─────────────────────────────────────────── --}}
             @include('asset-manager::livewire.costs._import-log')
 

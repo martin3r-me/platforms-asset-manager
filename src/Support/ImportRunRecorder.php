@@ -41,6 +41,8 @@ final class ImportRunRecorder
         [$metrics, $findings, $headline] = match ($source) {
             AssetImportRun::SOURCE_LICENSE_INVOICE => $this->fromLicenseInvoice($result),
             AssetImportRun::SOURCE_VODAFONE        => $this->fromVodafone($result),
+            AssetImportRun::SOURCE_TELEPHONY_SEATS => $this->fromTelephonySeats($result),
+            AssetImportRun::SOURCE_VODAFONE_FIXEDNET => $this->fromVodafoneFixedNet($result),
             default                                => $this->fromExcel($result),
         };
 
@@ -116,6 +118,78 @@ final class ImportRunRecorder
     }
 
     // ---- Übersetzung je Quelle -----------------------------------------------------------------
+
+    /**
+     * RingCentral-Benutzerliste (#931).
+     *
+     * @param array<string, mixed> $result
+     * @return array{0: array<string, string>, 1: list<string>, 2: string}
+     */
+    private function fromTelephonySeats(array $result): array
+    {
+        $status = (array) ($result['status'] ?? []);
+
+        $metrics = [
+            'Plätze'          => $this->number($result['seats'] ?? 0, 0),
+            'Mit Träger'      => $this->number($result['matched'] ?? 0, 0)
+                . ((int) ($result['matched_name'] ?? 0) > 0 ? ' (davon ' . $this->number($result['matched_name'], 0) . ' über den Namen)' : ''),
+            'Ohne Träger'     => $this->number(count((array) ($result['unmatched'] ?? [])), 0),
+            'Status'          => implode(' · ', array_map(fn ($k, $v) => "{$k} {$v}", array_keys($status), $status)) ?: '—',
+        ];
+
+        if (! ($result['first_upload'] ?? false)) {
+            $metrics['Neu / entfallen'] = $this->number(count((array) ($result['added'] ?? [])), 0) . ' / ' . $this->number($result['removed'] ?? 0, 0);
+        }
+
+        $findings = [];
+        $notActive = (array) ($result['not_active'] ?? []);
+        if ($notActive !== []) {
+            $findings[] = sprintf('%d Plätze sind nicht aktiviert oder deaktiviert — bezahlt, aber ungenutzt: %s',
+                count($notActive), implode(', ', array_slice(array_column($notActive, 'name'), 0, 5)) . (count($notActive) > 5 ? ' …' : ''));
+        }
+
+        return [$metrics, $findings, sprintf('%s Plätze, %s mit Träger',
+            $this->number($result['seats'] ?? 0, 0), $this->number($result['matched'] ?? 0, 0))];
+    }
+
+    /**
+     * Vodafone-Festnetzrechnung (#931).
+     *
+     * @param array<string, mixed> $result
+     * @return array{0: array<string, string>, 1: list<string>, 2: string}
+     */
+    private function fromVodafoneFixedNet(array $result): array
+    {
+        $tel = $result['telephony'] ?? null;
+
+        $metrics = [
+            'Rechnungskonto' => (string) ($result['account'] ?? '—'),
+            'Zeitraum'       => (string) ($result['period'] ?? '—'),
+            'Rechnungsnetto' => $this->money($result['total_net'] ?? 0),
+        ];
+
+        foreach ((array) ($result['internet'] ?? []) as $line) {
+            $metrics['Internet ' . $line['item']] = $this->money($line['amount']);
+        }
+
+        if (is_array($tel)) {
+            $metrics['Lizenzen auf Personen'] = $this->money($tel['persons_amount']) . ' (' . $this->number($tel['person_seats'], 0) . ' × ' . $this->money($tel['unit_net']) . ')';
+            $metrics['Lizenz-Pool']           = $this->money($tel['pool_amount']) . ' (' . $this->number($tel['pool_seats'], 0) . ' Plätze)';
+            $metrics['Anlagenanschluss']      = $this->money($tel['fixed_net']);
+            $metrics['Verbindungen']          = $this->money($tel['usage_net']);
+        }
+
+        if ((int) ($result['removed_excel'] ?? 0) > 0) {
+            $metrics['Excel-Zeilen abgelöst'] = $this->number($result['removed_excel'], 0);
+        }
+
+        $findings = array_values((array) ($result['findings'] ?? []));
+        if (($result['reconciles'] ?? true) === false) {
+            array_unshift($findings, sprintf('Die Positionen weichen um %s vom Rechnungsnetto ab — die Datei ist unvollständig.', $this->money($result['difference'] ?? 0)));
+        }
+
+        return [$metrics, $findings, sprintf('Konto %s · %s netto', $result['account'] ?? '—', $this->money($result['total_net'] ?? 0))];
+    }
 
     /**
      * Lizenz-Abrechnung (ADR 0019).

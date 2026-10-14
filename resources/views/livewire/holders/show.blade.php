@@ -321,7 +321,7 @@
 
             {{-- Mobilfunk (ADR 0014): Rufnummer/SIM/Vertragsnr/Datenvolumen am Asset-Träger; Monatspreis aus der
                  Mobilfunk-Kostenposition (read-only, Controlling). Bearbeiten via Modal (Button oben rechts). --}}
-            @php $hasMobilfunk = $holder->mobile_phone || $holder->business_phone || $holder->sim_number || $holder->contract_number || $holder->data_volume; @endphp
+            @php $hasMobilfunk = $holder->mobile_phone || $holder->business_phone || $holder->sim_number || $holder->contract_number || $holder->data_volume || $telephonySeats->isNotEmpty(); @endphp
             @if($hasMobilfunk || $canManage)
                 <x-asset-manager-panel title="Mobilfunk">
                     <x-slot name="actions">
@@ -340,6 +340,15 @@
                         <x-asset-manager-detail-row label="SIM-Nummer" bordered><span class="tabular-nums">{{ $holder->sim_number ?: '—' }}</span></x-asset-manager-detail-row>
                         <x-asset-manager-detail-row label="Vertragsnummer" bordered><span class="tabular-nums">{{ $holder->contract_number ?: '—' }}</span></x-asset-manager-detail-row>
                         <x-asset-manager-detail-row label="Datenvolumen" bordered>{{ $holder->data_volume ?: '—' }}</x-asset-manager-detail-row>
+                        @foreach($telephonySeats as $seat)
+                            <x-asset-manager-detail-row label="RingCentral" bordered>
+                                <span class="tabular-nums">{{ $seat->direct_number ?: 'Nst. ' . $seat->extension }}</span>
+                                <span class="text-[11px] text-[var(--am-text-muted)]"> · {{ $seat->device ?: 'ohne Endgerät' }}</span>
+                                @unless($seat->isActive())
+                                    <x-asset-manager-badge color="amber">{{ $seat->status }}</x-asset-manager-badge>
+                                @endunless
+                            </x-asset-manager-detail-row>
+                        @endforeach
                     </x-asset-manager-detail-list>
                 </x-asset-manager-panel>
             @endif
