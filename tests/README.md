@@ -35,6 +35,7 @@ php tests/local/import-users-schedule.php   # Verzeichnis-Abgleich: Kommando reg
 php tests/local/vodafone-invoice-validity.php # Mobilfunk zaehlt auch nach Ende des Rechnungszeitraums (Bug #930)
 php tests/local/fixednet-invoice-csv.php      # Festnetz-"Rechnung CSV": Bloecke, Rabatt-Zuordnung, SaaS-Erkennung (#931)
 php tests/local/telephony-seat-import.php     # RingCentral-Benutzerliste: Abgleich, Snapshot, zweite Durchwahl (#931)
+php tests/local/fixednet-invoice-import.php   # Festnetz-Import: Plaetze/Pool, Sammelstelle, Excel-Abloesung, Prune je Konto (#931)
 node tests/local/pivot-grid.mjs             # deren Browser-Logik (CSS-Regel, Zaehler, Drop-Ziel)
 php tests/local/blade-lint.php resources/views/livewire/cost-lines/*.blade.php
 ```

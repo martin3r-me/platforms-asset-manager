@@ -128,8 +128,10 @@ class CostExcelImportService
 
         // Spalte → Kostenart-Key (MS Lizenz/D bewusst ausgelassen — kommt aus Graph)
         $map = [
-            'F' => 'vf_lizenz_rc',
-            'G' => 'vf_lizenz_rc_rab',
+            // 'F' => 'vf_lizenz_rc', 'G' => 'vf_lizenz_rc_rab' — ENTFERNT 2026-10-14 (#931). RingCentral
+            // kommt jetzt aus der Vodafone-Festnetzrechnung ({@see VodafoneFixedNetImportService}): je
+            // belegtem Platz laut Benutzerliste, Rest im Pool. Bliebe die Spalte hier, kämen die
+            // abgelösten Zeilen beim nächsten Excel-Lauf zurück und zählten doppelt (ADR 0001).
             'I' => 'lap_dock',
             'J' => 'versicherung',
             'K' => 'o365_backup',
@@ -183,6 +185,9 @@ class CostExcelImportService
             $this->sheetRow = (int) $i;
             $anschluss = trim((string) ($row['A'] ?? ''));
             if ($anschluss === '') continue;
+            // Vodafone-Leitungen kommen seit 2026-10-14 aus der Festnetzrechnung (#931), der GigaCube
+            // aus der Mobilfunkrechnung — beide nicht mehr aus der Excel, sonst doppelt (ADR 0001).
+            if (stripos((string) ($row['D'] ?? ''), 'vodafone') !== false) continue;
             $amount = $this->num($row['E'] ?? null);
             $code   = $this->cc($row['F'] ?? null);
 
