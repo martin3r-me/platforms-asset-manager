@@ -140,6 +140,22 @@
                                     wird daraus eine belastbare Kündigungsentscheidung.
                                 </p>
                             </div>
+
+                            <div>
+                                <label class="block text-xs text-[var(--am-text-secondary)] mb-1">
+                                    Telefonie (Anlage, Verbindungen, Plätze ohne Person)
+                                </label>
+                                <x-asset-manager-select wire:model="telephonyCostCenterId">
+                                    <option value="">— nicht gesetzt —</option>
+                                    @foreach($costCenters as $costCenter)
+                                        <option value="{{ $costCenter->id }}">{{ $costCenter->code }} — {{ $costCenter->name }}</option>
+                                    @endforeach
+                                </x-asset-manager-select>
+                                <p class="text-[11px] text-[var(--am-text-muted)] mt-1 m-0">
+                                    Ziel des Festnetz-Imports für Anlagenanschluss und Verbindungsvolumen sowie für
+                                    Telefonie-Plätze, die keinem Träger gehören (Konferenztelefon, Lager).
+                                </p>
+                            </div>
                         </div>
 
                         <div class="flex items-center gap-2">

@@ -52,6 +52,9 @@ class Index extends Component
 
     public ?int $licensePoolCostCenterId = null;
 
+    /** Sammelstelle der Telefonie (#931): Anlagenanschluss, Verbindungen, Plätze ohne Person. */
+    public ?int $telephonyCostCenterId = null;
+
     public ?string $licenseCostCenterFlash = null;
 
     public function mount(): void
@@ -67,6 +70,7 @@ class Index extends Component
 
         $this->licenseOverflowCostCenterId = $settings?->license_overflow_cost_center_id;
         $this->licensePoolCostCenterId     = $settings?->license_pool_cost_center_id;
+        $this->telephonyCostCenterId       = $settings?->telephony_cost_center_id;
     }
 
     /**
@@ -81,7 +85,7 @@ class Index extends Component
             ->pluck('id')
             ->all();
 
-        foreach (['licenseOverflowCostCenterId', 'licensePoolCostCenterId'] as $field) {
+        foreach (['licenseOverflowCostCenterId', 'licensePoolCostCenterId', 'telephonyCostCenterId'] as $field) {
             $value = $this->{$field} !== null ? (int) $this->{$field} : null;
 
             // Fremde oder gelöschte Kostenstelle nicht übernehmen — sonst zeigte die Einstellung auf
@@ -94,6 +98,7 @@ class Index extends Component
             [
                 'license_overflow_cost_center_id' => $this->licenseOverflowCostCenterId,
                 'license_pool_cost_center_id'     => $this->licensePoolCostCenterId,
+                'telephony_cost_center_id'        => $this->telephonyCostCenterId,
             ],
         );
 

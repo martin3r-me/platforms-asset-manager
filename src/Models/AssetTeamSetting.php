@@ -32,6 +32,8 @@ class AssetTeamSetting extends Model
         // „IT-Gemeinkosten" und „Lizenzpool IT" Kostenstellennamen *eines* Kunden sind.
         'license_overflow_cost_center_id',
         'license_pool_cost_center_id',
+        // Sammelstelle der Telefonie (#931): Anlagenanschluss, Verbindungen, Plätze ohne Person.
+        'telephony_cost_center_id',
     ];
 
     protected $casts = [
@@ -59,5 +61,11 @@ class AssetTeamSetting extends Model
     public function licensePoolCostCenter(): BelongsTo
     {
         return $this->belongsTo(AssetCostCenter::class, 'license_pool_cost_center_id');
+    }
+
+    /** Sammelstelle der Telefonie: Anlagenanschluss, Verbindungen und Plätze ohne Person. */
+    public function telephonyCostCenter(): BelongsTo
+    {
+        return $this->belongsTo(AssetCostCenter::class, 'telephony_cost_center_id');
     }
 }
