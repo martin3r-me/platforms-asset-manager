@@ -156,8 +156,8 @@ class Import extends Component
             $this->addError('vodafoneFile', 'Datei zu groß (max. 20 MB).');
             return false;
         }
-        if (strtolower($this->vodafoneFile->getClientOriginalExtension() ?? '') !== 'xlsx') {
-            $this->addError('vodafoneFile', 'Bitte den Portal-Export als .xlsx hochladen.');
+        if (! in_array(strtolower($this->vodafoneFile->getClientOriginalExtension() ?? ''), ['xlsx', 'csv'], true)) {
+            $this->addError('vodafoneFile', 'Bitte den Portal-Export „Rechnungsdaten" als .xlsx oder .csv hochladen.');
             return false;
         }
 

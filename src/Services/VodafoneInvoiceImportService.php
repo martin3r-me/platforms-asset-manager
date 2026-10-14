@@ -30,6 +30,10 @@ use Platform\AssetManager\Support\XlsxReader;
  *
  * Gerechnet wird mit **Netto** (Spalte J) — die Kostenaufteilung ist eine Netto-Sicht.
  *
+ * Gleichwertig angenommen wird die **„Rechnungsdaten CSV"** derselben Rechnung (Detailseite im Portal):
+ * identische Spalten ohne Titelzeilen, Windows-1252, Semikolon. Im CSV ist Spalte M (Kostenstelle)
+ * leer — deshalb nimmt ein Lauf einer bestehenden Zeile ihre Kostenstelle nie weg (siehe upsertLine).
+ *
  * ## Modell (ADR 0014, ADR 0001)
  *
  * Eine {@see AssetCostLine} je Rufnummer, Kostenart `mobilfunk`, `source='vodafone_invoice'`.
@@ -292,6 +296,12 @@ class VodafoneInvoiceImportService
             if ($existing->trashed()) {
                 return;
             }
+            // Ein Import nimmt nie eine Kostenstelle weg. Ohne Träger kommt sie nur aus der Export-
+            // Spalte M — und die ist im CSV-Export leer. Sonst verlören Nummern ohne Träger (und die
+            // kontobezogenen Posten) bei jedem Lauf ihre einmal gesetzte oder im UI gepflegte Stelle.
+            if ($values['cost_center_id'] === null && $existing->cost_center_id !== null) {
+                $values['cost_center_id'] = $existing->cost_center_id;
+            }
             $existing->update($values);
         } else {
             AssetCostLine::create($values + [
@@ -421,8 +431,36 @@ class VodafoneInvoiceImportService
 
     // ---- Parsen ----------------------------------------------------------------------------
 
-    /** @return list<array<string, mixed>> Datenzeilen des Blatts „Rechnungsdaten" */
+    /** @return list<array<string, mixed>> Datenzeilen des Exports „Rechnungsdaten" (xlsx oder CSV) */
     protected function readRows(string $path): array
+    {
+        $sheet = $this->isZip($path) ? $this->readXlsxSheet($path) : $this->readCsvSheet($path);
+
+        // Kopfzeilen (Titel, Leerzeile, Spaltenüberschriften) haben in Spalte A keinen der drei Typen.
+        return array_values(array_filter(
+            $sheet,
+            fn ($row) => in_array(trim((string) ($row['A'] ?? '')), ['Rechnung', 'Rufnummer', 'Rechnungsposten'], true),
+        ));
+    }
+
+    /**
+     * Das Format am Inhalt erkennen, nicht an der Endung: der Upload liegt als Temp-Datei vor, deren
+     * Name die Endung nicht verlässlich trägt. Eine .xlsx ist ein ZIP-Archiv und beginnt mit „PK".
+     */
+    protected function isZip(string $path): bool
+    {
+        $handle = @fopen($path, 'rb');
+        if ($handle === false) {
+            throw new \RuntimeException('Datei konnte nicht gelesen werden.');
+        }
+        $magic = (string) fread($handle, 2);
+        fclose($handle);
+
+        return $magic === 'PK';
+    }
+
+    /** @return list<array<string, mixed>> */
+    protected function readXlsxSheet(string $path): array
     {
         $sheets = $this->reader->read($path);
         $sheet  = $this->reader->findSheet($sheets, ['Rechnungsdaten', 'Rechnungsdaten Export']);
@@ -431,11 +469,50 @@ class VodafoneInvoiceImportService
             throw new \RuntimeException('Blatt „Rechnungsdaten" nicht gefunden.');
         }
 
-        // Kopfzeilen (Titel, Leerzeile, Spaltenüberschriften) haben in Spalte A keinen der drei Typen.
-        return array_values(array_filter(
-            $sheet,
-            fn ($row) => in_array(trim((string) ($row['A'] ?? '')), ['Rechnung', 'Rufnummer', 'Rechnungsposten'], true),
-        ));
+        return $sheet;
+    }
+
+    /**
+     * Portal-Export „Rechnungsdaten CSV": dieselben 13 Spalten wie das Blatt der .xlsx (verifiziert an
+     * 14 Rechnungen 08/2025–09/2026), Semikolon, deutsches Zahlenformat, **Windows-1252** — die Zeilen
+     * werden auf Spaltenbuchstaben A…M abgebildet, damit der Rest des Imports nichts vom Format weiß.
+     *
+     * @return list<array<string, string>>
+     */
+    protected function readCsvSheet(string $path): array
+    {
+        $raw = (string) file_get_contents($path);
+        if (str_starts_with($raw, "\xEF\xBB\xBF")) {
+            $raw = substr($raw, 3);
+        }
+        if (! mb_check_encoding($raw, 'UTF-8')) {
+            $raw = mb_convert_encoding($raw, 'UTF-8', 'Windows-1252');
+        }
+
+        $rows = [];
+        foreach (preg_split('/\r\n|\n|\r/', $raw) as $line) {
+            if (trim($line) === '') {
+                continue;
+            }
+            $row = [];
+            foreach (str_getcsv($line, ';', '"', '') as $i => $value) {
+                $row[$this->columnLetter($i)] = $value;
+            }
+            $rows[] = $row;
+        }
+
+        return $rows;
+    }
+
+    /** 0 → A, 25 → Z, 26 → AA. */
+    protected function columnLetter(int $index): string
+    {
+        $letter = '';
+        for ($n = $index + 1; $n > 0; $n = intdiv($n - 1, 26)) {
+            $letter = chr(65 + (($n - 1) % 26)) . $letter;
+        }
+
+        return $letter;
     }
 
     /** @return list<array<string, mixed>> */

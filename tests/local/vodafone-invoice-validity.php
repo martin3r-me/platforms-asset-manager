@@ -206,4 +206,43 @@ ok('nach neuem Import zählt der Bestand wieder (46,00 €)', countedToday() ===
 ok('abgängige Nummer wurde entfernt (Prune)', $res['pruned_rows'] === 1, 'pruned ' . $res['pruned_rows']);
 ok('Zeile behält ihre ID über Monate (Hash ohne Betrag)', AssetCostLine::find($line->id) !== null);
 
+// ---- 5: „Rechnungsdaten CSV" aus dem Portal (Windows-1252, Semikolon, leere Spalte M) -----
+
+// Kopfzeile wörtlich wie im Portal-Export; Daten synthetisch.
+$csv = implode("\r\n", [
+    'Typ;Rechnungskonto;Rechnungs-Nummer;Rechnungs-Datum;Abrechnungszeitraum von;Abrechnungszeitraum bis;Brutto-Betrag Euro;Ust.-Satz %;Ust.-Betrag Euro;Netto-Betrag Euro;D2-Nummer;Beschreibung;Kostenstelle',
+    'Rechnung;86839593;1225;18.09.2026;15.08.2026;14.09.2026;1.309,00;19;209,00;1.100,00;;;',
+    'Rufnummer;86839593;1225;18.09.2026;15.08.2026;14.09.2026;;19;;46,0000;01638588153;;',
+    'Rufnummer;86839593;1225;18.09.2026;15.08.2026;14.09.2026;;19;;1.004,0000;015202316833;;',
+    'Rechnungsposten;86839593;1225;18.09.2026;15.08.2026;14.09.2026;;19;;50,0000;;Vodafone-CorporateVPN – Grundpreis;',
+]);
+$csvPath = tempnam(sys_get_temp_dir(), 'vf');
+file_put_contents($csvPath, mb_convert_encoding($csv, 'Windows-1252', 'UTF-8'));
+
+// Vorbelegte Kostenstelle für eine Nummer ohne Träger und für den Kontoposten (wie auf demo aus dem
+// früheren .xlsx-Export) — der CSV-Lauf darf sie nicht leeren.
+$ccPool = DB::table('asset_cost_centers')->insertGetId(['team_id' => TEAM, 'tenant_id' => TENANT, 'code' => '1500', 'name' => 'IT']);
+(new RowsVodafoneImport(invoice('15.07.2026', '14.08.2026', ['01638588153' => 46.0, '015202316833' => 21.0], ['Vodafone-CorporateVPN – Grundpreis' => 50.0])))
+    ->import(TEAM, 'egal', 'test-aug', false, TENANT);
+AssetCostLine::where('source', 'vodafone_invoice')->whereNull('assignee_id')->each(fn ($l) => $l->update(['cost_center_id' => $ccPool]));
+
+$res = (new VodafoneInvoiceImportService())->import(TEAM, $csvPath, 'test-csv', false, TENANT);
+@unlink($csvPath);
+
+ok('CSV: Rechnung erkannt, 2 Nummern + 1 Posten', $res['stats']['numbers'] === 2 && $res['stats']['account_items'] === 1,
+    $res['stats']['numbers'] . ' / ' . $res['stats']['account_items']);
+ok('CSV: deutsches Zahlenformat inkl. Tausenderpunkt', $res['sum_net'] === 1100.0, 'sum ' . $res['sum_net']);
+ok('CSV: Summe geht auf den Kopf auf', $res['reconciles'] === true);
+ok('CSV: Zeitraum aus dd.mm.yyyy', $res['period']['from']?->format('Y-m-d') === '2026-08-15');
+ok('CSV: Umlaut/Gedankenstrich aus Windows-1252 korrekt',
+    AssetCostLine::where('label', 'Vodafone-CorporateVPN – Grundpreis')->exists());
+ok('CSV: Nummer mit Träger bekommt dessen Kostenstelle',
+    AssetCostLine::where('assignee_id', $holder)->value('cost_center_id') === $ccPerson);
+ok('CSV: Nummer ohne Träger behält ihre Kostenstelle (Spalte M leer)',
+    AssetCostLine::where('source', 'vodafone_invoice')->whereNull('assignee_id')->where('raw_data', 'like', '%4915202316833%')->value('cost_center_id') === $ccPool);
+ok('CSV: Kontoposten behält seine Kostenstelle',
+    AssetCostLine::where('label', 'Vodafone-CorporateVPN – Grundpreis')->value('cost_center_id') === $ccPool);
+ok('CSV: neuer Betrag übernommen (1.004,00 €)',
+    (float) AssetCostLine::where('raw_data', 'like', '%4915202316833%')->value('amount') === 1004.0);
+
 check_summary();

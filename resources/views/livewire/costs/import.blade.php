@@ -119,8 +119,8 @@
                     </div>
 
                     <div>
-                        <label class="block text-xs text-[var(--am-text-secondary)] mb-1.5">Rechnungsdaten (.xlsx)</label>
-                        <input type="file" wire:model="vodafoneFile" accept=".xlsx"
+                        <label class="block text-xs text-[var(--am-text-secondary)] mb-1.5">Rechnungsdaten (.xlsx oder „Rechnungsdaten CSV")</label>
+                        <input type="file" wire:model="vodafoneFile" accept=".xlsx,.csv"
                                class="block w-full text-sm text-[var(--am-text-secondary)] file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[var(--am-primary)] file:text-[var(--am-on-primary)] hover:file:opacity-90 file:cursor-pointer cursor-pointer">
                         @error('vodafoneFile')<span class="text-[11px] text-red-700">{{ $message }}</span>@enderror
 
