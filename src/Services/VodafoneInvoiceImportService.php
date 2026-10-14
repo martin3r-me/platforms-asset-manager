@@ -268,8 +268,13 @@ class VodafoneInvoiceImportService
             'period_label'    => $period['from'] && $period['to']
                 ? $period['from']->format('d.m.Y') . '–' . $period['to']->format('d.m.Y')
                 : null,
-            'valid_from'      => $period['from'],
-            'valid_to'        => $period['to'],
+            // Bewusst KEINE Gültigkeit aus dem Rechnungszeitraum (Bug #930): die Auswertungen zählen
+            // nur `validOn(now())`, und der Zeitraum einer Rechnung liegt immer in der Vergangenheit —
+            // nach seinem Ende fiel der ganze Mobilfunk still aus Pivot und Dashboard. Aktuell hält
+            // die Zeilen stattdessen der Import selbst: er aktualisiert die Beträge und räumt
+            // abgängige Nummern per Prune ab. Explizit NULL, damit ein Lauf alte Werte zurücksetzt.
+            'valid_from'      => null,
+            'valid_to'        => null,
             'import_batch_id' => $this->batchId,
             'raw_data'        => $raw + [
                 'rechnungskonto' => $period['account'],

@@ -32,6 +32,7 @@ php tests/local/n-plus-1.php                # Query-Budgets der Listen + Geraete
 php tests/local/table-view-state.php        # anpassbare Tabellen-Ansicht: Zustand, Sanitizing, Faltung
 php tests/local/table-view-service.php      # deren Speicherpfad (Scoping, Pruefen beim Schreiben)
 php tests/local/import-users-schedule.php   # Verzeichnis-Abgleich: Kommando registriert, im Zeitplan, VOR dem Lizenz-Sync
+php tests/local/vodafone-invoice-validity.php # Mobilfunk zaehlt auch nach Ende des Rechnungszeitraums (Bug #930)
 node tests/local/pivot-grid.mjs             # deren Browser-Logik (CSS-Regel, Zaehler, Drop-Ziel)
 php tests/local/blade-lint.php resources/views/livewire/cost-lines/*.blade.php
 ```
