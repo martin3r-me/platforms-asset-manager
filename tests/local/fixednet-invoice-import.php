@@ -243,4 +243,16 @@ try {
 }
 @unlink($fileS);
 
+// ---- Umbuchungsbasis je Rechnung (Discussion #26) -----------------------------------------
+
+$docs = collect((new \Platform\AssetManager\Services\CostReallocationService())->documents(TEAM, 'vodafone_fixednet'))->keyBy('account');
+$a    = $docs['0100000001'];
+check('Umbuchungsbasis: ein Beleg je Konto', ['0100000001', '0200000002', '0400000004'], $docs->keys()->sort()->values()->all());
+check('Umbuchungsbasis: Summe = Rechnungsnetto', 308.0, $a['total']);
+check('Umbuchungsbasis: Summe der Zeilen = Belegsumme', 308.0, round(array_sum(array_column($a['rows'], 'amount')), 2));
+$sammel = collect($a['rows'])->where('cost_center_id', $cc1520)->where('cost_type', 'telefonie')->first();
+check('Umbuchungsbasis: Telefonie auf der Sammelstelle (Anlage 84 + Verb. 8 + Pool)', round(84 + 8 + 51.2, 2), $sammel['amount']);
+check('Umbuchungsbasis: Personen auf ihrer KST verdichtet', 6.4, collect($a['rows'])->where('cost_center_id', $cc2599)->where('cost_type', 'vf_lizenz_rc')->first()['amount']);
+check('Umbuchungsbasis: Filter Konto', 1, count((new \Platform\AssetManager\Services\CostReallocationService())->documents(TEAM, null, '0200000002')));
+
 check_summary();
