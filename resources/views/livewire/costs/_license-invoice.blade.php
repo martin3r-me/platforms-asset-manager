@@ -32,11 +32,11 @@
         </div>
 
         <div class="flex items-center gap-2">
-            <x-asset-manager-button variant="ghost" size="sm" wire:click="previewLicenseInvoice" wire:loading.attr="disabled" wire:target="previewLicenseInvoice,runLicenseInvoiceImport,licenseFile" :disabled="!$licenseFile">
+            <x-asset-manager-button variant="ghost" size="sm" wire:click="previewLicenseInvoice" wire:loading.attr="disabled" wire:target="previewLicenseInvoice,runLicenseInvoiceImport" :disabled="!$licenseFile">
                 @svg('heroicon-o-eye', 'w-3.5 h-3.5')
                 Vorschau (Dry-Run)
             </x-asset-manager-button>
-            <x-asset-manager-button variant="primary" size="md" wire:click="runLicenseInvoiceImport" wire:loading.attr="disabled" wire:target="previewLicenseInvoice,runLicenseInvoiceImport,licenseFile"
+            <x-asset-manager-button variant="primary" size="md" wire:click="runLicenseInvoiceImport" wire:loading.attr="disabled" wire:target="previewLicenseInvoice,runLicenseInvoiceImport"
                     wire:confirm="Import wirklich schreiben? Handgepflegte Stückpreise der betroffenen Lizenzen werden dabei abgelöst."
                     :disabled="!$licenseFile">
                 @svg('heroicon-o-arrow-up-tray', 'w-3.5 h-3.5')

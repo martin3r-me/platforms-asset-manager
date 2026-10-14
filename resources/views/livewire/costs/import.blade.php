@@ -44,11 +44,11 @@
 
                     {{-- Aktionen --}}
                     <div class="flex items-center gap-2">
-                        <x-asset-manager-button variant="ghost" size="sm" wire:click="preview" wire:loading.attr="disabled" wire:target="preview,runImport,file" :disabled="!$file">
+                        <x-asset-manager-button variant="ghost" size="sm" wire:click="preview" wire:loading.attr="disabled" wire:target="preview,runImport" :disabled="!$file">
                             @svg('heroicon-o-eye', 'w-3.5 h-3.5')
                             Vorschau (Dry-Run)
                         </x-asset-manager-button>
-                        <x-asset-manager-button variant="primary" size="md" wire:click="runImport" wire:loading.attr="disabled" wire:target="preview,runImport,file"
+                        <x-asset-manager-button variant="primary" size="md" wire:click="runImport" wire:loading.attr="disabled" wire:target="preview,runImport"
                                 wire:confirm="Import wirklich schreiben? (idempotent — überschreibt vorherigen Upload-Batch)"
                                 :disabled="!$file">
                             @svg('heroicon-o-arrow-up-tray', 'w-3.5 h-3.5')
@@ -134,11 +134,11 @@
                     </div>
 
                     <div class="flex items-center gap-2">
-                        <x-asset-manager-button variant="ghost" size="sm" wire:click="previewVodafone" wire:loading.attr="disabled" wire:target="previewVodafone,runVodafoneImport,vodafoneFile" :disabled="!$vodafoneFile">
+                        <x-asset-manager-button variant="ghost" size="sm" wire:click="previewVodafone" wire:loading.attr="disabled" wire:target="previewVodafone,runVodafoneImport" :disabled="!$vodafoneFile">
                             @svg('heroicon-o-eye', 'w-3.5 h-3.5')
                             Vorschau (Dry-Run)
                         </x-asset-manager-button>
-                        <x-asset-manager-button variant="primary" size="md" wire:click="runVodafoneImport" wire:loading.attr="disabled" wire:target="previewVodafone,runVodafoneImport,vodafoneFile"
+                        <x-asset-manager-button variant="primary" size="md" wire:click="runVodafoneImport" wire:loading.attr="disabled" wire:target="previewVodafone,runVodafoneImport"
                                 wire:confirm="Import wirklich schreiben? Die Mobilfunk-Zeilen aus dem Excel-Import werden dabei entfernt."
                                 :disabled="!$vodafoneFile">
                             @svg('heroicon-o-arrow-up-tray', 'w-3.5 h-3.5')
