@@ -60,6 +60,9 @@ class VodafoneFixedNetImportService
     /** @var list<string> */
     protected array $findings = [];
 
+    /** @var array<string, AssetCostLine> in diesem Lauf geschriebene Zeilen je Schlüssel (Rundungsausgleich) */
+    protected array $written = [];
+
     public function __construct(protected VodafoneFixedNetCsv $parser = new VodafoneFixedNetCsv()) {}
 
     /**
@@ -73,6 +76,7 @@ class VodafoneFixedNetImportService
         $this->tenantId      = $tenantId ?? TenantContext::defaultTenantId($teamId);
         $this->writtenHashes = [];
         $this->findings      = [];
+        $this->written       = [];
 
         TenantContext::forceTenant($this->tenantId);
 
@@ -130,6 +134,11 @@ class VodafoneFixedNetImportService
                 $this->findings[] = count($bill['unassigned']) . ' Rechnungsposition(en) ohne Regel (' . number_format($sum, 2, ',', '.') . ' €) — als Sammelzeile gebucht, bitte prüfen.';
             }
 
+            [$roundedKey, $residual] = $this->balanceRounding((float) $bill['total_net']);
+            $result['rounding'] = $residual;
+            if ($roundedKey === 'pool' && is_array($result['telephony'])) {
+                $result['telephony']['pool_amount'] = round($result['telephony']['pool_amount'] + $residual, 2);
+            }
             $result['pruned_rows'] = $this->prune($bill['account']);
             $result['findings']    = $this->findings;
 
@@ -366,8 +375,9 @@ class VodafoneFixedNetImportService
                 $values['cost_center_id'] = $existing->cost_center_id;
             }
             $existing->update($values);
+            $this->written[$key] = $existing;
         } else {
-            AssetCostLine::create($values + [
+            $this->written[$key] = AssetCostLine::create($values + [
                 'team_id'     => $this->teamId,
                 'tenant_id'   => $this->tenantId,
                 'import_hash' => $hash,
@@ -375,6 +385,41 @@ class VodafoneFixedNetImportService
         }
 
         $this->writtenHashes[] = $hash;
+    }
+
+    /**
+     * Rundungsausgleich auf das Rechnungsnetto.
+     *
+     * Vodafone rundet jede Rechnungsposition einzeln auf den Cent (−1.208,394 → −1.208,39) und summiert
+     * dann; gebucht wird je Block. Dadurch kann die Summe der Zeilen um einzelne Cent vom Rechnungsnetto
+     * abweichen (September 2026: 1.848,80 statt 1.848,79). Der Rest geht auf die Pool-Zeile, sonst auf
+     * die erste geschriebene Zeile — gebucht wird, was auf der Rechnung steht. Nur echte Rundung: ab
+     * 5 Cent ist es ein Befund, kein Ausgleich.
+     */
+    /** @return array{0: ?string, 1: float} Schlüssel der ausgeglichenen Zeile, Betrag des Ausgleichs */
+    protected function balanceRounding(float $totalNet): array
+    {
+        if ($this->written === []) {
+            return [null, 0.0];
+        }
+
+        $booked   = array_sum(array_map(fn (AssetCostLine $l) => (float) $l->amount, $this->written));
+        $residual = round($totalNet - $booked, 2);
+
+        if ($residual == 0.0) {
+            return [null, 0.0];
+        }
+
+        if (abs($residual) >= 0.05) {
+            $this->findings[] = 'Gebuchte Zeilen weichen um ' . number_format($residual, 2, ',', '.') . ' € vom Rechnungsnetto ab — nicht ausgeglichen, bitte prüfen.';
+            return [null, 0.0];
+        }
+
+        $key    = isset($this->written['pool']) ? 'pool' : array_key_first($this->written);
+        $target = $this->written[$key];
+        $target->update(['amount' => round((float) $target->amount + $residual, 2)]);
+
+        return [$key, $residual];
     }
 
     /** Zeilen früherer Läufe DESSELBEN Kontos, die diesmal nicht geschrieben wurden. */

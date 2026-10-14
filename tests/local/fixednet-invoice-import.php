@@ -213,6 +213,23 @@ $rc = $service->import(TEAM, $fileC, 'test', true, TENANT);
 @unlink($fileC);
 check('Unbekannte Leitung wird gemeldet', ['neu9'], $rc['unknown_lines']);
 
+// ---- Rundung: gebucht wird exakt das Rechnungsnetto -----------------------------------------
+// Positionen mit Bruchteilen von Cent (wie −1.208,394 € echt): Blöcke einzeln gerundet ergäben 307,99 €,
+// die Rechnung sagt 308,00 € — der Cent geht auf den Pool.
+
+$fileR = invoiceCsv('0400000004', [
+    ['Kostenart' => $M, 'Produktname' => $NET, 'Dienstenutzung Beschreibung' => 'Anschlussleitung', 'Anschlusskennung' => 'leitung4', 'Position Netto' => '152,000000'],
+    ['Kostenart' => $M, 'Produktname' => $UC, 'Dienstenutzung Beschreibung' => 'Premium', 'Anschlusskennung' => '4940', 'Position Netto' => '200,000000', 'Dauer' => '10,000000', 'Einheit' => 'LIZ'],
+    ['Kostenart' => $M, 'Produktname' => $UC, 'Dienstenutzung Beschreibung' => 'IP Anlagenanschluss RingCentral', 'Anschlusskennung' => '4940', 'Position Netto' => '120,000000', 'Dauer' => '10,000000', 'Einheit' => 'KNL'],
+    $R('68% Lizenzen', '-135,996000'), $R('20% Anschluss', '-36,006000'),
+    ['Kostenart' => 'VOLUMENBEZOGENE LEISTUNGEN', 'Produktname' => $UC, 'Dienstenutzung Beschreibung' => 'Gespräche', 'Anschlusskennung' => '4941', 'Position Netto' => '8,000000'],
+], '308,000000');
+$rr = $service->import(TEAM, $fileR, 'test', false, TENANT, ['leitung4' => $gladbach]);
+@unlink($fileR);
+check('Rundung: Ausgleich +0,01 € gemeldet', 0.01, $rr['rounding']);
+check('Rundung: Σ Zeilen des Kontos = Rechnungsnetto', 308.0, round((float) $fixednet()->where('raw_data', 'like', '%0400000004%')->sum('amount'), 2));
+check('Rundung: Vorschau zeigt den ausgeglichenen Pool', (float) $fixednet()->where('raw_data', 'like', '%0400000004%')->where('label', 'like', 'RingCentral-Lizenzen ohne Person%')->value('amount'), $rr['telephony']['pool_amount']);
+
 // ---- Lizenzkonto wird abgewiesen ----------------------------------------------------------
 
 $fileS = invoiceCsv('1057494449', [
