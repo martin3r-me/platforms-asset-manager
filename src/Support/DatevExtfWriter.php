@@ -19,6 +19,9 @@ namespace Platform\AssetManager\Support;
  *
  * Die verbindliche Fassung pflegt die Buchhaltung (`02_EXTF/EXTF_Schema.md` in ihrem Vault). Sie liegt
  * hier als `resources/datev/extf-buchungsstapel-kopfzeile.txt` und wird beim Austausch nur dort ersetzt.
+ * Stand: Kopfzeile der Controlling-Datei `EXTF_RS_IT_Sep2026.csv` (14.10.2026, Formatversion 7) — gleiche
+ * Schreibweise wie die Anleitung („KOST1-Kostenstelle"). Die ältere März-Fassung schrieb die Namen
+ * anders, die Positionen sind identisch; der Writer erkennt beide.
  * Die genutzten Spalten werden über den **Namen** gesucht und gegen die dokumentierte Position geprüft:
  * eine verrutschte Kopfzeile (bekannt: Buchungstext und Postensperre vertauscht → REW91550) fällt so
  * beim Bau des Writers auf, nicht erst beim Import.

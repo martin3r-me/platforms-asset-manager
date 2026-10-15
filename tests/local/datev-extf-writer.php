@@ -81,7 +81,7 @@ $bytes = $w->write(meta(), example());
 check('Kein BOM', false, str_starts_with($bytes, "\xEF\xBB\xBF"));
 check('Zeilenende CRLF, auch nach der letzten Zeile', true, str_ends_with($bytes, "\r\n"));
 check('Kein nacktes LF', 0, preg_match_all('/(?<!\r)\n/', $bytes));
-check('CP1252: ü als 0xFC in der Kopfzeile', true, str_contains($bytes, "Gegenkonto (ohne BU-Schl\xFCssel)"));
+check('CP1252: ü als 0xFC in der Kopfzeile', true, str_contains($bytes, ";BU-Schl\xFCssel;"));
 
 $lines = explode("\r\n", rtrim($bytes, "\r\n"));
 check('Vorlauf + Kopf + 4 Buchungen', 6, count($lines));
@@ -193,10 +193,13 @@ try {
     check('Kopfzeile mit 115 Feldern → abgewiesen', true, mentions($e->violations, '116'));
 }
 
-// Schreibweise der Spaltennamen variiert zwischen den Fassungen („KOST1 - Kostenstelle" / „KOST1-Kostenstelle").
+// Schreibweise der Spaltennamen variiert zwischen den Fassungen: die ältere (März 2026, Formatversion 6)
+// schreibt „KOST1 - Kostenstelle", „Umsatz (ohne Soll/Haben-Kz)", „Gegenkonto (ohne BU-Schlüssel)".
 $alt = explode(';', trim(file_get_contents(dirname(__DIR__, 2) . '/resources/datev/extf-buchungsstapel-kopfzeile.txt')));
-$alt[36] = 'KOST1-Kostenstelle';
-$alt[0]  = 'Umsatz';
+$alt[0]  = 'Umsatz (ohne Soll/Haben-Kz)';
+$alt[7]  = 'Gegenkonto (ohne BU-Schlüssel)';
+$alt[36] = 'KOST1 - Kostenstelle';
+$alt[37] = 'KOST2 - Kostenstelle';
 check('Andere Schreibweise der Spaltennamen wird erkannt', 6, count(explode("\r\n", rtrim((new DatevExtfWriter($alt))->write(meta(), example()), "\r\n"))));
 
 // ---- Buchungstext Stil C -------------------------------------------------------------------------------
