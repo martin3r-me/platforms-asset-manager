@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Platform\AssetManager\Concerns\TenantScopable;
 
@@ -49,6 +50,16 @@ class AssetDatevBatch extends Model
     public function snapshots(): HasMany
     {
         return $this->hasMany(AssetInvoiceSnapshot::class, 'datev_batch_id');
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(\Platform\Core\Models\User::class, 'user_id');
+    }
+
+    public function voidedByUser(): BelongsTo
+    {
+        return $this->belongsTo(\Platform\Core\Models\User::class, 'voided_by');
     }
 
     /** Die Datei als Bytes (Windows-1252), unverändert wie erzeugt. */

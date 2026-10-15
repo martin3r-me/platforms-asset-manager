@@ -17,6 +17,7 @@ use Platform\AssetManager\Livewire\Holders\Show as HoldersShow;
 use Platform\AssetManager\Livewire\Costs\Dashboard as CostsDashboard;
 use Platform\AssetManager\Livewire\Costs\Allocation as CostsAllocation;
 use Platform\AssetManager\Livewire\Costs\Import as CostsImport;
+use Platform\AssetManager\Livewire\Costs\DatevReallocation as CostsDatevReallocation;
 use Platform\AssetManager\Livewire\CostLines\Index as CostLinesIndex;
 use Platform\AssetManager\Livewire\Billing\Index as BillingIndex;
 use Platform\AssetManager\Livewire\Reports\DeviceModels as DeviceModelsReport;
@@ -93,6 +94,8 @@ Route::middleware(EnsureControllingEnabled::class)->group(function () {
     Route::get('/cost-lines', CostLinesIndex::class)->name('asset-manager.cost-lines.index');
     Route::get('/reports/device-models', DeviceModelsReport::class)->name('asset-manager.reports.device-models');
     Route::get('/costs/import', CostsImport::class)->name('asset-manager.costs.import');
+    // DATEV-Umbuchung (docs/adr/0027): Monatsstände der Rechnungen → EXTF-Buchungsstapel.
+    Route::get('/costs/datev', CostsDatevReallocation::class)->name('asset-manager.costs.datev');
 
     // Weiterberechnung (ADR 0021): aus dem Bestand wird ein Rechnungsentwurf beim Kunden. Liegt in
     // der Controlling-Gruppe, weil es eine kaufmännische Auswertung ist — ein Team, das den
