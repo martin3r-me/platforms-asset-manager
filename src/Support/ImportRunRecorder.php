@@ -312,10 +312,18 @@ final class ImportRunRecorder
             'Rechnungskopf'  => $this->money($result['invoice_total_net'] ?? 0),
         ];
 
+        if ((float) ($result['rounding'] ?? 0) != 0.0) {
+            $metrics['Rundungsausgleich'] = $this->money($result['rounding']);
+        }
+
         $findings = [];
 
         if (($result['reconciles'] ?? true) === false) {
             $findings[] = 'Die Summe der Zeilen rechnet nicht gegen den Rechnungskopf auf — die Zahlen sind unvollständig.';
+        }
+
+        if (($result['rounding_unbalanced'] ?? null) !== null) {
+            $findings[] = sprintf('Gebuchte Zeilen weichen um %s vom Rechnungsnetto ab — mehr als Rundung, nicht ausgeglichen.', $this->money($result['rounding_unbalanced']));
         }
 
         if ((int) ($stats['unmatched'] ?? 0) > 0) {

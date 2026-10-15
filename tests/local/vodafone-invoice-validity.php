@@ -245,4 +245,46 @@ ok('CSV: Kontoposten behält seine Kostenstelle',
 ok('CSV: neuer Betrag übernommen (1.004,00 €)',
     (float) AssetCostLine::where('raw_data', 'like', '%4915202316833%')->value('amount') === 1004.0);
 
+// ---- 6: Rundungsausgleich — gebucht wird exakt das Rechnungsnetto -------------------------
+
+// Vodafone liefert Netto mit vier Nachkommastellen; jede Zeile auf den Cent gerundet ergibt hier
+// 35,00 € statt 35,02 € Rechnungsnetto (September 2026: 4.008,50 statt 4.008,52).
+$vodafone = fn () => AssetCostLine::where('source', 'vodafone_invoice');
+$oct = invoice('15.09.2026', '14.10.2026',
+    ['01638588153' => 10.0049, '01738580129' => 10.0049, '015202316833' => 10.0049],
+    ['Vodafone-CorporateVPN' => 5.0049]);
+$oct[0]['J'] = 35.02; // Rechnungskopf, wie im Export auf den Cent
+
+$res = (new RowsVodafoneImport($oct))->import(TEAM, 'egal', 'test-okt', true, TENANT);
+ok('Rundung: Probelauf meldet den Ausgleich (+0,02 €)', ($res['rounding'] ?? null) === 0.02, 'ist ' . var_export($res['rounding'] ?? null, true));
+
+$res = (new RowsVodafoneImport($oct))->import(TEAM, 'egal', 'test-okt', false, TENANT);
+ok('Rundung: Σ Zeilen = Rechnungsnetto (35,02 €)', round((float) $vodafone()->sum('amount'), 2) === 35.02,
+    'ist ' . round((float) $vodafone()->sum('amount'), 2));
+ok('Rundung: Ausgleich auf dem Kontoposten, nicht auf einer Person',
+    (float) $vodafone()->where('label', 'Vodafone-CorporateVPN')->value('amount') === 5.02
+    && (float) $vodafone()->where('assignee_id', $holder)->value('amount') === 10.0);
+ok('Rundung: keine offene Abweichung', array_key_exists('rounding_unbalanced', $res) && $res['rounding_unbalanced'] === null);
+
+(new RowsVodafoneImport($oct))->import(TEAM, 'egal', 'test-okt-2', false, TENANT);
+ok('Rundung: zweiter Lauf gleicht nicht doppelt aus', round((float) $vodafone()->sum('amount'), 2) === 35.02,
+    'ist ' . round((float) $vodafone()->sum('amount'), 2));
+
+// Ohne Kontoposten trägt die erste Zeile den Rest.
+$nov = invoice('15.10.2026', '14.11.2026', ['01638588153' => 10.0049, '01738580129' => 10.0049]);
+$nov[0]['J'] = 20.01;
+(new RowsVodafoneImport($nov))->import(TEAM, 'egal', 'test-nov', false, TENANT);
+ok('Rundung: ohne Kontoposten geht der Rest auf die erste Zeile',
+    (float) $vodafone()->where('assignee_id', $holder)->value('amount') === 10.01
+    && round((float) $vodafone()->sum('amount'), 2) === 20.01);
+
+// Mehr als ½ Cent je Zeile ist keine Rundung mehr — dann Befund, kein stiller Ausgleich.
+$dec = invoice('15.11.2026', '14.12.2026', ['01638588153' => 10.0, '01738580129' => 10.0]);
+$dec[0]['J'] = 20.05;
+$res = (new RowsVodafoneImport($dec))->import(TEAM, 'egal', 'test-dez', false, TENANT);
+ok('Rundung: echte Abweichung wird nicht ausgeglichen',
+    ($res['rounding'] ?? null) === 0.0 && round((float) $vodafone()->sum('amount'), 2) === 20.0);
+ok('Rundung: echte Abweichung wird gemeldet (0,05 €)', ($res['rounding_unbalanced'] ?? null) === 0.05,
+    'ist ' . var_export($res['rounding_unbalanced'] ?? null, true));
+
 check_summary();

@@ -172,6 +172,12 @@
                         @if($v['reconciles'])
                             @svg('heroicon-o-check-circle', 'w-3.5 h-3.5 inline')
                             Summe der Zeilen entspricht dem Rechnungsbetrag ({{ number_format($v['sum_net'], 2, ',', '.') }} € netto).
+                            @if((float) ($v['rounding'] ?? 0) != 0.0)
+                                Rundungsausgleich {{ number_format($v['rounding'], 2, ',', '.') }} € auf einem Kontoposten.
+                            @endif
+                            @if(($v['rounding_unbalanced'] ?? null) !== null)
+                                <span class="text-red-700"><strong>Gebuchte Zeilen weichen um {{ number_format($v['rounding_unbalanced'], 2, ',', '.') }} € ab</strong> — mehr als Rundung, nicht ausgeglichen.</span>
+                            @endif
                         @else
                             @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline')
                             <strong>Summe weicht ab:</strong> Zeilen {{ number_format($v['sum_net'], 2, ',', '.') }} € gegen

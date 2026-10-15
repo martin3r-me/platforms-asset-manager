@@ -67,6 +67,9 @@ class VodafoneInvoiceImportService
     /** @var list<string> import_hash jeder in diesem Lauf geschriebenen Zeile — Basis des Prune. */
     protected array $writtenHashes = [];
 
+    /** @var array<string, AssetCostLine> in diesem Lauf geschriebene Zeilen je Schlüssel — Basis des Rundungsausgleichs. */
+    protected array $written = [];
+
     public function __construct(protected XlsxReader $reader = new XlsxReader()) {}
 
     /**
@@ -81,6 +84,7 @@ class VodafoneInvoiceImportService
         $this->batchId  = $batchId;
         $this->dryRun   = $dryRun;
         $this->writtenHashes = [];
+        $this->written       = [];
 
         // Tenant für den Global Scope setzen — der Importer läuft ohne UI-Kontext (Console/Upload).
         TenantContext::forceTenant($this->tenantId);
@@ -131,6 +135,8 @@ class VodafoneInvoiceImportService
 
             $sum = round(array_sum(array_map(fn ($r) => $this->num($r['J'] ?? null), array_merge($lines, $items))), 2);
 
+            [$rounding, $unbalanced] = $this->balanceRounding(round($this->num($header['J'] ?? null), 2));
+
             $result = [
                 'dry_run'            => $dryRun,
                 'period'             => $period,
@@ -143,6 +149,8 @@ class VodafoneInvoiceImportService
                 'reconciles'         => abs($sum - round($this->num($header['J'] ?? null), 2)) < 0.01,
                 'removed_excel_rows' => $removedExcel,
                 'pruned_rows'        => $pruned,
+                'rounding'           => $rounding,
+                'rounding_unbalanced'=> $unbalanced,
             ];
 
             $dryRun ? DB::rollBack() : DB::commit();
@@ -303,8 +311,9 @@ class VodafoneInvoiceImportService
                 $values['cost_center_id'] = $existing->cost_center_id;
             }
             $existing->update($values);
+            $this->written[$key] = $existing;
         } else {
-            AssetCostLine::create($values + [
+            $this->written[$key] = AssetCostLine::create($values + [
                 'team_id'     => $this->teamId,
                 'tenant_id'   => $this->tenantId,
                 'import_hash' => $hash,
@@ -312,6 +321,42 @@ class VodafoneInvoiceImportService
         }
 
         $this->writtenHashes[] = $hash;
+    }
+
+    /**
+     * Rundungsausgleich auf das Rechnungsnetto (wie {@see VodafoneFixedNetImportService::balanceRounding()}).
+     *
+     * Der Export liefert das Netto je Zeile mit vier Nachkommastellen, gebucht wird je Zeile auf den Cent.
+     * Dadurch weicht die Summe der Zeilen um einzelne Cent vom Rechnungskopf ab (September 2026:
+     * 4.008,50 statt 4.008,52) — und die DATEV-Umbuchung muss exakt den Rechnungsbetrag verteilen. Der
+     * Rest geht auf den ersten Kontoposten (keine Person), sonst auf die erste Zeile. Nur echte Rundung
+     * wird ausgeglichen: höchstens ½ Cent je Zeile. Alles darüber ist ein Befund (`rounding_unbalanced`).
+     *
+     * @return array{0: float, 1: ?float} Ausgleich, nicht ausgeglichene Abweichung
+     */
+    protected function balanceRounding(float $totalNet): array
+    {
+        if ($this->written === []) {
+            return [0.0, null];
+        }
+
+        $booked   = array_sum(array_map(fn (AssetCostLine $l) => (float) $l->amount, $this->written));
+        $residual = round($totalNet - $booked, 2);
+
+        if ($residual == 0.0) {
+            return [0.0, null];
+        }
+
+        if (abs((int) round($residual * 100)) > (int) ceil(count($this->written) / 2)) {
+            return [0.0, $residual];
+        }
+
+        $key = array_key_first(array_filter($this->written, fn ($_, string $k) => str_starts_with($k, 'posten:'), ARRAY_FILTER_USE_BOTH))
+            ?? array_key_first($this->written);
+        $target = $this->written[$key];
+        $target->update(['amount' => round((float) $target->amount + $residual, 2)]);
+
+        return [$residual, null];
     }
 
     /**
