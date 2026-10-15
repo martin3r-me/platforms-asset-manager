@@ -57,11 +57,103 @@ class Index extends Component
 
     public ?string $licenseCostCenterFlash = null;
 
+    // ---- DATEV-Stapelkopf (Discussion #26) — je Tenant, weil Kanzlei und Mandant Kundendaten sind.
+
+    public string $datevConsultant = '';
+
+    public string $datevClient = '';
+
+    /** Anzeigeform „TT.MM." — gespeichert als MM-DD. */
+    public string $datevFiscalYearStart = '';
+
+    public string $datevAccountLength = '';
+
+    public string $datevInitials = '';
+
+    public ?int $datevSourceCostCenterId = null;
+
+    public ?string $datevFlash = null;
+
     public function mount(): void
     {
         $this->controllingEnabled = app(ControllingContext::class)->enabledFor($this->teamId());
         $this->loadHolderRules();
         $this->loadLicenseCostCenters();
+        $this->loadDatevHeader();
+    }
+
+    protected function loadDatevHeader(): void
+    {
+        $settings = AssetTeamSetting::where('team_id', $this->teamId())->first();
+
+        $this->datevConsultant         = (string) $settings?->datev_consultant;
+        $this->datevClient             = (string) $settings?->datev_client;
+        $this->datevAccountLength      = $settings?->datev_account_length !== null ? (string) $settings->datev_account_length : '';
+        $this->datevInitials           = (string) $settings?->datev_initials;
+        $this->datevSourceCostCenterId = $settings?->datev_source_cost_center_id;
+
+        $monthDay = (string) $settings?->datev_fiscal_year_start;
+        $this->datevFiscalYearStart = preg_match('/^(\d{2})-(\d{2})$/', $monthDay, $m) ? "{$m[2]}.{$m[1]}." : '';
+    }
+
+    /**
+     * DATEV-Stapelkopf speichern. Geprüft wird hier, was der Writer später ohnehin verlangt — so
+     * fällt ein Tippfehler beim Speichern auf und nicht erst beim ersten Stapel.
+     */
+    public function saveDatevHeader(): void
+    {
+        abort_unless(Gate::allows('asset-manager.manage'), 403);
+
+        $this->datevFlash = null;
+        $this->datevConsultant = trim($this->datevConsultant);
+        $this->datevClient     = trim($this->datevClient);
+        $this->datevInitials   = trim($this->datevInitials);
+
+        $this->validate([
+            'datevConsultant'      => ['nullable', 'regex:/^\d{1,7}$/'],
+            'datevClient'          => ['nullable', 'regex:/^\d{1,5}$/'],
+            'datevFiscalYearStart' => ['nullable', 'regex:/^\s*\d{1,2}\.\d{1,2}\.?\s*$/'],
+            'datevAccountLength'   => ['nullable', 'integer', 'between:4,8'],
+            'datevInitials'        => ['nullable', 'max:2', 'not_regex:/[;"]/'],
+        ], [
+            'datevConsultant.regex'      => 'Berater: nur Ziffern, höchstens 7.',
+            'datevClient.regex'          => 'Mandant: nur Ziffern, höchstens 5.',
+            'datevFiscalYearStart.regex' => 'Beginn Wirtschaftsjahr als TT.MM., z. B. 01.01.',
+            'datevAccountLength.between' => 'Sachkontenlänge 4 bis 8.',
+            'datevInitials.max'          => 'Diktatkürzel: höchstens 2 Zeichen.',
+        ]);
+
+        $monthDay = null;
+        if (trim($this->datevFiscalYearStart) !== '') {
+            [$day, $month] = array_map('intval', explode('.', trim($this->datevFiscalYearStart)));
+            if (! checkdate($month, $day, 2001)) {
+                $this->addError('datevFiscalYearStart', 'Beginn Wirtschaftsjahr ist kein gültiges Datum.');
+
+                return;
+            }
+            $monthDay = sprintf('%02d-%02d', $month, $day);
+            $this->datevFiscalYearStart = sprintf('%02d.%02d.', $day, $month);
+        }
+
+        $source = $this->datevSourceCostCenterId !== null ? (int) $this->datevSourceCostCenterId : null;
+        if ($source !== null && ! \Platform\AssetManager\Models\AssetCostCenter::where('team_id', $this->teamId())->whereKey($source)->exists()) {
+            $source = null;
+        }
+        $this->datevSourceCostCenterId = $source;
+
+        AssetTeamSetting::updateOrCreate(
+            ['team_id' => $this->teamId(), 'tenant_id' => TenantContext::scopeTenantId()],
+            [
+                'datev_consultant'            => $this->datevConsultant ?: null,
+                'datev_client'                => $this->datevClient ?: null,
+                'datev_fiscal_year_start'     => $monthDay,
+                'datev_account_length'        => $this->datevAccountLength !== '' ? (int) $this->datevAccountLength : null,
+                'datev_initials'              => $this->datevInitials ?: null,
+                'datev_source_cost_center_id' => $source,
+            ],
+        );
+
+        $this->datevFlash = 'Gespeichert.';
     }
 
     protected function loadLicenseCostCenters(): void

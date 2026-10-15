@@ -174,6 +174,73 @@
                 </div>
             </x-asset-manager-panel>
 
+            {{-- DATEV-Stapelkopf (Discussion #26) — gilt für den aktiven Tenant --}}
+            @if($controllingEnabled)
+            <x-asset-manager-panel title="DATEV-Umbuchung: Stapelkopf">
+                <div class="space-y-4">
+                    <p class="text-xs text-[var(--am-text-secondary)] m-0">
+                        Kopfdaten des EXTF-Buchungsstapels für {{ $tenantName }}. Die Sammel-Kostenstelle ist die
+                        Stelle, auf der die Buchhaltung die IT-Rechnungen bucht — jede Umbuchung entlastet sie und
+                        belastet die nutzenden Kostenstellen. Foodpol (Mandant 10002) braucht einen eigenen Tenant.
+                    </p>
+
+                    @if($canManage)
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-xs text-[var(--am-text-secondary)] mb-1">Berater</label>
+                                <x-asset-manager-input wire:model="datevConsultant" placeholder="z. B. 189671" />
+                                @error('datevConsultant') <p class="text-[11px] text-red-700 mt-1 m-0">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label class="block text-xs text-[var(--am-text-secondary)] mb-1">Mandant</label>
+                                <x-asset-manager-input wire:model="datevClient" placeholder="z. B. 530" />
+                                @error('datevClient') <p class="text-[11px] text-red-700 mt-1 m-0">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label class="block text-xs text-[var(--am-text-secondary)] mb-1">Beginn Wirtschaftsjahr</label>
+                                <x-asset-manager-input wire:model="datevFiscalYearStart" placeholder="TT.MM., z. B. 01.01." />
+                                @error('datevFiscalYearStart') <p class="text-[11px] text-red-700 mt-1 m-0">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label class="block text-xs text-[var(--am-text-secondary)] mb-1">Sachkontenlänge</label>
+                                <x-asset-manager-input type="number" min="4" max="8" wire:model="datevAccountLength" placeholder="z. B. 6" />
+                                @error('datevAccountLength') <p class="text-[11px] text-red-700 mt-1 m-0">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label class="block text-xs text-[var(--am-text-secondary)] mb-1">Diktatkürzel</label>
+                                <x-asset-manager-input wire:model="datevInitials" maxlength="2" placeholder="2 Zeichen" />
+                                @error('datevInitials') <p class="text-[11px] text-red-700 mt-1 m-0">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label class="block text-xs text-[var(--am-text-secondary)] mb-1">Sammel-Kostenstelle</label>
+                                <x-asset-manager-select wire:model="datevSourceCostCenterId">
+                                    <option value="">— nicht gesetzt —</option>
+                                    @foreach($costCenters as $costCenter)
+                                        <option value="{{ $costCenter->id }}">{{ $costCenter->code }} — {{ $costCenter->name }}</option>
+                                    @endforeach
+                                </x-asset-manager-select>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <x-asset-manager-button variant="primary" size="sm" wire:click="saveDatevHeader">
+                                Speichern
+                            </x-asset-manager-button>
+                            @if($datevFlash)
+                                <span class="text-xs text-emerald-700">{{ $datevFlash }}</span>
+                            @endif
+                        </div>
+                    @else
+                        <p class="text-xs text-[var(--am-text-muted)] m-0">
+                            Berater {{ $datevConsultant ?: '—' }} · Mandant {{ $datevClient ?: '—' }} ·
+                            WJ ab {{ $datevFiscalYearStart ?: '—' }} · Sachkontenlänge {{ $datevAccountLength ?: '—' }}.
+                            Ändern ist Owner/Admin vorbehalten.
+                        </p>
+                    @endif
+                </div>
+            </x-asset-manager-panel>
+            @endif
+
             {{-- Gefahrenzone — kompletter Team-Reset --}}
             <x-asset-manager-panel title="Gefahrenzone">
                 <div class="flex items-start justify-between gap-6">

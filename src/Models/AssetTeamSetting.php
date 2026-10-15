@@ -34,11 +34,19 @@ class AssetTeamSetting extends Model
         'license_pool_cost_center_id',
         // Sammelstelle der Telefonie (#931): Anlagenanschluss, Verbindungen, Plätze ohne Person.
         'telephony_cost_center_id',
+        // DATEV-Stapelkopf (Discussion #26): Kanzlei-/Mandantendaten eines Kunden, deshalb hier.
+        'datev_consultant',
+        'datev_client',
+        'datev_fiscal_year_start',
+        'datev_account_length',
+        'datev_initials',
+        'datev_source_cost_center_id',
     ];
 
     protected $casts = [
         'controlling_enabled' => 'boolean',
         'holder_type_rules'   => 'array',
+        'datev_account_length' => 'integer',
     ];
 
     public function team(): BelongsTo
@@ -67,5 +75,71 @@ class AssetTeamSetting extends Model
     public function telephonyCostCenter(): BelongsTo
     {
         return $this->belongsTo(AssetCostCenter::class, 'telephony_cost_center_id');
+    }
+
+    /** Sammel-KST, auf der die Buchhaltung die IT-Rechnungen bucht — Quelle jeder DATEV-Umbuchung. */
+    public function datevSourceCostCenter(): BelongsTo
+    {
+        return $this->belongsTo(AssetCostCenter::class, 'datev_source_cost_center_id');
+    }
+
+    /**
+     * Was am DATEV-Stapelkopf fehlt; leer = ein Stapel kann erzeugt werden. Die Formatprüfung
+     * (Ziffern, Längen) macht der Writer — hier nur, ob überhaupt etwas gepflegt ist.
+     *
+     * @return list<string>
+     */
+    public function datevMissing(): array
+    {
+        $missing = [];
+
+        foreach ([
+            'datev_consultant'        => 'Berater',
+            'datev_client'            => 'Mandant',
+            'datev_fiscal_year_start' => 'Beginn Wirtschaftsjahr',
+            'datev_account_length'    => 'Sachkontenlänge',
+            'datev_initials'          => 'Diktatkürzel',
+        ] as $column => $label) {
+            if (trim((string) $this->{$column}) === '') {
+                $missing[] = $label;
+            }
+        }
+
+        if ($this->datev_source_cost_center_id === null || trim((string) $this->datevSourceCostCenter?->code) === '') {
+            $missing[] = 'Sammel-Kostenstelle (mit Code)';
+        }
+
+        return $missing;
+    }
+
+    /**
+     * Kopfdaten für {@see \Platform\AssetManager\Services\DatevBatchService::create()}.
+     *
+     * @return array{consultant: string, client: string, fiscal_year_start: \DateTimeImmutable, account_length: int, initials: string}
+     */
+    public function datevMeta(\DateTimeInterface $month): array
+    {
+        return [
+            'consultant'        => (string) $this->datev_consultant,
+            'client'            => (string) $this->datev_client,
+            'fiscal_year_start' => self::fiscalYearStart((string) $this->datev_fiscal_year_start, $month),
+            'account_length'    => (int) $this->datev_account_length,
+            'initials'          => (string) $this->datev_initials,
+        ];
+    }
+
+    /**
+     * Beginn des Wirtschaftsjahres, in dem der Buchungsmonat liegt: „07-01" und März 2026 → 01.07.2025.
+     */
+    public static function fiscalYearStart(string $monthDay, \DateTimeInterface $month): \DateTimeImmutable
+    {
+        if (! preg_match('/^(\d{2})-(\d{2})$/', $monthDay, $m) || ! checkdate((int) $m[1], (int) $m[2], 2001)) {
+            throw new \InvalidArgumentException("Beginn Wirtschaftsjahr „{$monthDay}“ ist kein gültiges MM-TT.");
+        }
+
+        $year  = (int) $month->format('Y');
+        $start = new \DateTimeImmutable(sprintf('%04d-%s-%s', $year, $m[1], $m[2]));
+
+        return $start->format('Y-m') > $month->format('Y-m') ? $start->modify('-1 year') : $start;
     }
 }
