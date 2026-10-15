@@ -56,6 +56,17 @@
             im Kosten-Dashboard meldet Positionen, die nicht dazu passen.
         </p>
     </div>
+    {{-- Sachkonto für die DATEV-Umbuchung (Discussion #26): hängt an der Kostenart, nicht am
+         Kreditor, weil eine Rechnung mehrere Sachkonten tragen kann. --}}
+    <div>
+        <label class="block text-xs text-[var(--am-text-muted)] mb-1">DATEV-Sachkonto</label>
+        <x-asset-manager-input size="sm" type="text" inputmode="numeric" wire:model="form.datev_account" placeholder="z.B. 680510" class="w-full" />
+        @error('form.datev_account')<span class="text-[10px] text-red-600">Nur Ziffern, 4–8 Stellen.</span>@enderror
+        <p class="text-[10px] text-[var(--am-text-muted)] mt-1">
+            Konto, auf dem die Rechnung gebucht ist. Die DATEV-Umbuchung verteilt es von der Sammel-Kostenstelle
+            auf die nutzenden Kostenstellen. Leer = wird nicht umgebucht.
+        </p>
+    </div>
 
     @include('asset-manager::livewire.master-data.partials.form-actions', [
         'id'      => $selectedId,

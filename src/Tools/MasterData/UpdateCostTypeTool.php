@@ -14,7 +14,7 @@ use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 
 /**
- * Aktualisiert eine Kostenart — Bezugsebene, Name, Default-Frequenz, Gutschrift-Flag.
+ * Aktualisiert eine Kostenart — Bezugsebene, Name, Default-Frequenz, Gutschrift-Flag, DATEV-Sachkonto.
  *
  * Die Kostenart war über MCP bisher nur lesbar. Das fiel zweimal auf: „Lap+Dock" musste auf
  * quartalsweise gestellt werden (ging nur über die Oberfläche, sonst wären alle 68 Positionen beim
@@ -42,7 +42,8 @@ class UpdateCostTypeTool implements ToolContract, ToolMetadataContract
             . 'allocation_level (person|cost_center — an was die Kosten hängen; steuert die '
             . 'Plausibilitätsprüfung), name, frequency_default (monthly|quarterly|yearly|once — die '
             . 'Frequenz, die der Excel-Import neuen Positionen gibt), allow_negative (Gutschriften), '
-            . 'sort_order. aggregation_source ist NICHT änderbar: sie bestimmt die Pivot-Quelle '
+            . 'sort_order, datev_account (DATEV-Sachkonto, 4–8 Ziffern, null = nicht umbuchen; das Konto hängt '
+            . 'an der Kostenart, nicht am Kreditor). aggregation_source ist NICHT änderbar: sie bestimmt die Pivot-Quelle '
             . '(ADR 0001) und ein Wechsel verschiebt Beträge zwischen den Kosten-Buckets.';
     }
 
@@ -57,6 +58,7 @@ class UpdateCostTypeTool implements ToolContract, ToolMetadataContract
                 'frequency_default' => ['type' => 'string', 'enum' => self::FREQUENCIES, 'description' => 'Default-Frequenz für neue/importierte Positionen.'],
                 'allow_negative'    => ['type' => 'boolean', 'description' => 'Erlaubt negative Beträge (Gutschrift/Rabatt).'],
                 'sort_order'        => ['type' => 'integer', 'description' => 'Spaltenreihenfolge im Pivot.'],
+                'datev_account'     => ['type' => 'string', 'description' => 'DATEV-Sachkonto der Kostenart (z. B. 680510 Mobilfunk), 4–8 Ziffern. Leerer String = Konto entfernen (wird nicht per DATEV umgebucht).'],
             ], $this->tenantSchemaProperty()),
             'required' => ['id'],
         ];
@@ -113,6 +115,14 @@ class UpdateCostTypeTool implements ToolContract, ToolMetadataContract
                 $type->sort_order = (int) $arguments['sort_order'];
             }
 
+            if (array_key_exists('datev_account', $arguments)) {
+                $account = trim((string) ($arguments['datev_account'] ?? ''));
+                if ($account !== '' && ! preg_match(AssetCostType::DATEV_ACCOUNT_PATTERN, $account)) {
+                    return ToolResult::error('VALIDATION_ERROR', 'datev_account muss aus 4–8 Ziffern bestehen.');
+                }
+                $type->datev_account = $account !== '' ? $account : null;
+            }
+
             $type->save();
 
             return ToolResult::success([
@@ -123,6 +133,7 @@ class UpdateCostTypeTool implements ToolContract, ToolMetadataContract
                 'frequency_default' => $type->frequency_default,
                 'allow_negative'    => (bool) $type->allow_negative,
                 'sort_order'        => $type->sort_order,
+                'datev_account'     => $type->datev_account,
                 'tenant_id'         => $tenantId,
                 // Die Default-Frequenz wirkt auf KÜNFTIGE Positionen. Bestehende behalten ihre eigene
                 // — sonst würde ein Stammdaten-Klick rückwirkend Monatsbeträge verschieben.

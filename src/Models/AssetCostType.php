@@ -56,6 +56,12 @@ class AssetCostType extends Model
         self::LEVEL_COST_CENTER,
     ];
 
+    /**
+     * Gültiges DATEV-Sachkonto: nur Ziffern, 4–8 Stellen (DATEV-Sachkontenlänge). Die exakte Länge
+     * des Mandanten prüft erst der EXTF-Export, weil sie an der Gesellschaft hängt, nicht hier.
+     */
+    public const DATEV_ACCOUNT_PATTERN = '/^\d{4,8}$/';
+
     protected $table = 'asset_cost_types';
 
     protected $fillable = [
@@ -70,6 +76,7 @@ class AssetCostType extends Model
         'allocation_level',
         'aggregation_source',
         'allow_negative',
+        'datev_account',
     ];
 
     protected $casts = [

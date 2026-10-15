@@ -154,7 +154,7 @@ class Index extends Component
     {
         return match ($this->active) {
             'cost-centers' => ['code' => '', 'name' => '', 'parent_id' => null, 'is_active' => true],
-            'cost-types'   => ['name' => '', 'vendor_default_id' => null, 'system_default' => '', 'frequency_default' => 'monthly', 'aggregation_source' => AssetCostType::SOURCE_COST_LINE, 'allocation_level' => AssetCostType::LEVEL_COST_CENTER],
+            'cost-types'   => ['name' => '', 'vendor_default_id' => null, 'system_default' => '', 'frequency_default' => 'monthly', 'aggregation_source' => AssetCostType::SOURCE_COST_LINE, 'allocation_level' => AssetCostType::LEVEL_COST_CENTER, 'datev_account' => ''],
             'vendors'      => ['name' => '', 'creditor_no' => ''],
         };
     }
@@ -163,7 +163,7 @@ class Index extends Component
     {
         return match ($this->active) {
             'cost-centers' => ['code' => $m->code, 'name' => $m->name ?? '', 'parent_id' => $m->parent_id, 'is_active' => (bool) $m->is_active],
-            'cost-types'   => ['name' => $m->name, 'vendor_default_id' => $m->vendor_default_id, 'system_default' => $m->system_default ?? '', 'frequency_default' => $m->frequency_default, 'aggregation_source' => $m->aggregation_source, 'allocation_level' => $m->allocation_level],
+            'cost-types'   => ['name' => $m->name, 'vendor_default_id' => $m->vendor_default_id, 'system_default' => $m->system_default ?? '', 'frequency_default' => $m->frequency_default, 'aggregation_source' => $m->aggregation_source, 'allocation_level' => $m->allocation_level, 'datev_account' => $m->datev_account ?? ''],
             'vendors'      => ['name' => $m->name, 'creditor_no' => $m->creditor_no ?? ''],
         };
     }
@@ -192,6 +192,7 @@ class Index extends Component
                 'form.frequency_default'  => 'required|in:monthly,quarterly,yearly,once',
                 'form.aggregation_source' => ['required', Rule::in(AssetCostType::SOURCES)],
                 'form.allocation_level'   => ['required', Rule::in(AssetCostType::LEVELS)],
+                'form.datev_account'      => ['nullable', 'regex:' . AssetCostType::DATEV_ACCOUNT_PATTERN],
             ],
             'vendors' => [
                 'form.name'        => 'required|string|max:255',
@@ -305,6 +306,7 @@ class Index extends Component
             'frequency_default'  => $this->form['frequency_default'],
             'aggregation_source' => $this->form['aggregation_source'],
             'allocation_level'   => $this->form['allocation_level'] ?? AssetCostType::LEVEL_COST_CENTER,
+            'datev_account'      => trim((string) ($this->form['datev_account'] ?? '')) ?: null,
         ];
 
         if ($this->selectedId) {

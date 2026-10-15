@@ -74,6 +74,7 @@ class ListCostTypesTool implements ToolContract, ToolMetadataContract
                     'allocation_level'   => $t->allocation_level,
                     'is_per_employee'    => (bool) $t->is_per_employee, // abgeleitet, rueckwaertskompatibel
                     'vendor_default'     => $t->vendorDefault?->name,
+                    'datev_account'      => $t->datev_account,
                 ])->values()->all();
 
             return ToolResult::success(['cost_types' => $rows, 'count' => count($rows)]);

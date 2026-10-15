@@ -17,6 +17,7 @@
             <th class="text-left px-2 py-3">
                 <button wire:click="sortBy('aggregation_source')" class="inline-flex items-center gap-1 hover:text-[var(--am-accent)]">Quelle @if($sortField==='aggregation_source')<span class="text-[var(--am-accent)]">{{ $sortDir==='asc' ? '▲' : '▼' }}</span>@endif</button>
             </th>
+            <th class="text-left px-2 py-3">Sachkonto</th>
             <th class="text-right px-2 py-3">
                 <button wire:click="sortBy('cost_lines_count')" class="inline-flex items-center gap-1 hover:text-[var(--am-accent)]">Pos. @if($sortField==='cost_lines_count')<span class="text-[var(--am-accent)]">{{ $sortDir==='asc' ? '▲' : '▼' }}</span>@endif</button>
             </th>
@@ -50,6 +51,7 @@
                         <x-asset-manager-badge color="gray" size="xs">{{ $sourceLabels[$t->aggregation_source] ?? $t->aggregation_source }}</x-asset-manager-badge>
                     @endif
                 </td>
+                <td class="px-2 py-2.5 text-xs font-mono text-[var(--am-text-secondary)]">{{ $t->datev_account ?? '—' }}</td>
                 <td class="px-2 py-2.5 text-right text-xs text-[var(--am-text-secondary)]">{{ $t->cost_lines_count }}</td>
                 <td class="px-2 py-2.5 text-right whitespace-nowrap">
                     @can('asset-manager.manage')
@@ -62,7 +64,7 @@
         @endforeach
         @if($rows->isEmpty())
             <tr>
-                <td colspan="8" class="px-4 py-10 text-center">
+                <td colspan="9" class="px-4 py-10 text-center">
                     @if(($total ?? 0) === 0)
                         <p class="text-sm text-[var(--am-text-secondary)] mb-3">Noch keine Kostenarten angelegt. Lege oben eine eigene an — oder lade generische Standard-Kostenarten als Starthilfe.</p>
                         @can('asset-manager.manage')
