@@ -188,6 +188,9 @@ final class ImportRunRecorder
             array_unshift($findings, sprintf('Die Positionen weichen um %s vom Rechnungsnetto ab — die Datei ist unvollständig.', $this->money($result['difference'] ?? 0)));
         }
 
+        // Die Befunde des Monatsstands stehen beim Festnetz-Import schon in `findings`.
+        [$metrics, $findings] = $this->withSnapshot($result, $metrics, $findings, withFindings: false);
+
         return [$metrics, $findings, sprintf('Konto %s · %s netto', $result['account'] ?? '—', $this->money($result['total_net'] ?? 0))];
     }
 
@@ -289,6 +292,8 @@ final class ImportRunRecorder
             $this->money($totals['invoice_amount'] ?? 0),
         );
 
+        [$metrics, $findings] = $this->withSnapshot($result, $metrics, $findings);
+
         return [$metrics, $findings, $headline];
     }
 
@@ -357,6 +362,8 @@ final class ImportRunRecorder
             $this->money($result['sum_net'] ?? 0),
         );
 
+        [$metrics, $findings] = $this->withSnapshot($result, $metrics, $findings);
+
         return [$metrics, $findings, $headline];
     }
 
@@ -406,6 +413,33 @@ final class ImportRunRecorder
         unset($result['lines'], $result['allocation']['skus']);
 
         return $result;
+    }
+
+    /**
+     * Monatsstand für die DATEV-Umbuchung (Discussion #26) als Kennzahl, seine Befunde als Befunde.
+     *
+     * @param array<string, mixed>  $result
+     * @param array<string, string> $metrics
+     * @param list<string>          $findings
+     * @return array{0: array<string, string>, 1: list<string>}
+     */
+    private function withSnapshot(array $result, array $metrics, array $findings, bool $withFindings = true): array
+    {
+        $snapshot = $result['snapshot'] ?? null;
+        if (! is_array($snapshot)) {
+            return [$metrics, $findings];
+        }
+
+        $month = $snapshot['month'] ?? null;
+        $metrics['Monatsstand DATEV'] = $month === null
+            ? 'ohne Buchungsmonat'
+            : sprintf('%s %s (%d Zeilen)', $month, ($result['dry_run'] ?? false) ? 'würde festgeschrieben' : 'festgeschrieben', (int) ($snapshot['rows'] ?? 0));
+
+        if ($withFindings) {
+            $findings = [...$findings, ...array_values((array) ($snapshot['findings'] ?? []))];
+        }
+
+        return [$metrics, $findings];
     }
 
     private function money(mixed $value): string

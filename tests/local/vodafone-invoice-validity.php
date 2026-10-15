@@ -109,6 +109,16 @@ Schema::create('asset_cost_lines', function (Blueprint $t) {
     $t->softDeletes();
 });
 
+// Monatsstand je Rechnung (InvoiceSnapshotService) — der scharfe Import schreibt ihn mit.
+Schema::create('asset_invoice_snapshots', function (Blueprint $t) {
+    $t->id(); $t->unsignedBigInteger('team_id'); $t->unsignedBigInteger('tenant_id');
+    $t->string('source', 32); $t->string('account', 64)->default(''); $t->string('invoice', 64);
+    $t->date('invoice_date')->nullable(); $t->date('booking_month')->nullable(); $t->string('period_label')->nullable();
+    $t->decimal('total_net', 12, 2); $t->json('distribution'); $t->unsignedBigInteger('datev_batch_id')->nullable();
+    $t->timestamp('captured_at')->nullable(); $t->timestamps();
+    $t->unique(['tenant_id', 'source', 'account', 'invoice']);
+});
+
 // ---- Testrahmen ---------------------------------------------------------------------------
 
 function ok(string $name, bool $condition, string $detail = ''): void

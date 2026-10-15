@@ -154,6 +154,21 @@ Schema::create('asset_license_billing_aliases', function (Blueprint $t) {
     $t->timestamps();
 });
 
+// Monatsstand je Rechnung (InvoiceSnapshotService) — der scharfe Import schreibt ihn mit, dafür
+// braucht er die Kostenart der MS-Lizenzen.
+Schema::create('asset_cost_types', function (Blueprint $t) {
+    $t->id(); $t->unsignedBigInteger('team_id'); $t->unsignedBigInteger('tenant_id')->nullable(); $t->string('key'); $t->string('name');
+    $t->string('aggregation_source')->default('cost_line'); $t->timestamps();
+});
+Schema::create('asset_invoice_snapshots', function (Blueprint $t) {
+    $t->id(); $t->unsignedBigInteger('team_id'); $t->unsignedBigInteger('tenant_id');
+    $t->string('source', 32); $t->string('account', 64)->default(''); $t->string('invoice', 64);
+    $t->date('invoice_date')->nullable(); $t->date('booking_month')->nullable(); $t->string('period_label')->nullable();
+    $t->decimal('total_net', 12, 2); $t->json('distribution'); $t->unsignedBigInteger('datev_batch_id')->nullable();
+    $t->timestamp('captured_at')->nullable(); $t->timestamps();
+    $t->unique(['tenant_id', 'source', 'account', 'invoice']);
+});
+
 // ---- Testrahmen ---------------------------------------------------------------------------
 
 /**
@@ -202,6 +217,10 @@ $fachCc = \Illuminate\Support\Facades\DB::table('asset_cost_centers')
     'controlling_enabled'             => true,
     'license_overflow_cost_center_id' => $overflowCc,
     'license_pool_cost_center_id'     => $poolCc,
+]);
+
+\Illuminate\Support\Facades\DB::table('asset_cost_types')->insert([
+    'team_id' => TEAM, 'tenant_id' => TENANT, 'key' => 'ms_lizenz', 'name' => 'MS Lizenz', 'aggregation_source' => 'ms_license',
 ]);
 
 /** Lizenzkatalog — Mengen so, dass die Mengenbestätigung des Matchers greifen kann. */
@@ -281,6 +300,7 @@ $service = new LicenseInvoiceImportService();
 $fixture = dirname(__DIR__) . '/fixtures/license-invoice-sample.csv';
 
 $preview = $service->import(TEAM, $fixture, 'test-preview', true, TENANT);
+ok('Vorschau: kein Monatsstand', \Platform\AssetManager\Models\AssetInvoiceSnapshot::withoutTenantScope()->count() === 0);
 
 ok('Vorschau schreibt keine Vertragszeilen', AssetLicenseContractLine::count() === 0);
 ok('Vorschau ist als Probelauf markiert', $preview['dry_run'] === true);
@@ -303,6 +323,18 @@ ok('Positionen verdichtet (Teilperioden verschmolzen)', $preview['positions'] ==
 
 $result = $service->import(TEAM, $fixture, 'test-import', false, TENANT);
 LicensePriceBook::flush();
+
+// Monatsstand für die DATEV-Umbuchung (Discussion #26): Rechnungsbetrag + Verteilung wie im Pivot.
+$snapshot = \Platform\AssetManager\Models\AssetInvoiceSnapshot::withoutTenantScope()->where('source', 'license_invoice')->first();
+$distribution = collect((array) $snapshot?->distribution);
+ok('Monatsstand: einer, Buchungsmonat = Abrechnungsmonat', $snapshot?->booking_month?->toDateString() === '2026-07-01'
+    && \Platform\AssetManager\Models\AssetInvoiceSnapshot::withoutTenantScope()->count() === 1, (string) $snapshot?->booking_month);
+ok('Monatsstand: Rechnungsnetto der Abrechnung', near((float) $snapshot?->total_net, (float) ($result['checks']['invoice_total_net'] ?? $result['checks']['positions_sum_net'])),
+    sprintf('%.2f', (float) $snapshot?->total_net));
+ok('Monatsstand: Verteilung = Monatswert der Kostenaufteilung', near((float) $distribution->sum('amount'), (float) $result['allocation']['totals']['invoice_amount']),
+    sprintf('%.2f vs %.2f', $distribution->sum('amount'), $result['allocation']['totals']['invoice_amount']));
+ok('Monatsstand: Funktionskonten auf ihrer KST', $distribution->contains(fn ($r) => $r['cost_center_code'] === '2599' && $r['cost_type_key'] === 'ms_lizenz'));
+ok('Monatsstand: Monatswert-Differenz ist kein Befund', $result['snapshot']['findings'] === [], json_encode($result['snapshot']['findings'], JSON_UNESCAPED_UNICODE));
 
 ok('Sechs Vertragszeilen geschrieben', AssetLicenseContractLine::count() === 6,
     (string) AssetLicenseContractLine::count());

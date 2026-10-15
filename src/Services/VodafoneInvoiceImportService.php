@@ -70,7 +70,13 @@ class VodafoneInvoiceImportService
     /** @var array<string, AssetCostLine> in diesem Lauf geschriebene Zeilen je Schlüssel — Basis des Rundungsausgleichs. */
     protected array $written = [];
 
-    public function __construct(protected XlsxReader $reader = new XlsxReader()) {}
+    /** @var ?array<string, AssetHolder> Rufnummern-Index der Träger, je Lauf neu aufgebaut. */
+    protected ?array $holderIndex = null;
+
+    public function __construct(
+        protected XlsxReader $reader = new XlsxReader(),
+        protected InvoiceSnapshotService $snapshots = new InvoiceSnapshotService(),
+    ) {}
 
     /**
      * Rechnungsdatei einlesen und die Mobilfunk-Kostenpositionen des Tenants darauf ausrichten.
@@ -85,6 +91,7 @@ class VodafoneInvoiceImportService
         $this->dryRun   = $dryRun;
         $this->writtenHashes = [];
         $this->written       = [];
+        $this->holderIndex   = null;
 
         // Tenant für den Global Scope setzen — der Importer läuft ohne UI-Kontext (Console/Upload).
         TenantContext::forceTenant($this->tenantId);
@@ -137,6 +144,16 @@ class VodafoneInvoiceImportService
 
             [$rounding, $unbalanced] = $this->balanceRounding(round($this->num($header['J'] ?? null), 2));
 
+            // Monatsstand für die DATEV-Umbuchung — in der Transaktion, ein Probelauf hinterlässt nichts.
+            $snapshot = $this->snapshots->capture($this->teamId, $this->tenantId, [
+                'source'       => self::SOURCE,
+                'account'      => $period['account'],
+                'invoice'      => $period['invoice'],
+                'invoice_date' => $period['date'],
+                'period_label' => $period['from'] && $period['to'] ? $period['from']->format('d.m.Y') . '–' . $period['to']->format('d.m.Y') : null,
+                'total_net'    => round($this->num($header['J'] ?? null), 2),
+            ], $this->snapshots->rowsFromCostLines($this->teamId, $this->tenantId, self::SOURCE, $period['account'], $period['invoice']));
+
             $result = [
                 'dry_run'            => $dryRun,
                 'period'             => $period,
@@ -151,6 +168,7 @@ class VodafoneInvoiceImportService
                 'pruned_rows'        => $pruned,
                 'rounding'           => $rounding,
                 'rounding_unbalanced'=> $unbalanced,
+                'snapshot'           => InvoiceSnapshotService::summary($snapshot),
             ];
 
             $dryRun ? DB::rollBack() : DB::commit();
@@ -402,14 +420,16 @@ class VodafoneInvoiceImportService
         return $this->holderPhoneIndex()[$e164] ?? null;
     }
 
-    /** @return array<string, AssetHolder> normalisierte Nummer => Träger (memoisiert je Lauf) */
+    /**
+     * @return array<string, AssetHolder> normalisierte Nummer => Träger (memoisiert je Lauf)
+     *
+     * Bewusst eine Eigenschaft, kein `static`: ein statischer Index überlebte den Lauf und lieferte im
+     * selben Prozess (Queue-Worker, Tests) beim nächsten Import Träger mit veralteter Kostenstelle.
+     */
     protected function holderPhoneIndex(): array
     {
-        static $index = null;
-        static $forTeam = null;
-
-        if ($index !== null && $forTeam === $this->teamId . ':' . $this->tenantId) {
-            return $index;
+        if ($this->holderIndex !== null) {
+            return $this->holderIndex;
         }
 
         $index = [];
@@ -427,9 +447,7 @@ class VodafoneInvoiceImportService
                 }
             });
 
-        $forTeam = $this->teamId . ':' . $this->tenantId;
-
-        return $index;
+        return $this->holderIndex = $index;
     }
 
     /** `2599 - HKS Team Düsseldorf` → `2599`. */

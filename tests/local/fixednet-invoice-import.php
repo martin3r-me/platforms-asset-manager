@@ -17,6 +17,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Platform\AssetManager\Models\AssetCostLine;
+use Platform\AssetManager\Models\AssetInvoiceSnapshot;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Services\VodafoneFixedNetImportService;
@@ -67,6 +68,16 @@ Schema::create('asset_cost_lines', function (Blueprint $t) {
     $t->decimal('monthly_amount', 12, 2)->default(0); $t->string('source')->default('manual'); $t->string('period_label')->nullable();
     $t->date('valid_from')->nullable(); $t->date('valid_to')->nullable(); $t->boolean('active')->default(true);
     $t->string('import_batch_id')->nullable(); $t->string('import_hash', 64)->nullable(); $t->text('raw_data')->nullable(); $t->timestamps(); $t->softDeletes();
+});
+
+// Monatsstand je Rechnung (InvoiceSnapshotService) — der scharfe Import schreibt ihn mit.
+Schema::create('asset_invoice_snapshots', function (Blueprint $t) {
+    $t->id(); $t->unsignedBigInteger('team_id'); $t->unsignedBigInteger('tenant_id');
+    $t->string('source', 32); $t->string('account', 64)->default(''); $t->string('invoice', 64);
+    $t->date('invoice_date')->nullable(); $t->date('booking_month')->nullable(); $t->string('period_label')->nullable();
+    $t->decimal('total_net', 12, 2); $t->json('distribution'); $t->unsignedBigInteger('datev_batch_id')->nullable();
+    $t->timestamp('captured_at')->nullable(); $t->timestamps();
+    $t->unique(['tenant_id', 'source', 'account', 'invoice']);
 });
 
 // ---- Fixture-Bau (Kopfzeile wörtlich aus dem Portal-Export) -------------------------------
@@ -150,6 +161,7 @@ $dry = $service->import(TEAM, $file, 'test', true, TENANT, ['leitung1' => $halle
 check('Probelauf schreibt nichts', 0, $fixednet()->count());
 check('Probelauf lässt Excel-Zeilen stehen', 4, AssetCostLine::where('source', 'excel_import')->count());
 check('Probelauf: Summe geht auf', true, $dry['reconciles']);
+check('Probelauf: kein Monatsstand', 0, AssetInvoiceSnapshot::withoutTenantScope()->count());
 
 // ---- Scharfer Lauf Konto A ----------------------------------------------------------------
 
@@ -175,6 +187,15 @@ check('Keine Gültigkeit aus dem Rechnungszeitraum (Bug #930)', 0, $fixednet()->
 check('Zeitraum als period_label', '26.08.2026–25.09.2026', $fixednet()->value('period_label'));
 check('Befund: nicht aktivierter Platz', true, (bool) array_filter($r['findings'], fn ($f) => str_contains($f, 'nicht aktiviert')));
 check('Befund: Träger ohne KST', true, (bool) array_filter($r['findings'], fn ($f) => str_contains($f, 'ohne Kostenstelle')));
+
+// Monatsstand für die DATEV-Umbuchung (Discussion #26).
+$snap = AssetInvoiceSnapshot::withoutTenantScope()->where('source', 'vodafone_fixednet')->first();
+check('Monatsstand: Buchungsmonat = Monat des Rechnungsdatums', '2026-10-01', $snap?->booking_month?->toDateString());
+check('Monatsstand: Rechnungsnetto', 308.0, (float) $snap?->total_net);
+check('Monatsstand: Verteilung = Rechnungsnetto', 308.0, round(array_sum(array_column((array) $snap?->distribution, 'amount')), 2));
+check('Monatsstand: Kostenarten der Rechnung', ['internet', 'telefonie', 'vf_lizenz_rc'],
+    array_values(array_unique(array_column((array) $snap?->distribution, 'cost_type_key'))));
+check('Monatsstand: im Ergebnis', ['2026-10', []], [$r['snapshot']['month'] ?? null, $r['snapshot']['findings'] ?? null]);
 
 // ---- Zweiter Lauf derselben Datei: idempotent ---------------------------------------------
 

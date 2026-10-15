@@ -63,7 +63,10 @@ class VodafoneFixedNetImportService
     /** @var array<string, AssetCostLine> in diesem Lauf geschriebene Zeilen je Schlüssel (Rundungsausgleich) */
     protected array $written = [];
 
-    public function __construct(protected VodafoneFixedNetCsv $parser = new VodafoneFixedNetCsv()) {}
+    public function __construct(
+        protected VodafoneFixedNetCsv $parser = new VodafoneFixedNetCsv(),
+        protected InvoiceSnapshotService $snapshots = new InvoiceSnapshotService(),
+    ) {}
 
     /**
      * @param  array<string, int>  $lineMapping  Anschlusskennung => AssetItem-ID für Leitungen, die
@@ -140,6 +143,19 @@ class VodafoneFixedNetImportService
                 $result['telephony']['pool_amount'] = round($result['telephony']['pool_amount'] + $residual, 2);
             }
             $result['pruned_rows'] = $this->prune($bill['account']);
+
+            // Monatsstand für die DATEV-Umbuchung — in der Transaktion, ein Probelauf hinterlässt nichts.
+            $snapshot = $this->snapshots->capture($this->teamId, $this->tenantId, [
+                'source'       => self::SOURCE,
+                'account'      => $bill['account'],
+                'invoice'      => $bill['invoice'],
+                'invoice_date' => $bill['invoice_date'],
+                'period_label' => $period['label'],
+                'total_net'    => (float) $bill['total_net'],
+            ], $this->snapshots->rowsFromCostLines($this->teamId, $this->tenantId, self::SOURCE, $bill['account'], $bill['invoice']));
+            $result['snapshot'] = InvoiceSnapshotService::summary($snapshot);
+            $this->findings     = [...$this->findings, ...$snapshot['findings']];
+
             $result['findings']    = $this->findings;
 
             $dryRun ? DB::rollBack() : DB::commit();

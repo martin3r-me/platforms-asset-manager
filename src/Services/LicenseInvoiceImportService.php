@@ -4,11 +4,14 @@ namespace Platform\AssetManager\Services;
 
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Platform\AssetManager\Models\AssetCostType;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetLicenseBillingAlias;
 use Platform\AssetManager\Models\AssetLicenseContractLine;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Support\LicenseEdition;
 use Platform\AssetManager\Support\LicenseInvoiceCsv;
+use Platform\AssetManager\Support\LicensePriceBook;
 use Platform\AssetManager\Support\LicenseSkuMatcher;
 
 /**
@@ -54,6 +57,7 @@ class LicenseInvoiceImportService
     public function __construct(
         protected LicenseInvoiceCsv $csv = new LicenseInvoiceCsv(),
         protected ?LicenseSeatAllocator $allocator = null,
+        protected InvoiceSnapshotService $snapshots = new InvoiceSnapshotService(),
     ) {
         $this->allocator ??= new LicenseSeatAllocator();
     }
@@ -134,6 +138,7 @@ class LicenseInvoiceImportService
                 'price_moves' => $priceMoves,
                 'allocation' => $allocation,
                 'checks'     => $this->checks($parsed, $allocation),
+                'snapshot'   => InvoiceSnapshotService::summary($this->captureSnapshot($parsed, $period)),
             ];
 
             $this->dryRun ? DB::rollBack() : DB::commit();
@@ -142,6 +147,62 @@ class LicenseInvoiceImportService
         } catch (\Throwable $e) {
             DB::rollBack();
             throw $e;
+        }
+    }
+
+    /**
+     * Monatsstand für die DATEV-Umbuchung (Discussion #26), in der Transaktion des Imports.
+     *
+     * Verteilt wird der **Rechnungsbetrag** nach den Anteilen der Kostenaufteilung — hier die Seats
+     * je Kostenstelle plus Überhang und Pool auf ihren Sammelstellen, genau wie im Pivot. Die
+     * Verteilung ist Monatswert (volle Seats), die Rechnung zeitanteilig; die Differenz ist erwartet und
+     * kein Befund. Abgebildet wird nur der jüngste Abrechnungsmonat: die Seats sind immer der heutige
+     * Bestand, für einen älteren Monat wären die Anteile geraten.
+     *
+     * @param array<string, mixed> $parsed
+     * @param array{from: \Illuminate\Support\Carbon, to: \Illuminate\Support\Carbon, days: int, label: string} $period
+     * @return array{snapshot: ?\Platform\AssetManager\Models\AssetInvoiceSnapshot, findings: list<string>}
+     */
+    protected function captureSnapshot(array $parsed, array $period): array
+    {
+        $type = AssetCostType::where('team_id', $this->teamId)
+            ->where('aggregation_source', AssetCostType::SOURCE_MS_LICENSE)
+            ->first();
+
+        if (! $type) {
+            return ['snapshot' => null, 'findings' => ['Keine Kostenart für MS-Lizenzen — kein Monatsstand für die DATEV-Umbuchung.']];
+        }
+
+        // Das Preisbuch ist memoisiert; hier muss es die eben geschriebenen Vertragszeilen sehen, und
+        // danach darf der (im Probelauf zurückgerollte) Stand nicht im Speicher bleiben.
+        LicensePriceBook::flush();
+        $book = LicensePriceBook::for($this->teamId);
+
+        try {
+            if ($book->period() !== $period['label']) {
+                return ['snapshot' => null, 'findings' => [
+                    "Abrechnung {$period['label']} ist nicht der jüngste Monat ({$book->period()}) — kein Monatsstand, die Seats gelten nur für den aktuellen.",
+                ]];
+            }
+
+            $ccByUpn = AssetHolder::where('team_id', $this->teamId)->pluck('cost_center_id', 'user_principal_name');
+
+            $rows = $book->seatRows()
+                ->map(fn ($row) => ['cost_type_id' => $type->id, 'cost_center_id' => $ccByUpn[$row['upn']] ?? null, 'amount' => $row['amount']])
+                ->merge($book->unallocatedRows()->map(fn ($row) => ['cost_type_id' => $type->id, 'cost_center_id' => $row['cost_center_id'], 'amount' => $row['amount']]));
+
+            return $this->snapshots->capture($this->teamId, $this->tenantId, [
+                'source'              => self::SOURCE,
+                'account'             => '',
+                'invoice'             => $period['label'],
+                'invoice_date'        => null,
+                'booking_month'       => $period['from'],
+                'period_label'        => $period['label'],
+                'total_net'           => (float) ($parsed['total_net'] ?? $parsed['sum_net']),
+                'distribution_is_key' => true,
+            ], $rows);
+        } finally {
+            LicensePriceBook::flush();
         }
     }
 
