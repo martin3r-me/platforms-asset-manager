@@ -219,10 +219,7 @@ class DatevReallocation extends Component
         abort_unless($this->canManage(), 403);
         $this->resetMessages();
 
-        $snapshot = AssetInvoiceSnapshot::withoutTenantScope()
-            ->where('team_id', $this->teamId())
-            ->where('tenant_id', $this->tenantId())
-            ->findOrFail($snapshotId);
+        $snapshot = $this->snapshotOrFail($snapshotId);
 
         $result = $snapshots->recapture($snapshot);
         if ($result['findings'] !== []) {
@@ -231,7 +228,50 @@ class DatevReallocation extends Component
             return;
         }
 
-        $this->flash = "Monatsstand der Rechnung {$snapshot->invoice} neu festgeschrieben.";
+        $month = $result['snapshot']?->booking_month;
+        $this->flash = "Monatsstand der Rechnung {$snapshot->invoice} neu festgeschrieben"
+            . ($month !== null ? ' (Buchungsmonat ' . \Platform\AssetManager\Support\DatevBookingText::month($month) . ').' : '.');
+    }
+
+    /** Monatsstand einer Rechnung zurücksetzen — der nächste Import schreibt ihn neu fest. */
+    public function resetSnapshot(int $snapshotId, InvoiceSnapshotService $snapshots): void
+    {
+        abort_unless($this->canManage(), 403);
+        $this->resetMessages();
+
+        $snapshot = $this->snapshotOrFail($snapshotId);
+
+        try {
+            $snapshots->reset($snapshot);
+        } catch (Throwable $e) {
+            $this->problems = [$e->getMessage()];
+
+            return;
+        }
+
+        $this->flash = "Monatsstand der Rechnung {$snapshot->invoice} zurückgesetzt. Der nächste scharfe Import "
+            . 'dieser Rechnung schreibt ihn neu fest.';
+    }
+
+    /** Alle offenen Monatsstände des gewählten Monats zurücksetzen; gebuchte bleiben. */
+    public function resetMonth(InvoiceSnapshotService $snapshots): void
+    {
+        abort_unless($this->canManage(), 403);
+        $this->resetMessages();
+
+        $count = $snapshots->resetMonth($this->teamId(), $this->tenantId(), $this->monthStart());
+
+        $this->flash = $count === 0
+            ? 'Keine offenen Monatsstände in diesem Monat.'
+            : "{$count} offene(r) Monatsstand/-stände zurückgesetzt. Gebuchte bleiben, bis ihr Stapel verworfen wird.";
+    }
+
+    protected function snapshotOrFail(int $id): AssetInvoiceSnapshot
+    {
+        return AssetInvoiceSnapshot::withoutTenantScope()
+            ->where('team_id', $this->teamId())
+            ->where('tenant_id', $this->tenantId())
+            ->findOrFail($id);
     }
 
     protected function batchOrFail(int $id): AssetDatevBatch

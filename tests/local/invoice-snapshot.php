@@ -198,4 +198,28 @@ check('Rechnung im Folgemonat: Buchungsmonat bleibt der Leistungsmonat', '2026-1
 check('Rundung: Rechnungsnetto 25,02', 25.02, (float) $s?->total_net);
 check('Rundung: Verteilung summiert auf Rechnungsnetto', 25.02, round(array_sum(array_column((array) $s?->distribution, 'amount')), 2));
 
+// ---- 9: Neu festschreiben bestimmt den Monat neu, Zurücksetzen ------------------------------
+
+// Stand nach alter Regel (Rechnungsdatum Januar) — Neu festschreiben zieht ihn in den Leistungsmonat.
+snap('DEZ-1')->update(['booking_month' => '2027-01-01']);
+$re = $service->recapture(snap('DEZ-1'));
+check('Neu festschreiben: Buchungsmonat aus dem Leistungszeitraum', ['2026-12-01', []], [snap('DEZ-1')?->booking_month?->toDateString(), $re['findings']]);
+
+check('Leistungsmonat aus Zeitraum-Text', ['2026-09', '2026-07', null], [
+    InvoiceSnapshotService::serviceMonth('26.08.2026–25.09.2026')?->format('Y-m'),
+    InvoiceSnapshotService::serviceMonth('2026-07')?->format('Y-m'),
+    InvoiceSnapshotService::serviceMonth('Sonderrechnung'),
+]);
+
+$service->reset(snap('DEZ-1'));
+check('Zurücksetzen: Monatsstand gelöscht', null, snap('DEZ-1'));
+
+$err = null;
+try { $service->reset(snap('OKT-1')); } catch (RuntimeException $e) { $err = $e->getMessage(); }
+check('Zurücksetzen: gebuchter Stand bleibt (erst Stapel verwerfen)', [true, true], [str_contains((string) $err, 'Stapel'), snap('OKT-1') !== null]);
+
+check('Monat zurücksetzen: nur offene Stände', 1, $service->resetMonth(TEAM, TENANT, new DateTimeImmutable('2026-09-01')));
+check('Monat zurücksetzen: September leer, gebuchter Oktober bleibt', [null, true], [snap('SEP-1'), snap('OKT-1') !== null]);
+check('Monat zurücksetzen: Oktober (nur gebucht) → 0', 0, $service->resetMonth(TEAM, TENANT, new DateTimeImmutable('2026-10-15')));
+
 check_summary();

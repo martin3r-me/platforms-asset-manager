@@ -164,4 +164,21 @@ check('Direkt gebucht: Status mit Ziel-KST', '2890', $data['directIds'][$gl->id]
 check('Direkt gebucht: kein offener Monat, kein Stapel', [false, [], false],
     [$data['openMonths']->has('2026-10'), $data['plan']['bookings'], $data['canCreate']]);
 
+// ---- 6: Zurücksetzen -----------------------------------------------------------------------
+
+$snaps = app(Platform\AssetManager\Services\InvoiceSnapshotService::class);
+$c->resetSnapshot($gl->id, $snaps);
+check('Zurücksetzen: Stand weg, Meldung', [null, true], [AssetInvoiceSnapshot::withoutTenantScope()->find($gl->id), str_contains((string) $c->flash, 'F-GL')]);
+
+// September-Stand in einen neuen Stapel, dann ist er gesperrt.
+$c->month = '2026-09';
+$c->createBatch(app(DatevBatchService::class));
+$c->resetSnapshot($sep->id, $snaps);
+check('Zurücksetzen gebuchter Stand: Meldung, Stand bleibt', [true, true], [str_contains($c->problems[0] ?? '', 'Stapel'), $sep->fresh() !== null]);
+
+$c->month = '2026-08';
+$c->resetMonth($snaps);
+check('Monat zurücksetzen: August leer', [0, true],
+    [AssetInvoiceSnapshot::withoutTenantScope()->whereDate('booking_month', '2026-08-01')->count(), str_contains((string) $c->flash, '1 offene')]);
+
 check_summary();

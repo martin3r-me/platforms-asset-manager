@@ -96,6 +96,16 @@
 
             {{-- Rechnungen des Monats --}}
             <x-asset-manager-panel title="Rechnungen {{ $monthLabel }}" bodyClass="p-0">
+                @if($canManage && $snapshots->contains(fn ($s) => ! $s->isBooked()))
+                    <x-slot name="actions">
+                        <button type="button" wire:click="resetMonth"
+                                wire:confirm="Alle offenen Monatsstände für {{ $monthLabel }} zurücksetzen? Gebuchte bleiben. Neu entstehen sie mit dem nächsten scharfen Import der Rechnungen."
+                                class="text-xs text-[var(--am-text-secondary)] underline decoration-dotted">
+                            Offene zurücksetzen
+                        </button>
+                    </x-slot>
+                @endif
+
                 @if($snapshots->isEmpty())
                     <p class="px-4 py-3 text-xs text-[var(--am-text-secondary)] m-0">
                         Für diesen Monat ist keine Rechnung festgeschrieben. Der Monatsstand entsteht beim scharfen
@@ -135,12 +145,19 @@
                                                 <x-asset-manager-badge color="amber" size="xs">offen</x-asset-manager-badge>
                                             @endif
                                         </td>
-                                        <td class="px-4 py-2 text-right">
-                                            @if($canManage && ! $snapshot->isBooked() && ! isset($directIds[$snapshot->id]) && $snapshot->source !== 'license_invoice')
-                                                <button type="button" wire:click="recapture({{ $snapshot->id }})"
-                                                        class="text-xs text-[var(--am-text-secondary)] underline decoration-dotted"
-                                                        title="Nach einer KST-Korrektur: Verteilung aus den heutigen Kostenpositionen übernehmen">
-                                                    Neu festschreiben
+                                        <td class="px-4 py-2 text-right whitespace-nowrap space-x-3">
+                                            @if($canManage && ! $snapshot->isBooked())
+                                                @if($snapshot->source !== 'license_invoice')
+                                                    <button type="button" wire:click="recapture({{ $snapshot->id }})"
+                                                            class="text-xs text-[var(--am-text-secondary)] underline decoration-dotted"
+                                                            title="Verteilung aus den heutigen Kostenpositionen übernehmen und den Buchungsmonat aus dem Leistungszeitraum neu bestimmen">
+                                                        Neu festschreiben
+                                                    </button>
+                                                @endif
+                                                <button type="button" wire:click="resetSnapshot({{ $snapshot->id }})"
+                                                        wire:confirm="Monatsstand der Rechnung {{ $snapshot->invoice }} zurücksetzen? Er entsteht neu mit dem nächsten scharfen Import dieser Rechnung."
+                                                        class="text-xs text-red-700 underline decoration-dotted">
+                                                    Zurücksetzen
                                                 </button>
                                             @endif
                                         </td>

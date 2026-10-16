@@ -132,10 +132,61 @@ class InvoiceSnapshotService
             'account'       => $snapshot->account,
             'invoice'       => $snapshot->invoice,
             'invoice_date'  => $snapshot->invoice_date,
-            'booking_month' => $snapshot->booking_month,
+            // Monat neu aus dem Leistungszeitraum — so zieht ein Stand, der nach einer alten Regel
+            // festgeschrieben wurde, beim Neu-Festschreiben in seinen Leistungsmonat.
+            'booking_month' => self::serviceMonth($snapshot->period_label) ?? $snapshot->booking_month,
             'period_label'  => $snapshot->period_label,
             'total_net'     => (float) $snapshot->total_net,
         ], $rows);
+    }
+
+    /**
+     * Leistungsmonat aus dem gespeicherten Zeitraum-Text: „26.08.2026–25.09.2026" → September
+     * (Ende des Zeitraums), „2026-07" → Juli (Abrechnungsmonat der Lizenz-Abrechnung). null = nicht lesbar.
+     */
+    public static function serviceMonth(?string $periodLabel): ?\DateTimeImmutable
+    {
+        $label = trim((string) $periodLabel);
+
+        if (preg_match('/(\d{2})\.(\d{2})\.(\d{4})\s*$/u', $label, $m)) {
+            return checkdate((int) $m[2], (int) $m[1], (int) $m[3]) ? new \DateTimeImmutable("{$m[3]}-{$m[2]}-01") : null;
+        }
+        if (preg_match('/^(\d{4})-(\d{2})$/', $label, $m)) {
+            return checkdate((int) $m[2], 1, (int) $m[1]) ? new \DateTimeImmutable("{$m[1]}-{$m[2]}-01") : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * Monatsstand zurücksetzen (löschen). Der nächste scharfe Import derselben Rechnung schreibt ihn neu
+     * fest. Ein gebuchter Stand ist gesperrt — dafür erst den Stapel verwerfen, sonst verlöre das Protokoll
+     * seine Rechnung.
+     */
+    public function reset(AssetInvoiceSnapshot $snapshot): void
+    {
+        if ($snapshot->isBooked()) {
+            throw new \RuntimeException("Rechnung {$snapshot->invoice} ist in einem DATEV-Stapel gebucht — erst den Stapel verwerfen.");
+        }
+
+        $snapshot->delete();
+    }
+
+    /**
+     * Alle offenen Monatsstände eines Buchungsmonats zurücksetzen; gebuchte bleiben.
+     *
+     * @return int Anzahl gelöschter Stände
+     */
+    public function resetMonth(int $teamId, int $tenantId, \DateTimeInterface $month): int
+    {
+        $first = \DateTimeImmutable::createFromInterface($month)->modify('first day of this month');
+
+        return AssetInvoiceSnapshot::withoutTenantScope()
+            ->where('team_id', $teamId)
+            ->where('tenant_id', $tenantId)
+            ->whereDate('booking_month', $first->format('Y-m-d'))
+            ->whereNull('datev_batch_id')
+            ->delete();
     }
 
     /**
