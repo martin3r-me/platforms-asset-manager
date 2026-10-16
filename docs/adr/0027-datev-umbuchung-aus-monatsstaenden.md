@@ -81,11 +81,16 @@ Folgen:
   16 KST; Hendric 2026-10-16) — deshalb Umstellungsmonat Oktober 2026 (Regel 9). Die Verteilung der
   Buchhaltung folgt der Vodafone-Kostenstelle, unsere dem Asset-Träger: nach der Umstellung ändern sich
   die KST-Werte in DATEV sichtbar (Sep: 1900, 9920, 1520).
+- **Keine Prüfung gegen die DATEV-KST-Liste** (Max, 2026-10-16): die Seite übergibt dem Rechner keine
+  Liste, er prüft nur fehlende KST und Foodpol. Die Möglichkeit im Rechner bleibt ungenutzt.
+- **Leistung im Buchungstext bleibt die größte Kostenart** (Max, 2026-10-16): für 680500 also
+  „Vodafone VF Lizenz RC" — keine eigene Bezeichnung je Sachkonto.
 
 Offen:
 
-- **DATEV-KST-Liste als Prüfquelle** (`01_Stammdaten/Kostenstelle.md`): der Rechner kann gegen eine Liste
-  prüfen, die Seite übergibt noch keine.
 - **Umstellungsmonat mit Hendric bestätigen** (Vorschlag Oktober 2026).
-- **Vodafone-Zusatzvertrag 4452768764** (Aug 461,27 € auf KST 8000) ist keins der importierten
-  Rechnungskonten — klären, was er ist und ob er in den Asset Manager gehört.
+- **Vodafone-Beleg 4452768764** (24.08.2026, 548,91 € brutto = 461,27 € netto, 680510, KST 8000
+  „Kita & Schule", Stapel „Kreditoren AUG2026 (01/09)"): einmalig Jan–Aug, Nummernkreis 445… passt zu
+  keinem der vier Vodafone-Rechnungskonten (Mobilfunk 122…, Festnetz 37…) und steht in keinem
+  Portal-Export. Belegbild in DATEV prüfen — einmalige Rechnung (z. B. Endgerät) oder ein eigenes
+  Kundenkonto für Kita & Schule.
