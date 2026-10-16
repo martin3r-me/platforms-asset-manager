@@ -43,7 +43,7 @@ Schema::create('asset_team_settings', function (Blueprint $t) {
     $t->boolean('controlling_enabled')->default(true);
     $t->string('datev_consultant', 7)->nullable(); $t->string('datev_client', 5)->nullable(); $t->string('datev_fiscal_year_start', 5)->nullable();
     $t->unsignedTinyInteger('datev_account_length')->nullable(); $t->string('datev_initials', 2)->nullable();
-    $t->unsignedBigInteger('datev_source_cost_center_id')->nullable(); $t->timestamps();
+    $t->unsignedBigInteger('datev_source_cost_center_id')->nullable(); $t->date('datev_start_month')->nullable(); $t->timestamps();
 });
 Schema::create('asset_invoice_snapshots', function (Blueprint $t) {
     $t->id(); $t->unsignedBigInteger('team_id'); $t->unsignedBigInteger('tenant_id');
@@ -180,5 +180,21 @@ $c->month = '2026-08';
 $c->resetMonth($snaps);
 check('Monat zurücksetzen: August leer', [0, true],
     [AssetInvoiceSnapshot::withoutTenantScope()->whereDate('booking_month', '2026-08-01')->count(), str_contains((string) $c->flash, '1 offene')]);
+
+// ---- 7: Umstellungsmonat -------------------------------------------------------------------
+
+$snap('M-OKT', '2026-10-01');
+$snap('M-NOV', '2026-11-01');
+DB::table('asset_team_settings')->update(['datev_start_month' => '2026-11-01']);
+$c = $make();
+$c->month = '2026-10';
+$data = viewData($c);
+check('Vor der Umstellung: Hinweis, vorverteilt, kein Stapel', [true, true, false],
+    [$data['plan']['before_start'], $data['predistributedIds']->has(AssetInvoiceSnapshot::withoutTenantScope()->where('invoice', 'M-OKT')->value('id')), $data['canCreate']]);
+check('Vor der Umstellung: Oktober nicht offen, November schon', [false, true], [$data['openMonths']->has('2026-10'), $data['openMonths']->has('2026-11')]);
+
+$c2 = $make();
+$c2->mount();
+check('Startmonat überspringt vorverteilte Monate', '2026-11', $c2->month);
 
 check_summary();

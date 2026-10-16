@@ -68,6 +68,11 @@ $migration = require dirname(__DIR__, 2) . '/database/migrations/2026_10_15_0000
 $migration->up();
 $migration->up(); // zweiter Lauf: idempotent
 
+// Umstellungsmonat (2026-10-16): Oktober 2026 für Tenants mit Stapelkopf.
+$startMigration = require dirname(__DIR__, 2) . '/database/migrations/2026_10_16_000001_add_datev_start_month_to_team_settings.php';
+$startMigration->up();
+$startMigration->up();
+
 $row = fn (int $tenant) => DB::table('asset_team_settings')->where('tenant_id', $tenant)->first();
 
 check('Tenant 1: Kopf vorbelegt', ['189671', '530', '01-01', 6], [$row(1)->datev_consultant, $row(1)->datev_client, $row(1)->datev_fiscal_year_start, (int) $row(1)->datev_account_length]);
@@ -77,6 +82,8 @@ check('Tenant 1: übrige Einstellungen unberührt', [1, $cc1520], [(int) $row(1)
 check('Tenant 2 (ohne Sachkonto): nichts vorbelegt', [null, null], [$row(2)->datev_consultant, $row(2)->datev_source_cost_center_id]);
 check('Tenant 3: Einstellungszeile angelegt, ohne Sammel-KST', ['530', null], [$row(3)?->datev_client, $row(3)?->datev_source_cost_center_id]);
 check('Keine doppelten Zeilen', 3, DB::table('asset_team_settings')->count());
+check('Umstellungsmonat Oktober 2026 nur mit Stapelkopf', ['2026-10-01', null, '2026-10-01'],
+    [$row(1)->datev_start_month, $row(2)->datev_start_month, $row(3)->datev_start_month]);
 
 DB::table('asset_team_settings')->where('tenant_id', 1)->update(['datev_client' => '532']);
 $migration->up();
@@ -154,5 +161,25 @@ $c->datevConsultant = '189671'; $c->datevClient = '530'; $c->datevAccountLength 
 $c->datevSourceCostCenterId = (int) DB::table('asset_cost_centers')->where('tenant_id', 2)->value('id');
 trySave($c);
 check('Kostenstelle eines anderen Tenants wird nicht übernommen', null, $row(1)->datev_source_cost_center_id);
+
+// ---- 4: Umbuchung ab Leistungsmonat --------------------------------------------------------
+
+$c = $make();
+$c->datevConsultant = '189671'; $c->datevClient = '530'; $c->datevAccountLength = '6'; $c->datevInitials = 'KI'; $c->datevFiscalYearStart = '01.01.';
+$c->datevStartMonth = '2026-11';
+check('Umbuchung ab: gespeichert', [[], '2026-11-01'], [trySave($c), substr((string) $row(1)->datev_start_month, 0, 10)]);
+$c->datevStartMonth = '2026-13';
+check('Umbuchung ab: ungültiger Monat abgelehnt', ['datevStartMonth'], trySave($c));
+$c->datevStartMonth = '';
+trySave($c);
+check('Umbuchung ab: leer = keine Grenze', null, $row(1)->datev_start_month);
+
+$s = new AssetTeamSetting(['datev_start_month' => '2026-10-01']);
+check('Vor der Umstellung: Sep ja, Okt/Nov nein', [true, false, false], [
+    $s->datevBeforeStart(new DateTimeImmutable('2026-09-30')),
+    $s->datevBeforeStart(new DateTimeImmutable('2026-10-01')),
+    $s->datevBeforeStart(new DateTimeImmutable('2026-11-15')),
+]);
+check('Ohne Umstellungsmonat: nie davor', false, (new AssetTeamSetting())->datevBeforeStart(new DateTimeImmutable('2020-01-01')));
 
 check_summary();

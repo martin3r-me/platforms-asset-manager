@@ -220,6 +220,15 @@
                                     @endforeach
                                 </x-asset-manager-select>
                             </div>
+                            <div>
+                                <label class="block text-xs text-[var(--am-text-secondary)] mb-1">Umbuchung ab Leistungsmonat</label>
+                                <x-asset-manager-input type="month" wire:model="datevStartMonth" />
+                                @error('datevStartMonth') <p class="text-[11px] text-red-700 mt-1 m-0">{{ $message }}</p> @enderror
+                                <p class="text-[11px] text-[var(--am-text-muted)] mt-1 m-0">
+                                    Monate davor hat die Buchhaltung selbst je KST verteilt — dafür entsteht nie ein Stapel.
+                                    Leer = keine Grenze.
+                                </p>
+                            </div>
                         </div>
 
                         <div class="flex items-center gap-2">

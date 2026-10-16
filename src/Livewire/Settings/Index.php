@@ -72,6 +72,9 @@ class Index extends Component
 
     public ?int $datevSourceCostCenterId = null;
 
+    /** Erster umzubuchender Leistungsmonat (`Y-m`) — davor verteilt die Buchhaltung selbst. */
+    public string $datevStartMonth = '';
+
     public ?string $datevFlash = null;
 
     public function mount(): void
@@ -91,6 +94,7 @@ class Index extends Component
         $this->datevAccountLength      = $settings?->datev_account_length !== null ? (string) $settings->datev_account_length : '';
         $this->datevInitials           = (string) $settings?->datev_initials;
         $this->datevSourceCostCenterId = $settings?->datev_source_cost_center_id;
+        $this->datevStartMonth         = (string) $settings?->datev_start_month?->format('Y-m');
 
         $monthDay = (string) $settings?->datev_fiscal_year_start;
         $this->datevFiscalYearStart = preg_match('/^(\d{2})-(\d{2})$/', $monthDay, $m) ? "{$m[2]}.{$m[1]}." : '';
@@ -115,12 +119,14 @@ class Index extends Component
             'datevFiscalYearStart' => ['nullable', 'regex:/^\s*\d{1,2}\.\d{1,2}\.?\s*$/'],
             'datevAccountLength'   => ['nullable', 'integer', 'between:4,8'],
             'datevInitials'        => ['nullable', 'max:2', 'not_regex:/[;"]/'],
+            'datevStartMonth'      => ['nullable', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
         ], [
             'datevConsultant.regex'      => 'Berater: nur Ziffern, höchstens 7.',
             'datevClient.regex'          => 'Mandant: nur Ziffern, höchstens 5.',
             'datevFiscalYearStart.regex' => 'Beginn Wirtschaftsjahr als TT.MM., z. B. 01.01.',
             'datevAccountLength.between' => 'Sachkontenlänge 4 bis 8.',
             'datevInitials.max'          => 'Diktatkürzel: höchstens 2 Zeichen.',
+            'datevStartMonth.regex'      => 'Umbuchung ab: Monat als JJJJ-MM.',
         ]);
 
         $monthDay = null;
@@ -150,6 +156,7 @@ class Index extends Component
                 'datev_account_length'        => $this->datevAccountLength !== '' ? (int) $this->datevAccountLength : null,
                 'datev_initials'              => $this->datevInitials ?: null,
                 'datev_source_cost_center_id' => $source,
+                'datev_start_month'           => $this->datevStartMonth !== '' ? $this->datevStartMonth . '-01' : null,
             ],
         );
 

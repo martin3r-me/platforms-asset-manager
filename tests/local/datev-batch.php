@@ -158,4 +158,11 @@ $again = $service->create(TEAM, TENANT, $sep, meta(), USER);
 check('Nach Verwerfen: neuer Stapel nimmt die Rechnung wieder auf', ['M-SEP'], array_column($again->summary['snapshots'], 'invoice'));
 check('Nach Verwerfen: eindeutige Bezeichnung (Teil 3)', 'CTRL Umb IT Sep 2026 Teil 3', $again->label);
 
+// ---- 5: vor der Umstellung kein Stapel ------------------------------------------------------
+
+$sepC = snapshot('M-SEP-SPAET', '2026-09-01', 30.0, ['2000' => 10.0, '2500' => 20.0]);
+$err = fails(fn () => $service->create(TEAM, TENANT, $sep, meta(), USER, startMonth: new DateTimeImmutable('2026-10-01')));
+check('Vor der Umstellung: abgelehnt mit Begründung', true, $err !== null && str_contains($err[1], 'vor der Umstellung'));
+check('Vor der Umstellung: nichts gesperrt', null, $sepC->fresh()->datev_batch_id);
+
 check_summary();

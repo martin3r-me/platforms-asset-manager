@@ -80,10 +80,19 @@
                     <div class="ml-auto text-xs text-[var(--am-text-secondary)]">
                         @if($settings)
                             Mandant {{ $settings->datev_client ?: '—' }} · Berater {{ $settings->datev_consultant ?: '—' }} ·
-                            Sammel-KST {{ $settings->datevSourceCostCenter?->code ?: '—' }}
+                            Sammel-KST {{ $settings->datevSourceCostCenter?->code ?: '—' }} ·
+                            Umbuchung ab {{ $settings->datev_start_month ? \Platform\AssetManager\Support\DatevBookingText::month($settings->datev_start_month) : '—' }}
                         @endif
                     </div>
                 </div>
+
+                @if($plan['before_start'])
+                    <div class="mt-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                        {{ $monthLabel }} liegt vor der Umstellung (Umbuchung ab
+                        {{ \Platform\AssetManager\Support\DatevBookingText::month($settings->datev_start_month) }}).
+                        Die Buchhaltung hat diese Rechnungen selbst je Kostenstelle verteilt — kein Stapel, sonst doppelt gebucht.
+                    </div>
+                @endif
 
                 @if($missing !== [])
                     <div class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
@@ -136,6 +145,11 @@
                                         <td class="px-4 py-2">
                                             @if($snapshot->isBooked())
                                                 <x-asset-manager-badge color="emerald" size="xs">gebucht · {{ $batchLabels[$snapshot->datev_batch_id] ?? 'Stapel #' . $snapshot->datev_batch_id }}</x-asset-manager-badge>
+                                            @elseif(isset($predistributedIds[$snapshot->id]))
+                                                <x-asset-manager-badge color="gray" size="xs"
+                                                    title="Vor der Umstellung — von der Buchhaltung selbst je KST verteilt.">
+                                                    vorverteilt
+                                                </x-asset-manager-badge>
                                             @elseif(isset($directIds[$snapshot->id]))
                                                 <x-asset-manager-badge color="sky" size="xs"
                                                     title="Die ganze Rechnung liegt auf einer Kostenstelle — die Buchhaltung bucht sie direkt dorthin, keine Umbuchung.">

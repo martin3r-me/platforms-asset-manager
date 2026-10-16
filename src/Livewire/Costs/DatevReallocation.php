@@ -72,6 +72,8 @@ class DatevReallocation extends Component
      */
     protected function openMonths(): \Illuminate\Support\Collection
     {
+        $settings = $this->settings();
+
         return AssetInvoiceSnapshot::withoutTenantScope()
             ->where('team_id', $this->teamId())
             ->where('tenant_id', $this->tenantId())
@@ -79,6 +81,8 @@ class DatevReallocation extends Component
             ->whereNotNull('booking_month')
             ->get(['id', 'booking_month', 'distribution'])
             ->reject(fn (AssetInvoiceSnapshot $s) => DatevReallocationService::directCostCenter($s) !== null)
+            // Vor der Umstellung verteilt die Buchhaltung selbst — diese Monate sind nie offen.
+            ->reject(fn (AssetInvoiceSnapshot $s) => (bool) $settings?->datevBeforeStart($s->booking_month))
             ->groupBy(fn (AssetInvoiceSnapshot $s) => $s->booking_month->format('Y-m'))
             ->map->count()
             ->sortKeysDesc();
@@ -152,6 +156,7 @@ class DatevReallocation extends Component
                 (int) Auth::id(),
                 null,
                 (string) $settings->datevSourceCostCenter->code,
+                $settings->datev_start_month,
             );
         } catch (DatevExtfException $e) {
             $this->problems = $e->violations;
@@ -298,6 +303,7 @@ class DatevReallocation extends Component
             (string) ($settings?->datev_client ?? ''),
             null,
             $source !== '' ? $source : '?',
+            $settings?->datev_start_month,
         );
 
         $snapshots = AssetInvoiceSnapshot::withoutTenantScope()
@@ -330,6 +336,7 @@ class DatevReallocation extends Component
             'batchLabels' => $batches->pluck('label', 'id'),
             // Rechnung-ID => KST, auf die die Buchhaltung sie direkt bucht.
             'directIds'   => collect($plan['direct'])->pluck('cost_center', 'id'),
+            'predistributedIds' => collect($plan['predistributed'])->pluck('id')->flip(),
             'canCreate'   => $missing === [] && $plan['violations'] === [] && $plan['bookings'] !== [],
         ])->layout('platform::layouts.app');
     }

@@ -49,7 +49,12 @@ Entscheidung:
    Stände fallen aus jedem weiteren Stapel heraus und werden von keinem Re-Import verändert. Nachzügler
    desselben Monats kommen in „… Teil 2". Verwerfen braucht einen Grund, gibt die Stände frei und
    behält die Datei; ein bereits importierter Stapel muss in DATEV storniert werden.
-9. **Alles oder nichts:** jeder Verstoß — Anteil ohne KST, unbekannte KST, falscher Mandant, jede Regel
+9. **Umstellungsmonat** (`asset_team_settings.datev_start_month`): erster Leistungsmonat, den der Asset
+   Manager umbucht. Davor hat die Buchhaltung die Rechnungen selbst je KST verteilt (Hendric, 2026-10-16:
+   Vodafone September noch vorverteilt in DATEV KOST) — Monatsstände dieser Monate heißen „vorverteilt",
+   sind nie offen und kommen nie in einen Stapel. Erstbefüllt mit Oktober 2026 (vorgeschlagen, mit
+   Hendric abzustimmen); ein zu früher Monat bucht doppelt, ein zu später hält nur eine Umbuchung zurück.
+10. **Alles oder nichts:** jeder Verstoß — Anteil ohne KST, unbekannte KST, falscher Mandant, jede Regel
    der EXTF-Checkliste (`Support\DatevExtfWriter`) — verhindert die Datei vollständig.
 
 Verworfen:
@@ -72,14 +77,15 @@ Folgen:
 - **Nicht im Stapel, bis zur Klärung bei den Controlling-Templates:** HGK, O365 Backup, CSI Leasing,
   Druckerwartung, Bankettprofi, Grenke (Max, 2026-10-15) — ihre Kostenarten bekommen kein Sachkonto.
   Bankettprofi und Grenke-Versicherung sind RAP-Auflösungen (190003/190000), keine 159000-Umbuchungen.
-- **Vodafone war im HGK bis Aug 2026 vorverteilt erfasst** (Kreditorenstapel je KST). Vor dem ersten
-  Stapel ist zu klären, ab welchem Monat die Rechnung komplett auf 1520 landet — sonst wird doppelt
-  verteilt.
+- **Vodafone ist bis einschließlich September 2026 vorverteilt gebucht** (Mobilfunk 18 KST, Festnetz
+  16 KST; Hendric 2026-10-16) — deshalb Umstellungsmonat Oktober 2026 (Regel 9). Die Verteilung der
+  Buchhaltung folgt der Vodafone-Kostenstelle, unsere dem Asset-Träger: nach der Umstellung ändern sich
+  die KST-Werte in DATEV sichtbar (Sep: 1900, 9920, 1520).
 
 Offen:
 
 - **DATEV-KST-Liste als Prüfquelle** (`01_Stammdaten/Kostenstelle.md`): der Rechner kann gegen eine Liste
   prüfen, die Seite übergibt noch keine.
-- **RingCentral-Teil der Festnetzrechnung Düsseldorf (680500)** war im August je KST vorverteilt
-  gebucht (1540, 2599, 9920 …), nur Internet Düsseldorf lag auf 1520. Ab welcher Rechnung alles auf 1520
-  geht, gehört in dieselbe Klärung wie der Mobilfunk (Folgen, letzter Punkt).
+- **Umstellungsmonat mit Hendric bestätigen** (Vorschlag Oktober 2026).
+- **Vodafone-Zusatzvertrag 4452768764** (Aug 461,27 € auf KST 8000) ist keins der importierten
+  Rechnungskonten — klären, was er ist und ob er in den Asset Manager gehört.

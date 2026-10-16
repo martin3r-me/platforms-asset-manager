@@ -41,12 +41,15 @@ class AssetTeamSetting extends Model
         'datev_account_length',
         'datev_initials',
         'datev_source_cost_center_id',
+        // Erster Leistungsmonat, den der Asset Manager umbucht — davor verteilt die Buchhaltung selbst.
+        'datev_start_month',
     ];
 
     protected $casts = [
         'controlling_enabled' => 'boolean',
         'holder_type_rules'   => 'array',
         'datev_account_length' => 'integer',
+        'datev_start_month'   => 'date',
     ];
 
     public function team(): BelongsTo
@@ -126,6 +129,16 @@ class AssetTeamSetting extends Model
             'account_length'    => (int) $this->datev_account_length,
             'initials'          => (string) $this->datev_initials,
         ];
+    }
+
+    /**
+     * Liegt der Buchungsmonat vor der Umstellung? Dann hat die Buchhaltung die Rechnungen selbst je KST
+     * verteilt — kein Stapel, sonst doppelt gebucht. Ohne Umstellungsmonat gibt es keine Grenze.
+     */
+    public function datevBeforeStart(\DateTimeInterface $month): bool
+    {
+        return $this->datev_start_month !== null
+            && $month->format('Y-m') < $this->datev_start_month->format('Y-m');
     }
 
     /**

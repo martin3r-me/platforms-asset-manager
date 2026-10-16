@@ -31,9 +31,11 @@ class DatevBatchService
      * @param array{consultant: string|int, client: string|int, fiscal_year_start: \DateTimeInterface,
      *              account_length: int, initials: string} $meta DATEV-Kopf des Mandanten
      * @param ?list<string> $knownCostCenters DATEV-KST-Liste; null = nicht prüfen
+     * @param ?\DateTimeInterface $startMonth erster umzubuchender Leistungsmonat; davor kein Stapel
      *
      * @throws DatevExtfException bei Verstößen gegen Umbuchungsregeln oder Checkliste
-     * @throws \RuntimeException  wenn es nichts umzubuchen gibt oder ein Stand inzwischen gebucht ist
+     * @throws \RuntimeException  wenn es nichts umzubuchen gibt, der Monat vor der Umstellung liegt oder
+     *                            ein Stand inzwischen gebucht ist
      */
     public function create(
         int $teamId,
@@ -43,13 +45,18 @@ class DatevBatchService
         ?int $userId,
         ?array $knownCostCenters = null,
         string $sourceCostCenter = '1520',
+        ?\DateTimeInterface $startMonth = null,
     ): AssetDatevBatch {
         $from = \DateTimeImmutable::createFromInterface($month)->modify('first day of this month')->setTime(0, 0);
         $to   = $from->modify('last day of this month');
 
-        return DB::transaction(function () use ($teamId, $tenantId, $from, $to, $meta, $userId, $knownCostCenters, $sourceCostCenter) {
-            $plan = $this->reallocation->prepare($teamId, $tenantId, $from, (string) $meta['client'], $knownCostCenters, $sourceCostCenter);
+        return DB::transaction(function () use ($teamId, $tenantId, $from, $to, $meta, $userId, $knownCostCenters, $sourceCostCenter, $startMonth) {
+            $plan = $this->reallocation->prepare($teamId, $tenantId, $from, (string) $meta['client'], $knownCostCenters, $sourceCostCenter, $startMonth);
 
+            if ($plan['before_start']) {
+                throw new \RuntimeException(DatevBookingText::month($from) . ' liegt vor der Umstellung (ab '
+                    . DatevBookingText::month($startMonth) . ') — die Buchhaltung hat diese Rechnungen selbst verteilt, kein Stapel.');
+            }
             if ($plan['violations'] !== []) {
                 throw new DatevExtfException($plan['violations']);
             }

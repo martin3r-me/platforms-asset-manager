@@ -138,6 +138,14 @@ check('DATEV-KST-Liste wird durchgereicht', true, count($r3['violations']) === 1
 $oct = $service->prepare(TEAM, TENANT, new DateTimeImmutable('2026-10-01'), client: '530');
 check('Oktober: nur der Oktober-Stand', ['H 5000 1520 680510', 'S 3000 1520 680510', 'S 2000 2000 680510'], rows($oct['bookings']));
 
+// Umstellung ab Oktober: der September ist vorverteilt — keine Blöcke, nichts offen.
+$pre = $service->prepare(TEAM, TENANT, $sep, client: '530', startMonth: new DateTimeImmutable('2026-10-01'));
+check('Vor der Umstellung: vorverteilt, kein Stapel', [true, [], [], []],
+    [$pre['before_start'], $pre['bookings'], $pre['snapshots'], $pre['direct']]);
+check('Vor der Umstellung: alle ungebuchten Stände gelistet', ['F-GL', 'F-SEP', 'M-SEP'], array_column($pre['predistributed'], 'invoice'));
+$octStart = $service->prepare(TEAM, TENANT, new DateTimeImmutable('2026-10-01'), client: '530', startMonth: new DateTimeImmutable('2026-10-01'));
+check('Ab dem Umstellungsmonat: normal umgebucht', [false, 3], [$octStart['before_start'], count($octStart['bookings'])]);
+
 $nov = $service->prepare(TEAM, TENANT, new DateTimeImmutable('2026-11-01'), client: '530');
 check('Leerer Monat: keine Blöcke, keine Buchungen', [[], []], [$nov['blocks'], $nov['bookings']]);
 
