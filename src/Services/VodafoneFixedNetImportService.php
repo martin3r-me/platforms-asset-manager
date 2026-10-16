@@ -150,6 +150,10 @@ class VodafoneFixedNetImportService
                 'account'      => $bill['account'],
                 'invoice'      => $bill['invoice'],
                 'invoice_date' => $bill['invoice_date'],
+                // Leistungsmonat: der „Abrechnungsmonat" der Rechnung, sonst das Ende des Zeitraums.
+                'booking_month' => $bill['period']['label'] !== null
+                    ? new \DateTimeImmutable($bill['period']['label'] . '-01')
+                    : $bill['period']['to'],
                 'period_label' => $period['label'],
                 'total_net'    => (float) $bill['total_net'],
             ], $this->snapshots->rowsFromCostLines($this->teamId, $this->tenantId, self::SOURCE, $bill['account'], $bill['invoice']));

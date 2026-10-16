@@ -65,7 +65,7 @@
                     </div>
 
                     <div class="text-xs text-[var(--am-text-secondary)]">
-                        Buchungsmonat = Monat des Rechnungsdatums.
+                        Buchungsmonat = Leistungsmonat (Ende des Abrechnungszeitraums).
                         @if($openMonths->isNotEmpty())
                             Offen:
                             @foreach($openMonths as $openMonth => $count)
@@ -126,12 +126,17 @@
                                         <td class="px-4 py-2">
                                             @if($snapshot->isBooked())
                                                 <x-asset-manager-badge color="emerald" size="xs">gebucht · {{ $batchLabels[$snapshot->datev_batch_id] ?? 'Stapel #' . $snapshot->datev_batch_id }}</x-asset-manager-badge>
+                                            @elseif(isset($directIds[$snapshot->id]))
+                                                <x-asset-manager-badge color="sky" size="xs"
+                                                    title="Die ganze Rechnung liegt auf einer Kostenstelle — die Buchhaltung bucht sie direkt dorthin, keine Umbuchung.">
+                                                    direkt auf KST {{ $directIds[$snapshot->id] }}
+                                                </x-asset-manager-badge>
                                             @else
                                                 <x-asset-manager-badge color="amber" size="xs">offen</x-asset-manager-badge>
                                             @endif
                                         </td>
                                         <td class="px-4 py-2 text-right">
-                                            @if($canManage && ! $snapshot->isBooked() && $snapshot->source !== 'license_invoice')
+                                            @if($canManage && ! $snapshot->isBooked() && ! isset($directIds[$snapshot->id]) && $snapshot->source !== 'license_invoice')
                                                 <button type="button" wire:click="recapture({{ $snapshot->id }})"
                                                         class="text-xs text-[var(--am-text-secondary)] underline decoration-dotted"
                                                         title="Nach einer KST-Korrektur: Verteilung aus den heutigen Kostenpositionen übernehmen">

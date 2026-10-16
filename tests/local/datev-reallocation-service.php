@@ -87,7 +87,9 @@ $mobil = snapshot('vodafone_invoice', 'M-SEP', '2026-09-01', 100.02, [[$tMobil, 
 $fest = snapshot('vodafone_fixednet', 'F-SEP', '2026-09-01', 318.0, [
     [$tNet, '1520', 152.0], [$tTel, '1520', 92.0], [$tRc, '2599', 64.0], [$tOhne, '1520', 10.0],
 ]);
-snapshot('vodafone_invoice', 'M-OKT', '2026-10-01', 50.0, [[$tMobil, '1520', 50.0]]);          // anderer Monat
+// Separate Rechnung komplett auf einer KST (Internet Mönchengladbach) — bucht die Buchhaltung direkt.
+snapshot('vodafone_fixednet', 'F-GL', '2026-09-01', 369.0, [[$tNet, '2890', 369.0], [$tNet, '1520', 0.0]]);
+snapshot('vodafone_invoice', 'M-OKT', '2026-10-01', 50.0, [[$tMobil, '1520', 30.0], [$tMobil, '2000', 20.0]]); // anderer Monat
 $booked = snapshot('vodafone_invoice', 'M-SEP-ALT', '2026-09-01', 20.0, [[$tMobil, '1520', 20.0]], batch: 3); // gebucht
 snapshot('vodafone_invoice', 'M-OHNE', null, 5.0, [[$tMobil, '1520', 5.0]]);                    // ohne Monat
 
@@ -100,6 +102,8 @@ $r       = $service->prepare(TEAM, TENANT, $sep, client: '530');
 check('Monat normiert', '2026-09', $r['month']);
 check('Nur ungebuchte Stände des Monats', ['F-SEP', 'M-SEP'], array_column($r['snapshots'], 'invoice'));
 check('Gebuchte Stände werden gelistet, nicht verteilt', ['M-SEP-ALT'], array_column($r['booked'], 'invoice'));
+check('Rechnung auf genau einer KST: direkt gebucht, nicht im Stapel', [['F-GL', '2890']],
+    array_map(fn ($d) => [$d['invoice'], $d['cost_center']], $r['direct']));
 
 // ---- 2 + 3: Rechnung × Anteil, Blöcke je Sachkonto × Kreditor ------------------------------
 
@@ -132,7 +136,7 @@ $r3 = $service->prepare(TEAM, TENANT, $sep, client: '530', knownCostCenters: ['1
 check('DATEV-KST-Liste wird durchgereicht', true, count($r3['violations']) === 1 && str_contains($r3['violations'][0], '8090'));
 
 $oct = $service->prepare(TEAM, TENANT, new DateTimeImmutable('2026-10-01'), client: '530');
-check('Oktober: nur der Oktober-Stand', ['H 5000 1520 680510', 'S 5000 1520 680510'], rows($oct['bookings']));
+check('Oktober: nur der Oktober-Stand', ['H 5000 1520 680510', 'S 3000 1520 680510', 'S 2000 2000 680510'], rows($oct['bookings']));
 
 $nov = $service->prepare(TEAM, TENANT, new DateTimeImmutable('2026-11-01'), client: '530');
 check('Leerer Monat: keine Blöcke, keine Buchungen', [[], []], [$nov['blocks'], $nov['bookings']]);

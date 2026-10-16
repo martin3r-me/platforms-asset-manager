@@ -150,6 +150,8 @@ class VodafoneInvoiceImportService
                 'account'      => $period['account'],
                 'invoice'      => $period['invoice'],
                 'invoice_date' => $period['date'],
+                // Leistungsmonat = Monat, in dem der Abrechnungszeitraum endet (15.08.–14.09. → September).
+                'booking_month' => $period['to'],
                 'period_label' => $period['from'] && $period['to'] ? $period['from']->format('d.m.Y') . '–' . $period['to']->format('d.m.Y') : null,
                 'total_net'    => round($this->num($header['J'] ?? null), 2),
             ], $this->snapshots->rowsFromCostLines($this->teamId, $this->tenantId, self::SOURCE, $period['account'], $period['invoice']));

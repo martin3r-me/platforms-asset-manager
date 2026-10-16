@@ -26,24 +26,30 @@ Entscheidung:
    Festnetz, Lizenz-Abrechnung) schreibt in seiner Transaktion Rechnungsnetto, Buchungsmonat und
    Verteilung auf Kostenart × KST fest; ein Probelauf hinterlässt nichts. Derselbe Beleg erneut
    importiert ersetzt seinen Stand, die nächste Rechnung legt einen neuen an.
-4. **Buchungsmonat = Monat des Rechnungsdatums** — die Buchhaltung bucht die Rechnung mit ihrem
-   Belegdatum auf 1520, die Umbuchung gehört in dieselbe Periode. Eine Festnetzrechnung vom 02.10. für
-   den Abrechnungsmonat September landet damit im Oktober-Stapel. Ohne Rechnungsdatum kein Monat, und
-   die Rechnung fehlt in jedem Stapel (Befund), statt in einem falschen zu stehen.
-5. **Buchungsmuster N-Wege-Verteilung** (Controlling-Vault `05_Kontierungsregeln/Umbuchungen.md`): je
+4. **Buchungsmonat = Leistungsmonat** (Hendric, 2026-10-16: alle Rechnungen werden nach Leistungsdatum
+   gebucht). Leistungsmonat ist der Monat, in dem der Abrechnungszeitraum endet — so benennt ihn
+   Vodafone selbst („Abrechnungsmonat 202609" für 26.08.–25.09.). Mobilfunk 15.08.–14.09. → September;
+   die Festnetzrechnung vom 02.10. für September → September; Lizenz-Abrechnung → ihr Abrechnungsmonat.
+   Ohne Leistungszeitraum kein Monat, und die Rechnung fehlt in jedem Stapel (Befund), statt in einem
+   falschen zu stehen. *(Erste Fassung 2026-10-15: Monat des Rechnungsdatums — verworfen, siehe unten.)*
+5. **Eine Rechnung, die vollständig auf genau einer Kostenstelle liegt, bucht die Buchhaltung direkt
+   dorthin** (Max, 2026-10-16; Beispiel Internet Mönchengladbach, eigene Rechnung, KST 2890). Sie kommt
+   nicht in den Stapel — eine Umbuchung stellte sie auf der Ziel-KST doppelt und 1520 ins Minus. Die
+   Seite zeigt sie als „direkt auf KST …".
+6. **Buchungsmuster N-Wege-Verteilung** (Controlling-Vault `05_Kontierungsregeln/Umbuchungen.md`): je
    Block (Sachkonto × Kreditor) eine Quellzeile mit der vollen Summe auf der Sammel-KST (H) und eine
    Zielzeile je KST (S), auch für den Eigenanteil der Sammel-KST; 159000 immer im Gegenkonto; S/H dreht
    bei Gutschrift, negativem Anteil und Erlöskonto. Buchungstext Stil C
    `Umb. [1520|<KST>] <Kreditor> <Kostenart> <Mon><JJ>`, Quellzeile mit `diverse`.
-6. **Eine Datei je Monat und Mandant.** Der Stapelkopf (Berater, Mandant, WJ-Beginn,
+7. **Eine Datei je Monat und Mandant.** Der Stapelkopf (Berater, Mandant, WJ-Beginn,
    Sachkontenlänge, Diktatkürzel, Sammel-KST) steht in den Moduleinstellungen je Tenant — es sind
    Kundendaten. Foodpol (KST 11000, Mandant 10002) wird nie mit 530 gemischt; der Rechner blockiert.
-7. **Protokoll gegen Doppel-Umbuchung** (`asset_datev_batches`): ein Stapel speichert seine Datei
+8. **Protokoll gegen Doppel-Umbuchung** (`asset_datev_batches`): ein Stapel speichert seine Datei
    byte-genau (Base64, SHA-256) und sperrt die enthaltenen Monatsstände (`datev_batch_id`). Gesperrte
    Stände fallen aus jedem weiteren Stapel heraus und werden von keinem Re-Import verändert. Nachzügler
    desselben Monats kommen in „… Teil 2". Verwerfen braucht einen Grund, gibt die Stände frei und
    behält die Datei; ein bereits importierter Stapel muss in DATEV storniert werden.
-8. **Alles oder nichts:** jeder Verstoß — Anteil ohne KST, unbekannte KST, falscher Mandant, jede Regel
+9. **Alles oder nichts:** jeder Verstoß — Anteil ohne KST, unbekannte KST, falscher Mandant, jede Regel
    der EXTF-Checkliste (`Support\DatevExtfWriter`) — verhindert die Datei vollständig.
 
 Verworfen:
@@ -53,6 +59,10 @@ Verworfen:
 - **Sachkonto am Kreditor.** Dann landete eine Vodafone-Rechnung auf einem einzigen Konto.
 - **Beträge der Kostenaufteilung direkt buchen.** Sie weichen um Rundungs-Cent und bei der
   Lizenz-Abrechnung um die Zeitanteiligkeit vom Beleg ab; gebucht werden muss der Beleg.
+- **Buchungsmonat = Monat des Rechnungsdatums** (erste Fassung, 2026-10-15). Folgte der Annahme, die
+  Buchhaltung buche mit dem Belegdatum der Rechnung — die Historie bis August zeigt das auch
+  (Festnetzrechnung vom 03.08. für Juli in „Kreditoren AUG2026"). Hendric stellt auf Leistungsdatum um;
+  sonst landete jede Festnetzrechnung (Rechnungsstellung Anfang Folgemonat) einen Monat zu spät.
 
 Folgen:
 
@@ -70,6 +80,6 @@ Offen:
 
 - **DATEV-KST-Liste als Prüfquelle** (`01_Stammdaten/Kostenstelle.md`): der Rechner kann gegen eine Liste
   prüfen, die Seite übergibt noch keine.
-- **Buchungsmonat der Lizenz-Abrechnung:** die „Abrechnungsdetails" tragen kein Rechnungsdatum; heute gilt
-  der Abrechnungsmonat. Die Vodafone-SaaS-Rechnung desselben Inhalts wird aber rund einen Monat später
-  fakturiert (ADR 0026) — nach Regel 4 gehörte die Umbuchung in deren Monat. Mit Max/Controlling klären.
+- **RingCentral-Teil der Festnetzrechnung Düsseldorf (680500)** war im August je KST vorverteilt
+  gebucht (1540, 2599, 9920 …), nur Internet Düsseldorf lag auf 1520. Ab welcher Rechnung alles auf 1520
+  geht, gehört in dieselbe Klärung wie der Mobilfunk (Folgen, letzter Punkt).

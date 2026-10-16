@@ -190,12 +190,12 @@ check('Befund: Träger ohne KST', true, (bool) array_filter($r['findings'], fn (
 
 // Monatsstand für die DATEV-Umbuchung (Discussion #26).
 $snap = AssetInvoiceSnapshot::withoutTenantScope()->where('source', 'vodafone_fixednet')->first();
-check('Monatsstand: Buchungsmonat = Monat des Rechnungsdatums', '2026-10-01', $snap?->booking_month?->toDateString());
+check('Monatsstand: Buchungsmonat = Abrechnungsmonat (Rechnung vom 02.10.)', '2026-09-01', $snap?->booking_month?->toDateString());
 check('Monatsstand: Rechnungsnetto', 308.0, (float) $snap?->total_net);
 check('Monatsstand: Verteilung = Rechnungsnetto', 308.0, round(array_sum(array_column((array) $snap?->distribution, 'amount')), 2));
 check('Monatsstand: Kostenarten der Rechnung', ['internet', 'telefonie', 'vf_lizenz_rc'],
     array_values(array_unique(array_column((array) $snap?->distribution, 'cost_type_key'))));
-check('Monatsstand: im Ergebnis', ['2026-10', []], [$r['snapshot']['month'] ?? null, $r['snapshot']['findings'] ?? null]);
+check('Monatsstand: im Ergebnis', ['2026-09', []], [$r['snapshot']['month'] ?? null, $r['snapshot']['findings'] ?? null]);
 
 // ---- Zweiter Lauf derselben Datei: idempotent ---------------------------------------------
 

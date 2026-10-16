@@ -151,4 +151,17 @@ $c->confirmVoid(app(DatevBatchService::class));
 check('Verwerfen mit Grund', [true, null, null], [$batch->fresh()->voided_at !== null, $sep->fresh()->datev_batch_id, $c->voidingId]);
 check('Nach Verwerfen wieder erzeugbar', true, viewData($c)['canCreate']);
 
+// ---- 5: separate Rechnung auf einer KST — direkt gebucht, nie „offen" ----------------------
+
+$gl = AssetInvoiceSnapshot::withoutTenantScope()->create([
+    'team_id' => TEAM, 'tenant_id' => TENANT, 'source' => 'vodafone_fixednet', 'account' => '1056352491', 'invoice' => 'F-GL',
+    'booking_month' => '2026-10-01', 'total_net' => 369.0,
+    'distribution' => [['cost_type_id' => $tMobil, 'cost_type_key' => 'mobilfunk', 'cost_center_id' => null, 'cost_center_code' => '2890', 'amount' => 369.0, 'lines' => 1]],
+]);
+$c->month = '2026-10';
+$data = viewData($c);
+check('Direkt gebucht: Status mit Ziel-KST', '2890', $data['directIds'][$gl->id] ?? null);
+check('Direkt gebucht: kein offener Monat, kein Stapel', [false, [], false],
+    [$data['openMonths']->has('2026-10'), $data['plan']['bookings'], $data['canCreate']]);
+
 check_summary();

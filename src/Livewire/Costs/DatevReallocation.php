@@ -60,16 +60,28 @@ class DatevReallocation extends Component
     /** Jüngster Monat mit offenen Monatsständen, sonst der Vormonat. */
     protected function defaultMonth(): string
     {
-        $latest = AssetInvoiceSnapshot::withoutTenantScope()
+        return $this->openMonths()->keys()->first()
+            ?? now('Europe/Berlin')->subMonthNoOverflow()->format('Y-m');
+    }
+
+    /**
+     * Monate mit noch umzubuchenden Rechnungen (`Y-m` => Anzahl, neueste zuerst). Gebuchte zählen nicht,
+     * direkt gebuchte (ganze Rechnung auf einer KST) auch nicht — sie brauchen nie einen Stapel.
+     *
+     * @return \Illuminate\Support\Collection<string, int>
+     */
+    protected function openMonths(): \Illuminate\Support\Collection
+    {
+        return AssetInvoiceSnapshot::withoutTenantScope()
             ->where('team_id', $this->teamId())
             ->where('tenant_id', $this->tenantId())
             ->whereNull('datev_batch_id')
             ->whereNotNull('booking_month')
-            ->max('booking_month');
-
-        return $latest !== null
-            ? substr((string) $latest, 0, 7)
-            : now('Europe/Berlin')->subMonthNoOverflow()->format('Y-m');
+            ->get(['id', 'booking_month', 'distribution'])
+            ->reject(fn (AssetInvoiceSnapshot $s) => DatevReallocationService::directCostCenter($s) !== null)
+            ->groupBy(fn (AssetInvoiceSnapshot $s) => $s->booking_month->format('Y-m'))
+            ->map->count()
+            ->sortKeysDesc();
     }
 
     public function updatedMonth(): void
@@ -263,15 +275,7 @@ class DatevReallocation extends Component
             ->limit(36)
             ->get();
 
-        $openMonths = AssetInvoiceSnapshot::withoutTenantScope()
-            ->where('team_id', $this->teamId())
-            ->where('tenant_id', $this->tenantId())
-            ->whereNull('datev_batch_id')
-            ->whereNotNull('booking_month')
-            ->get(['booking_month'])
-            ->groupBy(fn ($s) => $s->booking_month->format('Y-m'))
-            ->map->count()
-            ->sortKeysDesc();
+        $openMonths = $this->openMonths();
 
         $missing = $settings?->datevMissing() ?? ['Stapelkopf'];
 
@@ -284,6 +288,8 @@ class DatevReallocation extends Component
             'batches'     => $batches,
             'openMonths'  => $openMonths,
             'batchLabels' => $batches->pluck('label', 'id'),
+            // Rechnung-ID => KST, auf die die Buchhaltung sie direkt bucht.
+            'directIds'   => collect($plan['direct'])->pluck('cost_center', 'id'),
             'canCreate'   => $missing === [] && $plan['violations'] === [] && $plan['bookings'] !== [],
         ])->layout('platform::layouts.app');
     }

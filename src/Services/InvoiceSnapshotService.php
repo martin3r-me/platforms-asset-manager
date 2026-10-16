@@ -18,16 +18,18 @@ use Platform\AssetManager\Models\AssetInvoiceSnapshot;
  * - Identität ist Quelle + Rechnungskonto + Rechnungsnummer. Ein erneuter Import derselben Rechnung
  *   ersetzt ihren Stand (z. B. nach Korrektur einer Kostenstelle), legt aber keinen zweiten an.
  * - Ein Stand, der schon in einem DATEV-Stapel gebucht ist, bleibt unverändert; der Import meldet das.
- * - Buchungsmonat ist der Monat des Rechnungsdatums (die Buchhaltung bucht die Rechnung mit ihrem
- *   Belegdatum auf 1520). Fehlt das Datum, bleibt der Monat leer und der Import meldet es — die
- *   Rechnung taucht dann in keinem Stapel auf, statt in einem falschen.
+ * - Buchungsmonat ist der **Leistungsmonat** = Monat, in dem der Leistungszeitraum endet (Hendric,
+ *   2026-10-16: alle Rechnungen werden nach Leistungsdatum gebucht). So benennt auch Vodafone selbst:
+ *   26.08.–25.09. ist „Abrechnungsmonat 202609". Der Importer übergibt ihn als `booking_month`. Fehlt der
+ *   Leistungszeitraum, bleibt der Monat leer und der Import meldet es — die Rechnung taucht dann in
+ *   keinem Stapel auf, statt in einem falschen.
  */
 class InvoiceSnapshotService
 {
     /**
      * @param array{source: string, account: string, invoice: string, invoice_date: ?\DateTimeInterface,
-     *              booking_month?: ?\DateTimeInterface, period_label: ?string, total_net: float} $document
-     *        booking_month: nur angeben, wenn er nicht aus dem Rechnungsdatum folgt (Lizenz-Abrechnung)
+     *              booking_month: ?\DateTimeInterface, period_label: ?string, total_net: float} $document
+     *        booking_month: ein Tag im Leistungsmonat (Ende des Leistungszeitraums); null = unbekannt
      *        distribution_is_key: die Verteilung ist nur Schlüssel (Monatswert), keine Summenprobe
      * @param iterable<array{cost_type_id: int, cost_center_id: ?int, amount: float}> $rows
      * @return array{snapshot: ?AssetInvoiceSnapshot, findings: list<string>}
@@ -49,9 +51,9 @@ class InvoiceSnapshotService
             ]];
         }
 
-        $month = $document['booking_month'] ?? $document['invoice_date'] ?? null;
+        $month = $document['booking_month'] ?? null;
         if ($month === null) {
-            $findings[] = "Rechnung {$identity['invoice']} ohne Rechnungsdatum — kein Buchungsmonat, sie kann nicht umgebucht werden.";
+            $findings[] = "Rechnung {$identity['invoice']} ohne Leistungszeitraum — kein Buchungsmonat, sie kann nicht umgebucht werden.";
         }
 
         $distribution = $this->distribution($teamId, $rows);

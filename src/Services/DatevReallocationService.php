@@ -15,8 +15,11 @@ use Platform\AssetManager\Support\DatevReallocationCalculator;
  *
  * ## Regeln
  *
- * - **Auswahl:** Monatsstände mit diesem Buchungsmonat (Monat des Rechnungsdatums, Entscheidung Max
- *   2026-10-15), die noch in keinem Stapel gebucht sind. Gebuchte werden gelistet, nie erneut verteilt.
+ * - **Auswahl:** Monatsstände mit diesem Buchungsmonat (Leistungsmonat, Hendric 2026-10-16), die noch
+ *   in keinem Stapel gebucht sind. Gebuchte werden gelistet, nie erneut verteilt.
+ * - **Direkt gebucht:** eine Rechnung, deren Verteilung vollständig auf genau einer Kostenstelle liegt,
+ *   bucht die Buchhaltung direkt dorthin (Max 2026-10-16, Beispiel Internet Mönchengladbach → 2890) —
+ *   sie kommt nicht in den Stapel, sonst stünde sie auf der Ziel-KST doppelt und auf 1520 negativ.
  * - **Rechnung × Anteil:** je Rechnung wird ihr Rechnungsnetto nach den Anteilen ihrer *gesamten*
  *   Verteilung aufgeteilt (Largest Remainder) — erst danach fallen Kostenarten ohne Sachkonto heraus.
  *   So bekommt jedes Sachkonto genau seinen Teil der Rechnung, und Rundungs-Cent einer Rechnung wandern
@@ -43,6 +46,7 @@ class DatevReallocationService
      *     month: string,
      *     snapshots: list<array{id: int, source: string, account: string, invoice: string, total_net: float}>,
      *     booked: list<array{id: int, source: string, account: string, invoice: string, total_net: float}>,
+     *     direct: list<array{id: int, source: string, account: string, invoice: string, total_net: float, cost_center: string}>,
      *     blocks: list<array{account: string, service: string, amount_cents: int, shares: array<string, int>}>,
      *     skipped: list<array{cost_type_key: ?string, invoice: string, amount_cents: int}>,
      *     bookings: list<array<string, mixed>>,
@@ -68,8 +72,9 @@ class DatevReallocationService
             ->orderBy('source')->orderBy('account')->orderBy('invoice')
             ->get();
 
-        $open   = $all->reject(fn (AssetInvoiceSnapshot $s) => $s->isBooked())->values();
         $booked = $all->filter(fn (AssetInvoiceSnapshot $s) => $s->isBooked())->values();
+        $direct = $all->filter(fn (AssetInvoiceSnapshot $s) => ! $s->isBooked() && self::directCostCenter($s) !== null)->values();
+        $open   = $all->filter(fn (AssetInvoiceSnapshot $s) => ! $s->isBooked() && self::directCostCenter($s) === null)->values();
 
         $types = AssetCostType::withoutTenantScope()
             ->where('team_id', $teamId)
@@ -156,6 +161,7 @@ class DatevReallocationService
             'month'      => $first->format('Y-m'),
             'snapshots'  => $open->map($brief)->all(),
             'booked'     => $booked->map($brief)->all(),
+            'direct'     => $direct->map(fn (AssetInvoiceSnapshot $s) => $brief($s) + ['cost_center' => (string) self::directCostCenter($s)])->all(),
             'blocks'     => $blocks,
             'skipped'    => $skipped,
             'bookings'   => $calculation['bookings'],
@@ -163,6 +169,28 @@ class DatevReallocationService
             'findings'   => $findings,
             'summary'    => $calculation['blocks'],
         ];
+    }
+
+    /**
+     * KST einer Rechnung, die vollständig auf genau einer Kostenstelle liegt — die bucht die Buchhaltung
+     * direkt dorthin. Zeilen mit 0 € zählen nicht (z. B. Grundpreis + gleich hoher Rabatt).
+     * null = verteilt auf mehrere KST (oder ohne KST) → Umbuchung.
+     */
+    public static function directCostCenter(AssetInvoiceSnapshot $snapshot): ?string
+    {
+        $codes = [];
+        foreach ((array) $snapshot->distribution as $row) {
+            if (round((float) $row['amount'], 2) == 0.0) {
+                continue;
+            }
+            $codes[(string) ($row['cost_center_code'] ?? '')] = true;
+        }
+
+        if (count($codes) !== 1 || array_key_first($codes) === '') {
+            return null;
+        }
+
+        return (string) array_key_first($codes);
     }
 
     private function euro(int $cents): string

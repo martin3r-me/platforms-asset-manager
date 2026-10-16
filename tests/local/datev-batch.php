@@ -94,7 +94,7 @@ function fails(callable $fn): ?array
 }
 
 $sepA = snapshot('M-SEP', '2026-09-01', 100.0, ['1520' => 40.0, '8090' => 60.0]);
-$octA = snapshot('M-OKT', '2026-10-01', 50.0, ['1520' => 50.0]);
+$octA = snapshot('M-OKT', '2026-10-01', 50.0, ['1520' => 30.0, '2000' => 20.0]);
 
 $service = new DatevBatchService();
 $sep     = new DateTimeImmutable('2026-09-01');
@@ -122,7 +122,7 @@ $err = fails(fn () => $service->create(TEAM, TENANT, $sep, meta(), USER));
 check('Nichts offen: kein zweiter Stapel', true, $err !== null && str_contains($err[1], 'keine offenen Monatsstände'));
 check('… und keine zweite Zeile', 1, AssetDatevBatch::withoutTenantScope()->count());
 
-$sepB  = snapshot('M-SEP-NACH', '2026-09-01', 20.0, ['2000' => 20.0]);
+$sepB  = snapshot('M-SEP-NACH', '2026-09-01', 20.0, ['2000' => 12.0, '2500' => 8.0]);
 $late  = $service->create(TEAM, TENANT, $sep, meta(), USER);
 check('Nachzügler: eigener Stapel, Teil 2', 'CTRL Umb IT Sep 2026 Teil 2', $late->label);
 check('Nachzügler: nur die neue Rechnung', ['M-SEP-NACH'], array_column($late->summary['snapshots'], 'invoice'));

@@ -6,12 +6,13 @@
  *
  * Durchgespielt am Mobilfunk-Import, weil der den einfachsten Rechnungsbezug hat:
  *  1. Probelauf schreibt nichts, scharfer Lauf genau einen Stand.
- *  2. Buchungsmonat = Monat des Rechnungsdatums; Verteilung je KST mit Code.
+ *  2. Buchungsmonat = Leistungsmonat (Ende des Abrechnungszeitraums), nicht das Rechnungsdatum;
+ *     Verteilung je KST mit Code.
  *  3. Derselbe Beleg erneut importiert ersetzt den Stand, legt keinen zweiten an.
  *  4. Die nächste Rechnung legt einen neuen Stand an — der alte bleibt (Historie).
  *  5. Nachträglich gesetzte KST: Neu-Festschreiben geht nur für den aktuellen Stand des Kontos.
  *  6. Ein gebuchter Stand bleibt unverändert, der Import meldet es.
- *  7. Ohne Rechnungsdatum kein Buchungsmonat, dafür ein Befund.
+ *  7. Ohne Leistungszeitraum kein Buchungsmonat, dafür ein Befund.
  *  8. Nach Rundungsausgleich ist die Verteilung = Rechnungsnetto.
  *
  * Aufruf: php tests/local/invoice-snapshot.php   (siehe tests/local/bootstrap.php)
@@ -83,9 +84,9 @@ final class RowsImport extends VodafoneInvoiceImportService
 }
 
 /** Rechnung im Spaltenschema des Exports; Kontoposten auf KST 1520. */
-function bill(string $invoice, ?string $date, array $numbers, array $items = [], ?float $header = null): array
+function bill(string $invoice, ?string $date, array $numbers, array $items = [], ?float $header = null, ?array $period = ['15.08.2026', '14.09.2026']): array
 {
-    $base = ['B' => '86839593', 'C' => $invoice, 'D' => $date ?? '', 'E' => '15.08.2026', 'F' => '14.09.2026'];
+    $base = ['B' => '86839593', 'C' => $invoice, 'D' => $date ?? '', 'E' => $period[0] ?? '', 'F' => $period[1] ?? ''];
     $rows = [['A' => 'Rechnung'] + $base + ['J' => $header ?? round(array_sum($numbers) + array_sum($items), 2)]];
     foreach ($numbers as $msisdn => $amount) {
         $rows[] = ['A' => 'Rufnummer'] + $base + ['J' => $amount, 'K' => (string) $msisdn, 'M' => '1520 - IT'];
@@ -140,7 +141,7 @@ check('Probelauf: Ergebnis zeigt den Monat trotzdem', '2026-09', $r['snapshot'][
 $r = import($sep);
 $s = snap('SEP-1');
 check('Scharf: genau ein Monatsstand', 1, AssetInvoiceSnapshot::withoutTenantScope()->count());
-check('Buchungsmonat = Monat des Rechnungsdatums', '2026-09-01', $s?->booking_month?->toDateString());
+check('Buchungsmonat = Leistungsmonat (Zeitraum endet 14.09.)', '2026-09-01', $s?->booking_month?->toDateString());
 check('Rechnungsdatum festgehalten', '2026-09-18', $s?->invoice_date?->toDateString());
 check('Rechnungskonto + Quelle', ['86839593', 'vodafone_invoice'], [$s?->account, $s?->source]);
 check('Rechnungsnetto', 67.0, (float) $s?->total_net);
@@ -156,7 +157,7 @@ check('Erneuter Import: neue KST übernommen', ['mobilfunk 1520 21.00 (3)', 'mob
 
 // ---- 4: nächste Rechnung — neuer Stand, alter bleibt ---------------------------------------
 
-$oct = bill('OKT-1', '19.10.2026', ['01638588153' => 48.5], ['Vodafone-CorporateVPN' => 50.0, 'Rabatt OfficeVPN' => -50.0]);
+$oct = bill('OKT-1', '19.10.2026', ['01638588153' => 48.5], ['Vodafone-CorporateVPN' => 50.0, 'Rabatt OfficeVPN' => -50.0], period: ['15.09.2026', '14.10.2026']);
 import($oct);
 check('Oktober: zweiter Stand', 2, AssetInvoiceSnapshot::withoutTenantScope()->count());
 check('Oktober: Buchungsmonat', '2026-10-01', snap('OKT-1')?->booking_month?->toDateString());
@@ -178,20 +179,22 @@ check('Alte Rechnung: Stand unverändert', ['mobilfunk 1520 21.00 (3)', 'mobilfu
 // ---- 6: gebuchter Stand bleibt -------------------------------------------------------------
 
 snap('OKT-1')->update(['datev_batch_id' => 7]);
-$r = import(bill('OKT-1', '19.10.2026', ['01638588153' => 99.0]));
+$r = import(bill('OKT-1', '19.10.2026', ['01638588153' => 99.0], period: ['15.09.2026', '14.10.2026']));
 check('Gebucht: Stand unverändert', 48.5, (float) snap('OKT-1')->total_net);
 check('Gebucht: Import meldet es', true, str_contains($r['snapshot']['findings'][0] ?? '', 'bereits per DATEV umgebucht'));
 
-// ---- 7: ohne Rechnungsdatum ----------------------------------------------------------------
+// ---- 7: ohne Leistungszeitraum -------------------------------------------------------------
 
-$r = import(bill('NOV-1', null, ['01638588153' => 40.0]));
-check('Ohne Datum: Stand ohne Buchungsmonat', null, snap('NOV-1')?->booking_month);
-check('Ohne Datum: Befund', true, str_contains($r['snapshot']['findings'][0] ?? '', 'ohne Rechnungsdatum'));
+$r = import(bill('NOV-1', '18.11.2026', ['01638588153' => 40.0], period: null));
+check('Ohne Leistungszeitraum: Stand ohne Buchungsmonat', null, snap('NOV-1')?->booking_month);
+check('Ohne Leistungszeitraum: Befund', true, str_contains($r['snapshot']['findings'][0] ?? '', 'ohne Leistungszeitraum'));
 
 // ---- 8: Rundungsausgleich → Verteilung = Rechnungsnetto ------------------------------------
 
-import(bill('DEZ-1', '18.12.2026', ['01638588153' => 10.0049, '015202316833' => 10.0049], ['Vodafone-CorporateVPN' => 5.0049], header: 25.02));
+// Rechnung erst im Januar gestellt — gebucht wird trotzdem im Leistungsmonat Dezember.
+import(bill('DEZ-1', '05.01.2027', ['01638588153' => 10.0049, '015202316833' => 10.0049], ['Vodafone-CorporateVPN' => 5.0049], header: 25.02, period: ['15.11.2026', '14.12.2026']));
 $s = snap('DEZ-1');
+check('Rechnung im Folgemonat: Buchungsmonat bleibt der Leistungsmonat', '2026-12-01', $s?->booking_month?->toDateString());
 check('Rundung: Rechnungsnetto 25,02', 25.02, (float) $s?->total_net);
 check('Rundung: Verteilung summiert auf Rechnungsnetto', 25.02, round(array_sum(array_column((array) $s?->distribution, 'amount')), 2));
 
