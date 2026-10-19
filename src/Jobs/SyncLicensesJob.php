@@ -9,6 +9,7 @@ use Platform\AssetManager\Models\AssetUserLicense;
 use Platform\AssetManager\Concerns\RunsTeamSync;
 use Platform\AssetManager\Services\HolderClassifier;
 use Platform\AssetManager\Services\HolderService;
+use Platform\AssetManager\Services\HolderTypeService;
 use Platform\AssetManager\Services\IntuneGraphService;
 use Platform\AssetManager\Services\TenantContext;
 use Illuminate\Bus\Queueable;
@@ -248,6 +249,22 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
 
             // Safety-Net: alle UPNs aus Bestandsdaten nachziehen
             $holderService->backfillForTenant($this->teamId, $this->tenantId);
+
+            // Seats haben sich geändert → Preise der jüngsten Abrechnungsperiode neu verteilen (#944).
+            // Sonst hätten neue Zuweisungen bis zum nächsten Rechnungsimport keinen Preis, und die
+            // Mengen an den Vertragszeilen (zugeordnet/Pool/Überhang) wären veraltet. Läuft NACH dem
+            // Backfill, damit neu angelegte Träger schon ihren Typ tragen (Funktionskonten-Kaskade).
+            // Ein Fehler hier darf den erfolgreichen Sync nicht umwerfen.
+            if ($added > 0 || $removed > 0) {
+                try {
+                    app(HolderTypeService::class)->redistribute($this->teamId, $this->tenantId);
+                } catch (\Throwable $e) {
+                    Log::warning('AssetManager: Lizenz-Preisverteilung nach Sync fehlgeschlagen', [
+                        'tenant_id' => $this->tenantId,
+                        'error'     => $e->getMessage(),
+                    ]);
+                }
+            }
 
             Log::info('AssetManager: Lizenz-Sync erfolgreich', [
                 'connector_id' => $this->connectorId,
