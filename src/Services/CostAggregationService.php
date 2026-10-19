@@ -117,10 +117,14 @@ class CostAggregationService
     {
         $holders = AssetHolder::where('team_id', $teamId)->get();
 
-        // Hardware-Kosten pro Asset-Träger (via assignee_id)
+        // Hardware-Kosten pro Asset-Träger (via assignee_id). Items mit eigener Kostenposition NICHT
+        // mitzählen — deren Kosten stecken schon in den costlines (wie in normalizedLines). Sonst lag
+        // die Abteilungssumme über dem Dashboard-Total, und der Clamp unten versteckte das (#952).
+        $itemIdsWithCostLine = $this->itemIdsWithCostLine($teamId);
         $items = AssetItem::where('team_id', $teamId)
             ->whereNotNull('assignee_id')
             ->get()
+            ->reject(fn ($i) => $itemIdsWithCostLine->has($i->id))
             ->groupBy('assignee_id');
 
         // Lizenzpreise: eine Quelle fuer alle Auswertungen (Vertragszeile vor handgepflegtem
@@ -546,11 +550,13 @@ class CostAggregationService
         $upn        = $emp->user_principal_name;
         $deviceRows ??= $this->deviceCostRows($teamId)->keyBy('device_id');
 
-        // Hardware-AfA: manuelle Items über assignee_id.
+        // Hardware-AfA: manuelle Items über assignee_id — ohne Items mit eigener Kostenposition (#952).
+        $itemIdsWithCostLine = $this->itemIdsWithCostLine($teamId);
         $hardware = (float) AssetItem::with('category')
             ->where('team_id', $teamId)
             ->where('assignee_id', $emp->id)
             ->get()
+            ->reject(fn ($i) => $itemIdsWithCostLine->has($i->id))
             ->sum(fn ($i) => $i->monthlyCost());
 
         $device  = 0.0;
