@@ -193,6 +193,7 @@ class AssetManagerServiceProvider extends ServiceProvider
             // Weiterberechnung + DATEV (read-only)
             $registry->register(new \Platform\AssetManager\Tools\Billing\BillingPreviewTool());
             $registry->register(new \Platform\AssetManager\Tools\Costs\DatevStatusTool());
+            $registry->register(new \Platform\AssetManager\Tools\AlertsTool());
 
             // Lizenzen
             $registry->register(new \Platform\AssetManager\Tools\Licenses\ListLicensesTool());

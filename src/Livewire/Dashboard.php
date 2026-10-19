@@ -126,6 +126,8 @@ class Dashboard extends Component
 
         return view('asset-manager::livewire.dashboard', [
             'controllingEnabled' => $controllingEnabled,
+            // Fristen & Warnungen (#973): eine Liste statt fünf Seiten.
+            'alerts'          => app(\Platform\AssetManager\Services\AlertService::class)->collect($team->id, $controllingEnabled),
             // Für den Hinweis „Zahlen über alle Kunden" in der Ansicht.
             'showsAllTenants' => $this->showsAllTenants(),
             'config'          => $config,

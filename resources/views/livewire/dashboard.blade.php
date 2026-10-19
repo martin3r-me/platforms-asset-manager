@@ -48,6 +48,27 @@
                 </div>
             @else
 
+            {{-- Fristen & Warnungen (#973) --}}
+            @if($alerts !== [])
+                <x-asset-manager-panel title="Fristen & Warnungen" body-class="p-0">
+                    <ul class="divide-y divide-[color:var(--am-border)]">
+                        @foreach($alerts as $alert)
+                            <li class="flex items-start gap-3 px-5 py-3">
+                                <span class="mt-1.5 w-2 h-2 rounded-full flex-shrink-0 {{ $alert['severity'] === 'high' ? 'bg-red-500' : ($alert['severity'] === 'medium' ? 'bg-amber-500' : 'bg-slate-400') }}"></span>
+                                <div class="min-w-0 flex-1">
+                                    @if($alert['route'])
+                                        <a href="{{ route($alert['route'], $alert['params']) }}" wire:navigate class="text-sm font-medium text-[var(--am-text)] hover:underline">{{ $alert['title'] }}</a>
+                                    @else
+                                        <span class="text-sm font-medium text-[var(--am-text)]">{{ $alert['title'] }}</span>
+                                    @endif
+                                    <p class="text-xs text-[var(--am-text-secondary)] mt-0.5">{{ $alert['detail'] }}</p>
+                                </div>
+                            </li>
+                        @endforeach
+                    </ul>
+                </x-asset-manager-panel>
+            @endif
+
             {{-- Asset Manager Top-Karten --}}
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <x-asset-manager-stat-card
