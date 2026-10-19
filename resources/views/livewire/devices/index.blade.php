@@ -50,6 +50,7 @@
                             ['noncompliant', 'Nicht konform'],
                             ['issues',       'Fehler / Konflikt'],
                             ['expiring',     'Läuft ab (90 T.)'],
+                            ['expired',      'Garantie/Leasing abgelaufen'],
                             ['unencrypted',  'Nicht verschlüsselt'],
                         ] as [$key, $label])
                             <button wire:click="setPreset('{{ $key }}')"
@@ -157,7 +158,7 @@
             {{-- Aktive Filter --}}
             @if($search || $filterCompliance || $filterOs || $filterLifecycle || $preset !== 'all')
                 @php
-                    $presetLabels = ['no_user' => 'Ohne Nutzer', 'inactive' => 'Inaktiv (>30 T.)', 'noncompliant' => 'Nicht konform', 'issues' => 'Fehler / Konflikt', 'expiring' => 'Läuft ab (90 T.)', 'unencrypted' => 'Nicht verschlüsselt'];
+                    $presetLabels = ['no_user' => 'Ohne Nutzer', 'inactive' => 'Inaktiv (>30 T.)', 'noncompliant' => 'Nicht konform', 'issues' => 'Fehler / Konflikt', 'expiring' => 'Läuft ab (90 T.)', 'expired' => 'Garantie/Leasing abgelaufen', 'unencrypted' => 'Nicht verschlüsselt'];
                     $lifecycleLabels = \Platform\AssetManager\Models\AssetDevice::LIFECYCLE_LABELS;
                 @endphp
                 <div class="flex flex-wrap items-center gap-2 text-xs">

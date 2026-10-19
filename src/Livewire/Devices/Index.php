@@ -52,7 +52,7 @@ class Index extends Component
     /** Schwellwert (Tage ohne Check-in), ab dem ein Gerät als inaktiv gilt. */
     public const INACTIVE_DAYS = 30;
 
-    public const PRESETS = ['all', 'no_user', 'inactive', 'noncompliant', 'issues', 'expiring', 'unencrypted'];
+    public const PRESETS = ['all', 'no_user', 'inactive', 'noncompliant', 'issues', 'expiring', 'expired', 'unencrypted'];
 
     protected $queryString = [
         'preset'           => ['except' => 'all'],
@@ -345,10 +345,16 @@ class Index extends Component
             }),
             'noncompliant' => fn ($q) => $q->where('compliance_state', 'noncompliant'),
             'issues'       => fn ($q) => $q->whereIn('compliance_state', ['error', 'conflict']),
+            // „Läuft ab" = ab heute bis +90 Tage; bereits Abgelaufenes ist ein eigenes Preset (#955) —
+            // vorher ohne Untergrenze, seit Jahren abgelaufene Geräte standen dauerhaft in „läuft ab".
             'expiring'     => fn ($q) => $q->where(function ($w) {
-                $t = now()->addDays(AssetDevice::EXPIRY_SOON_DAYS);
-                $w->where(function ($x) use ($t) { $x->whereNotNull('warranty_until')->where('warranty_until', '<=', $t); })
-                  ->orWhere(function ($x) use ($t) { $x->whereNotNull('lease_until')->where('lease_until', '<=', $t); });
+                $from = now()->startOfDay();
+                $to   = now()->addDays(AssetDevice::EXPIRY_SOON_DAYS);
+                $w->whereBetween('warranty_until', [$from, $to])->orWhereBetween('lease_until', [$from, $to]);
+            }),
+            'expired'      => fn ($q) => $q->where(function ($w) {
+                $today = now()->startOfDay();
+                $w->where('warranty_until', '<', $today)->orWhere('lease_until', '<', $today);
             }),
             'unencrypted' => fn ($q) => $q->where('is_encrypted', false),
         ];
