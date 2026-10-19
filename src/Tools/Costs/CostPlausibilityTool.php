@@ -69,7 +69,7 @@ class CostPlausibilityTool implements ToolContract, ToolMetadataContract
 
             // Bei "all" je Tenant prüfen: eine gemeinsame Liste wäre nicht zuordenbar, und die Regeln
             // (Einzelpreis je Kostenart, Kostenstellen-Baum) gelten ohnehin nur innerhalb eines Tenants.
-            $perTenant = $this->rowsPerTenant($teamId, $tenantId, fn () => [$service->check($teamId)]);
+            $perTenant = $this->rowsPerTenant($teamId, $tenantId, fn () => [$service->check($teamId)], onlyControlling: true);
 
             if ($tenantId !== null) {
                 return ToolResult::success($perTenant[0] + ['tenant_id' => $tenantId, 'currency' => 'EUR']);

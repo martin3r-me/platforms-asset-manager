@@ -90,7 +90,7 @@ class CostByDimensionTool implements ToolContract, ToolMetadataContract
 
             // Bei tenant_id="all" je Tenant auswerten und die Zeilen kennzeichnen — sonst addierte
             // sich z. B. die Kostenstelle „1000" zweier Kunden zu einer nicht zuordenbaren Zahl.
-            $rows = $this->rowsPerTenant($teamId, $tenantId, fn () => $agg->{$method}($teamId));
+            $rows = $this->rowsPerTenant($teamId, $tenantId, fn () => $agg->{$method}($teamId), onlyControlling: true);
 
             return ToolResult::success([
                 'dimension' => $dimension,

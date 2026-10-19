@@ -74,7 +74,7 @@ class CostAllocationTool implements ToolContract, ToolMetadataContract
             // grandTotal, der niemandem gehört). Bei tenant_id="all" daher ein Pivot je Tenant.
             $perTenant = $this->rowsPerTenant($teamId, $tenantId, fn () => [
                 app(CostAggregationService::class)->costCenterByType($teamId, $period),
-            ]);
+            ], onlyControlling: true);
 
             if ($tenantId !== null) {
                 return ToolResult::success(array_merge($perTenant[0], ['currency' => 'EUR']));

@@ -73,7 +73,7 @@ class CostSummaryTool implements ToolContract, ToolMetadataContract
             // je Tenant rechnen und die Gesamtsumme zusätzlich ausweisen.
             $perTenant = $this->rowsPerTenant($teamId, $tenantId, fn () => [
                 app(CostAggregationService::class)->totalMonthly($teamId),
-            ]);
+            ], onlyControlling: true);
 
             if ($tenantId !== null) {
                 return ToolResult::success(['monthly_costs' => $perTenant[0], 'currency' => 'EUR']);

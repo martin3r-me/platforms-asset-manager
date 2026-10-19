@@ -2,6 +2,7 @@
 
 namespace Platform\AssetManager\Tools\Holders;
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetHolder;
@@ -33,7 +34,7 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
 
     public function getDescription(): string
     {
-        return 'PUT /asset-manager/employee - Aktualisiert EINEN Asset-Träger (per id ODER '
+        return 'PUT /asset-manager/holder - Aktualisiert EINEN Asset-Träger (per id ODER '
             . 'user_principal_name). Optionale Felder: cost_center (Kostenstellen-Code; setzt Code + '
             . 'cost_center_id konsistent; "" leert die Zuordnung), department, is_active (boolean), '
             . 'job_title, holder_type (person|function|admin|service|external), billing_excluded '
@@ -142,48 +143,63 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
                 $emp->is_active = (bool) $arguments['is_active'];
             }
 
-            $emp->save();
+            // Alles oder nichts (#960): vorher war das Profil schon gespeichert, wenn danach die
+            // Abrechnungs-Ausnahme (z. B. ohne Grund) oder der Typ abgelehnt wurde — die Antwort
+            // meldete einen Fehler, ein Teil der Änderung stand aber trotzdem in der Datenbank.
+            $failure = null;
+            try {
+                DB::transaction(function () use ($emp, $arguments, $teamId, $context, &$failure) {
+                    $emp->save();
 
-            // Die Abrechnungs-Ausnahme läuft NICHT über die Feldschleife: an ihr hängen drei Felder
-            // (Zeitstempel, Grund, Urheber), die nur gemeinsam einen Sinn haben, plus die
-            // Pflichtprüfung des Grundes. Der Service ist die gemeinsame Wahrheit von Detailseite,
-            // Sammelaktion und Tool (ADR 0024).
-            if (array_key_exists('billing_excluded', $arguments)) {
-                $userId = $context->user->id ?? null;
+                    // Die Abrechnungs-Ausnahme läuft NICHT über die Feldschleife: an ihr hängen drei Felder
+                    // (Zeitstempel, Grund, Urheber), die nur gemeinsam einen Sinn haben, plus die
+                    // Pflichtprüfung des Grundes. Der Service ist die gemeinsame Wahrheit von Detailseite,
+                    // Sammelaktion und Tool (ADR 0024).
+                    if (array_key_exists('billing_excluded', $arguments)) {
+                        $userId = $context->user->id ?? null;
 
-                $result = app(BillingExclusionService::class)->setExclusion(
-                    $teamId,
-                    (int) $emp->tenant_id,
-                    [$emp->id],
-                    (bool) $arguments['billing_excluded'],
-                    $arguments['billing_exclusion_reason'] ?? null,
-                    $userId !== null ? (int) $userId : null,
-                );
+                        $result = app(BillingExclusionService::class)->setExclusion(
+                            $teamId,
+                            (int) $emp->tenant_id,
+                            [$emp->id],
+                            (bool) $arguments['billing_excluded'],
+                            $arguments['billing_exclusion_reason'] ?? null,
+                            $userId !== null ? (int) $userId : null,
+                        );
 
-                if (! $result['ok']) {
-                    return ToolResult::error($result['code'] ?? 'VALIDATION_ERROR', $result['message']);
+                        if (! $result['ok']) {
+                            $failure = ToolResult::error($result['code'] ?? 'VALIDATION_ERROR', $result['message']);
+                            throw new \RuntimeException('rollback');
+                        }
+
+                        $emp->refresh();
+                    }
+
+                    // Der Typ läuft NICHT über die Feldschleife: an ihm hängt die Lizenz-Verteilungskaskade
+                    // (ADR 0019). Ein direktes Setzen ließ hier bis zur Sammelaktion ein totes
+                    // `function_system` und eine Verteilung zurück, die die Stammdaten nicht mehr hergaben.
+                    // Der Service ist die gemeinsame Wahrheit von UI, Detailseite und Sammelaktion.
+                    if (array_key_exists('holder_type', $arguments) && $arguments['holder_type'] !== '') {
+                        $result = app(HolderTypeService::class)->setType(
+                            $teamId,
+                            (int) $emp->tenant_id,
+                            [$emp->id],
+                            (string) $arguments['holder_type'],
+                        );
+
+                        if (! $result['ok']) {
+                            $failure = ToolResult::error($result['code'] ?? 'VALIDATION_ERROR', $result['message']);
+                            throw new \RuntimeException('rollback');
+                        }
+
+                        $emp->refresh();
+                    }
+                });
+            } catch (\RuntimeException $e) {
+                if ($failure !== null) {
+                    return $failure;
                 }
-
-                $emp->refresh();
-            }
-
-            // Der Typ läuft NICHT über die Feldschleife: an ihm hängt die Lizenz-Verteilungskaskade
-            // (ADR 0019). Ein direktes Setzen ließ hier bis zur Sammelaktion ein totes
-            // `function_system` und eine Verteilung zurück, die die Stammdaten nicht mehr hergaben.
-            // Der Service ist die gemeinsame Wahrheit von UI, Detailseite und Sammelaktion.
-            if (array_key_exists('holder_type', $arguments) && $arguments['holder_type'] !== '') {
-                $result = app(HolderTypeService::class)->setType(
-                    $teamId,
-                    (int) $emp->tenant_id,
-                    [$emp->id],
-                    (string) $arguments['holder_type'],
-                );
-
-                if (! $result['ok']) {
-                    return ToolResult::error($result['code'] ?? 'VALIDATION_ERROR', $result['message']);
-                }
-
-                $emp->refresh();
+                throw $e;
             }
 
             $emp->load('costCenter');

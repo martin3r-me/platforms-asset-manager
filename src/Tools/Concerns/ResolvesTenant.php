@@ -142,7 +142,7 @@ trait ResolvesTenant
      * @param  callable(): iterable<array<string, mixed>>  $rowsFor  Auswertung im aktiven Tenant-Kontext.
      * @return list<array<string, mixed>>
      */
-    protected function rowsPerTenant(int $teamId, ?int $tenantId, callable $rowsFor): array
+    protected function rowsPerTenant(int $teamId, ?int $tenantId, callable $rowsFor, bool $onlyControlling = false): array
     {
         if ($tenantId !== null) {
             TenantContext::forceTenant($tenantId);
@@ -153,6 +153,13 @@ trait ResolvesTenant
         $rows = [];
 
         foreach ($this->tenantNames($teamId) as $id => $name) {
+            // Kosten-Tools (#961): ein Tenant mit abgeschaltetem Controlling (ADR 0008) liefert auch im
+            // "all"-Modus keine Kostenzahlen — die Team-Prüfung oben gilt „an", sobald IRGENDEIN Tenant
+            // Controlling nutzt, und ließ sonst die Zahlen aller Tenants durch.
+            if ($onlyControlling && ! app(\Platform\AssetManager\Services\ControllingContext::class)->enabledFor($teamId, (int) $id)) {
+                continue;
+            }
+
             TenantContext::forceTenant((int) $id);
 
             foreach ($rowsFor() as $row) {

@@ -79,7 +79,7 @@ class TopEmployeesByCostTool implements ToolContract, ToolMetadataContract
                     'licenses'            => $r['licenses'],
                     'costlines'           => $r['costlines'],
                     'total'               => $r['total'],
-                ]));
+                ]), onlyControlling: true);
 
             return ToolResult::success([
                 'holders'      => $rows,

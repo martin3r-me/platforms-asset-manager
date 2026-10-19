@@ -42,10 +42,6 @@ class DeviceStatusOverviewTool implements ToolContract, ToolMetadataContract
         return [
             'type' => 'object',
             'properties' => array_merge([
-                'tenant_id' => [
-                    'type'        => 'integer',
-                    'description' => 'Optional: nur Geräte dieses Tenants. Gültige IDs siehe "tenants" in der Antwort.',
-                ],
                 'status' => [
                     'type'        => 'string',
                     'enum'        => array_merge(AssetDevice::LIFECYCLE_STATUSES, ['none']),
@@ -68,11 +64,15 @@ class DeviceStatusOverviewTool implements ToolContract, ToolMetadataContract
                 ->orderByDesc('is_default')->orderBy('name')
                 ->get(['id', 'name', 'is_default']);
 
-            // Tenant-Filter validieren (muss zum Team gehören) — sonst klare Fehlermeldung statt leerem Ergebnis.
-            $tenantId = isset($arguments['tenant_id']) ? (int) $arguments['tenant_id'] : null;
-            if ($tenantId !== null && ! $tenants->contains('id', $tenantId)) {
-                return ToolResult::error('INVALID_TENANT', "Tenant {$tenantId} gehört nicht zu diesem Team.");
+            // Standard-Tenant-Auflösung wie in allen anderen Tools (#962, ADR 0016): Default ist die
+            // gespeicherte Auswahl, ein fremder Tenant ist NOT_FOUND. Vorher filterten Global Scope
+            // UND forTenant() gleichzeitig — ein expliziter anderer Tenant lieferte 0 Geräte, ohne
+            // User-Kontext kamen alle Tenants gemischt.
+            [$tenantId, $tenantError] = $this->resolveTenant($arguments, $context, $teamId);
+            if ($tenantError) {
+                return $tenantError;
             }
+            TenantContext::forceTenant($tenantId);
 
             $status = isset($arguments['status']) ? (string) $arguments['status'] : null;
             $validStatuses = array_merge(AssetDevice::LIFECYCLE_STATUSES, ['none']);
@@ -80,7 +80,7 @@ class DeviceStatusOverviewTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('INVALID_STATUS', "Unbekannter Status '{$status}'. Erlaubt: " . implode(', ', $validStatuses));
             }
 
-            $base = fn () => AssetDevice::where('team_id', $teamId)->forTenant($tenantId);
+            $base = fn () => AssetDevice::where('team_id', $teamId);
 
             // Stückzahl je Status (immer für die gewählte Tenant-Sicht, unabhängig vom status-Filter).
             $countsByStatus = [];

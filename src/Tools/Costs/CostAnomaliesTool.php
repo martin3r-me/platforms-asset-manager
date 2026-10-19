@@ -70,7 +70,7 @@ class CostAnomaliesTool implements ToolContract, ToolMetadataContract
             // vollstehen?" ließe sich dann nicht mehr beantworten. Deshalb ein Block je Tenant.
             $perTenant = $this->rowsPerTenant($teamId, $tenantId, fn () => [
                 app(CostAggregationService::class)->anomalies($teamId),
-            ]);
+            ], onlyControlling: true);
 
             if ($tenantId !== null) {
                 return ToolResult::success(array_merge($perTenant[0], ['currency' => 'EUR']));
