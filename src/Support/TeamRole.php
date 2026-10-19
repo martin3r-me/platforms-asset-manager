@@ -41,14 +41,38 @@ final class TeamRole
         // genau der teure Teil, den wir vermeiden wollen. `current_team_id` ist die Spalte, aus
         // der der Accessor sein Team ableitet — fuer denselben User liefert er innerhalb eines
         // Requests dasselbe Team, damit ist der Schluessel ausreichend fein.
-        $key = ($user->getAuthIdentifier() ?? 'guest') . ':' . ($user->current_team_id ?? 'none');
+        $key = ($user->getAuthIdentifier() ?? 'guest') . ':current:' . ($user->current_team_id ?? 'none');
+
+        if (array_key_exists($key, self::$resolved)) {
+            return self::$resolved[$key];
+        }
+
+        $teamId = $user->currentTeam?->id;
+
+        return self::$resolved[$key] = $teamId !== null && self::isOwnerOrAdminOf($user, (int) $teamId);
+    }
+
+    /**
+     * Owner/Admin eines **bestimmten** Teams — für die MCP-Tools (#943).
+     *
+     * Ein Tool schreibt in das Team seines Kontexts (`core__team__switch` setzt nur das Session-Team,
+     * nicht `users.current_team_id`). Geprüft werden muss deshalb die Rolle in GENAU diesem Team: wer
+     * im eigenen currentTeam Admin, im gewechselten Team aber nur Member ist, darf dort nicht schreiben.
+     */
+    public static function isOwnerOrAdminOf(?Authenticatable $user, int $teamId): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        $key = ($user->getAuthIdentifier() ?? 'guest') . ':team:' . $teamId;
 
         if (array_key_exists($key, self::$resolved)) {
             return self::$resolved[$key];
         }
 
         $role = $user->teams()
-            ->where('team_id', $user->currentTeam?->id)
+            ->where('team_id', $teamId)
             ->first()?->pivot?->role;
 
         return self::$resolved[$key] = $role !== null

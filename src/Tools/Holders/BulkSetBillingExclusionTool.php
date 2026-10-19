@@ -79,7 +79,7 @@ class BulkSetBillingExclusionTool implements ToolContract, ToolMetadataContract
             TenantContext::forceTenant($tenantId);
 
             // Schreibrechte (ADR 0004): dieselbe Grenze wie im UI, unabhängig vom Kanal.
-            if (! Gate::forUser($context->user)->allows('asset-manager.manage')) {
+            if (! Gate::forUser($context->user)->allows('asset-manager.manage', [$teamId])) {
                 return ToolResult::error('ACCESS_DENIED', 'Diese Aktion erfordert die Rolle Owner oder Admin im Team.');
             }
 

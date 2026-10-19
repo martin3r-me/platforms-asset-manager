@@ -17,27 +17,33 @@ require __DIR__ . '/bootstrap.php';
 use Platform\AssetManager\Support\TeamRole;
 
 /** Zaehlt Zugriffe auf teams() und auf den currentTeam-Accessor. */
-function am_stub_user(?string $role, int $userId = 1, int $teamId = 7): object
+function am_stub_user(?string $role, int $userId = 1, int $teamId = 7, array $rolesByTeam = []): object
 {
-    return new class($role, $userId, $teamId) implements \Illuminate\Contracts\Auth\Authenticatable {
+    return new class($role, $userId, $teamId, $rolesByTeam) implements \Illuminate\Contracts\Auth\Authenticatable {
         public int $teamsCalls       = 0;
         public int $currentTeamCalls = 0;
         public ?int $current_team_id;
 
-        public function __construct(private ?string $role, private int $userId, private int $teamId)
+        /** @param array<int, ?string> $rolesByTeam abweichende Rolle je Team (sonst $role) */
+        public function __construct(private ?string $role, private int $userId, private int $teamId, private array $rolesByTeam = [])
         {
             $this->current_team_id = $teamId;
         }
 
-        /** Fluent-Stub fuer $user->teams()->where(...)->first()?->pivot?->role */
+        /** Fluent-Stub fuer $user->teams()->where('team_id', X)->first()?->pivot?->role */
         public function teams(): object
         {
             $this->teamsCalls++;
-            $role = $this->role;
 
-            return new class($role) {
-                public function __construct(private ?string $role) {}
-                public function where($column, $value = null): static { return $this; }
+            return new class($this->role, $this->rolesByTeam) {
+                public function __construct(private ?string $role, private array $rolesByTeam) {}
+                public function where($column, $value = null): static
+                {
+                    if ($column === 'team_id' && array_key_exists((int) $value, $this->rolesByTeam)) {
+                        $this->role = $this->rolesByTeam[(int) $value];
+                    }
+                    return $this;
+                }
                 public function first(): ?object
                 {
                     if ($this->role === null) {
@@ -61,7 +67,8 @@ function am_stub_user(?string $role, int $userId = 1, int $teamId = 7): object
         {
             if ($name === 'currentTeam') {
                 $this->currentTeamCalls++;
-                return new class($this->teamId) {
+                // Wie der echte Accessor: folgt current_team_id.
+                return new class($this->current_team_id ?? $this->teamId) {
                     public function __construct(public int $id) {}
                 };
             }
@@ -131,5 +138,14 @@ TeamRole::flushResolved();
 TeamRole::isOwnerOrAdmin($fresh);
 
 check('flushResolved: loest danach neu auf',        2,     $fresh->teamsCalls);
+
+
+// --- 6) Rolle in einem BESTIMMTEN Team (#943, MCP-Kontext-Team) -----------------------------
+TeamRole::flushResolved();
+$cross = am_stub_user('owner', userId: 30, teamId: 7, rolesByTeam: [9 => 'member']);
+check('Admin im currentTeam: erlaubt',                 true,  TeamRole::isOwnerOrAdmin($cross));
+check('Kontext-Team, dort nur Member: verweigert',     false, TeamRole::isOwnerOrAdminOf($cross, 9));
+check('Kontext-Team = currentTeam: erlaubt',           true,  TeamRole::isOwnerOrAdminOf($cross, 7));
+check('Gast in beliebigem Team: verweigert',           false, TeamRole::isOwnerOrAdminOf(null, 9));
 
 check_summary();

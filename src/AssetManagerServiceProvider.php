@@ -79,7 +79,11 @@ class AssetManagerServiceProvider extends ServiceProvider
         // einheitlich Owner/Admin des aktuellen Teams. Eine Wahrheitsquelle (TeamRole::isOwnerOrAdmin),
         // die UI (Gate::authorize / canManage) und Tools (Gate::forUser($context->user)->allows(...))
         // teilen, damit die Berechtigungsgrenze nicht vom Kanal abhängt.
-        Gate::define('asset-manager.manage', fn ($user) => \Platform\AssetManager\Support\TeamRole::isOwnerOrAdmin($user));
+        // Optionales Team-Argument (#943): MCP-Tools prüfen gegen das Team ihres Kontexts, nicht gegen
+        // das currentTeam des Users — `Gate::forUser($u)->allows('asset-manager.manage', [$teamId])`.
+        Gate::define('asset-manager.manage', fn ($user, ?int $teamId = null) => $teamId !== null
+            ? \Platform\AssetManager\Support\TeamRole::isOwnerOrAdminOf($user, $teamId)
+            : \Platform\AssetManager\Support\TeamRole::isOwnerOrAdmin($user));
 
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
 

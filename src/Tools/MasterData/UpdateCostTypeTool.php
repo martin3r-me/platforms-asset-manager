@@ -82,7 +82,7 @@ class UpdateCostTypeTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('CONTROLLING_DISABLED', 'Die Controlling-/Kosten-Schicht ist für dieses Team deaktiviert (Modul-Einstellungen). Kosten, Kostenpositionen und Stammdaten sind daher nicht verfügbar.');
             }
 
-            if (! Gate::forUser($context->user)->allows('asset-manager.manage')) {
+            if (! Gate::forUser($context->user)->allows('asset-manager.manage', [$teamId])) {
                 return ToolResult::error('ACCESS_DENIED', 'Diese Aktion erfordert die Rolle Owner oder Admin im Team.');
             }
 

@@ -74,7 +74,7 @@ class TriggerSyncTool implements ToolContract, ToolMetadataContract
             }
 
             // Berechtigung wie im UI: nur Owner/Admin dürfen synchronisieren
-            if (!Gate::forUser($context->user)->allows('sync', AssetDevice::class)) {
+            if (!Gate::forUser($context->user)->allows('asset-manager.manage', [$teamId])) {
                 return ToolResult::error('ACCESS_DENIED', 'Sync erfordert die Rolle Owner oder Admin im Team.');
             }
 
