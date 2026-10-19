@@ -17,7 +17,7 @@
                         <option value="{{ $cat->id }}">{{ $cat->name }}</option>
                     @endforeach
                 </x-asset-manager-select>
-                @error('cCategoryId') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
+                @error('cCategoryId') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
             </div>
             <div>
                 <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Status *</label>
@@ -34,7 +34,7 @@
         <div>
             <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Name *</label>
             <x-asset-manager-input size="sm" type="text" wire:model="cName" placeholder="z. B. Logitech MX Keys" />
-            @error('cName') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
+            @error('cName') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -60,7 +60,7 @@
                     <option value="{{ $emp->id }}">{{ $emp->name }}</option>
                 @endforeach
             </x-asset-manager-select>
-            @error('cAssigneeId') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
+            @error('cAssigneeId') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
         </div>
 
         <div class="rounded-lg border border-[color:var(--am-border)] p-3 space-y-3">
@@ -73,12 +73,12 @@
                 <div>
                     <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Kaufpreis (€)</label>
                     <x-asset-manager-input size="sm" type="number" step="0.01" min="0" wire:model="cPurchasePrice" />
-                    @error('cPurchasePrice') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
+                    @error('cPurchasePrice') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
                 </div>
                 <div>
                     <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">AfA (Monate)</label>
                     <x-asset-manager-input size="sm" type="number" min="1" max="240" wire:model="cDepreciationMonths" />
-                    @error('cDepreciationMonths') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
+                    @error('cDepreciationMonths') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
                 </div>
             </div>
         </div>

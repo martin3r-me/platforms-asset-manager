@@ -260,6 +260,27 @@ foreach (collectFiles($root . '/src/Models', '.php') as $modelFile) {
         . ' Im Reset ergänzen oder mit Grund in $resetKeep dieses Guardrails aufnehmen.';
 }
 
+// ---- Check 8: jedes benutzte --am-*-Token ist im Theme definiert ------------------------
+// Eine nicht definierte CSS-Variable löst zu nichts auf — die Eigenschaft fällt still weg. So waren
+// Validierungsfehler farblos (--am-danger statt --am-error) und Trennlinien unsichtbar (#893).
+// Kein Lint und kein Render-Fehler zeigt das; nur dieser Abgleich.
+$themeFile = $root . '/resources/views/components/theme.blade.php';
+preg_match_all('/(--am-[a-z0-9-]+)\s*:/', (string) file_get_contents($themeFile), $defined);
+$definedTokens = array_flip($defined[1]);
+$undefinedTokens = [];
+foreach (collectFiles($root . '/resources/views', '.blade.php') as $view) {
+    preg_match_all('/var\(\s*(--am-[a-z0-9-]+)/', (string) file_get_contents($view), $used);
+    foreach ($used[1] as $token) {
+        if (! isset($definedTokens[$token])) {
+            $undefinedTokens[$token][] = relpath($root, $view);
+        }
+    }
+}
+foreach ($undefinedTokens as $token => $files) {
+    $failures[] = "Check 8 (design tokens): {$token} wird benutzt, ist in theme.blade.php aber nicht definiert ("
+        . implode(', ', array_unique($files)) . ').';
+}
+
 // ---- Report ---------------------------------------------------------------------------
 echo "Asset-Manager static guardrails\n";
 echo "  Tools:    {$toolCount} found, " . ($toolCount - count($unregistered)) . " registered\n";

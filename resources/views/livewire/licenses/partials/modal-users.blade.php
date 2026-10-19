@@ -47,7 +47,7 @@
                     </thead>
                     <tbody>
                         @foreach($rows as $row)
-                            <tr class="border-b border-[color:var(--am-border-subtle)] last:border-0">
+                            <tr class="border-b border-[color:var(--am-border)] last:border-0">
                                 <td class="py-1.5 px-1">
                                     <div class="flex items-center gap-1.5 min-w-0">
                                         @if($row['holder'])

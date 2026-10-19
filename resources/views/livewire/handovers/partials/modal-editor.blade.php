@@ -14,12 +14,12 @@
                         <option value="{{ $e->id }}">{{ $e->display_name ?: $e->user_principal_name }}</option>
                     @endforeach
                 </x-asset-manager-select>
-                @error('fHolderId') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
+                @error('fHolderId') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
             </div>
             <div>
                 <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Ausgabedatum</label>
                 <x-asset-manager-input size="sm" type="date" wire:model="fIssuedAt" />
-                @error('fIssuedAt') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
+                @error('fIssuedAt') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
             </div>
         </div>
 
@@ -31,7 +31,7 @@
                     <input type="checkbox" wire:model.live="includeIssued" class="rounded"> belegte zeigen
                 </label>
             </div>
-            @error('fLines') <p class="text-[10px] text-[var(--am-danger)]">{{ $message }}</p> @enderror
+            @error('fLines') <p class="text-[10px] text-[var(--am-error)]">{{ $message }}</p> @enderror
 
             @foreach($fLines as $i => $line)
                 <div wire:key="line-{{ $i }}-{{ $line['id'] ?? 'new' }}" class="rounded-lg border border-[color:var(--am-border)] p-2 space-y-2 {{ !empty($line['returned_at']) ? 'opacity-60 bg-[var(--am-bg)]' : '' }}">
@@ -55,7 +55,7 @@
                                     @endif
                                 @endforeach
                             </x-asset-manager-select>
-                            @error('fLines.'.$i.'.device_id') <p class="text-[10px] text-[var(--am-danger)]">{{ $message }}</p> @enderror
+                            @error('fLines.'.$i.'.device_id') <p class="text-[10px] text-[var(--am-error)]">{{ $message }}</p> @enderror
                         </div>
                     @endif
 
@@ -131,7 +131,7 @@
         <div>
             <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Notiz (Protokoll)</label>
             <x-asset-manager-textarea wire:model="fNotes" rows="2" />
-            @error('fNotes') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
+            @error('fNotes') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
         </div>
     </div>
 

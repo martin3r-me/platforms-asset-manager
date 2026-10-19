@@ -208,29 +208,29 @@
                 </thead>
                 <tbody>
                     @foreach($fn['internet'] as $line)
-                        <tr class="border-b border-[var(--am-border-subtle)]">
+                        <tr class="border-b border-[var(--am-border)]">
                             <td class="py-1.5 pr-3">Internet {{ $line['item'] }} <span class="font-mono text-[10px] text-[var(--am-text-muted)]">{{ $line['kennung'] }}</span></td>
                             <td class="py-1.5 pr-3">{{ $line['created'] ? 'neue Leitung' : 'Kostenstelle der Leitung' }}</td>
                             <td class="py-1.5 text-right tabular-nums">{{ $money($line['amount']) }}</td>
                         </tr>
                     @endforeach
                     @if($tel)
-                        <tr class="border-b border-[var(--am-border-subtle)]">
+                        <tr class="border-b border-[var(--am-border)]">
                             <td class="py-1.5 pr-3">RingCentral-Lizenzen auf Personen</td>
                             <td class="py-1.5 pr-3">{{ $tel['person_seats'] }} × {{ $money($tel['unit_net']) }} · Kostenstelle der Person</td>
                             <td class="py-1.5 text-right tabular-nums">{{ $money($tel['persons_amount']) }}</td>
                         </tr>
-                        <tr class="border-b border-[var(--am-border-subtle)]">
+                        <tr class="border-b border-[var(--am-border)]">
                             <td class="py-1.5 pr-3">RingCentral-Lizenzen ohne Person</td>
                             <td class="py-1.5 pr-3">{{ $tel['pool_seats'] }} Plätze · Sammelstelle</td>
                             <td class="py-1.5 text-right tabular-nums">{{ $money($tel['pool_amount']) }}</td>
                         </tr>
-                        <tr class="border-b border-[var(--am-border-subtle)]">
+                        <tr class="border-b border-[var(--am-border)]">
                             <td class="py-1.5 pr-3">Anlagenanschluss ({{ $tel['channels'] }} Kanäle)</td>
                             <td class="py-1.5 pr-3">Sammelstelle</td>
                             <td class="py-1.5 text-right tabular-nums">{{ $money($tel['fixed_net']) }}</td>
                         </tr>
-                        <tr class="border-b border-[var(--am-border-subtle)]">
+                        <tr class="border-b border-[var(--am-border)]">
                             <td class="py-1.5 pr-3">Verbindungen</td>
                             <td class="py-1.5 pr-3">Sammelstelle</td>
                             <td class="py-1.5 text-right tabular-nums">{{ $money($tel['usage_net']) }}</td>

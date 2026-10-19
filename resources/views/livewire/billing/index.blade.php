@@ -437,7 +437,7 @@
             <div>
                 <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Name *</label>
                 <x-asset-manager-input size="sm" type="text" wire:model="fName" placeholder="z. B. Broich" />
-                @error('fName') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
+                @error('fName') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
             </div>
 
             <div class="rounded-lg border border-[color:var(--am-border)] p-3 space-y-3">
@@ -446,7 +446,7 @@
                     <div>
                         <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Kundennummer oder Kunden-ID</label>
                         <x-asset-manager-input size="sm" type="text" wire:model="fCustomerId" placeholder="z. B. 6010200" />
-                        @error('fCustomerId') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
+                        @error('fCustomerId') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
                     </div>
                     <div>
                         <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Bezeichnung</label>
@@ -463,12 +463,12 @@
                     <div>
                         <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Auftragsnummer</label>
                         <x-asset-manager-input size="sm" type="text" wire:model="fOrderNumber" placeholder="z. B. KS-1800-1800" />
-                        @error('fOrderNumber') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
+                        @error('fOrderNumber') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
                     </div>
                     <div>
                         <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Zahlungsziel (Tage)</label>
                         <x-asset-manager-input size="sm" type="number" min="0" max="365" wire:model="fDueInDays" placeholder="z. B. 14" />
-                        @error('fDueInDays') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
+                        @error('fDueInDays') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
                     </div>
                 </div>
                 <p class="text-[10px] text-[var(--am-text-muted)]">
@@ -481,7 +481,7 @@
                     <div>
                         <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Käuferreferenz</label>
                         <x-asset-manager-input size="sm" type="text" wire:model="fBuyerReference" placeholder="z. B. CW-1520-1520" />
-                        @error('fBuyerReference') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
+                        @error('fBuyerReference') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
                     </div>
                 </div>
                 <p class="text-[10px] text-[var(--am-text-muted)]">
@@ -498,17 +498,17 @@
                     <div>
                         <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Artikelnummer (Commerce)</label>
                         <x-asset-manager-input size="sm" type="text" wire:model="fSku" placeholder="z. B. IT-5001" />
-                        @error('fSku') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
+                        @error('fSku') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
                     </div>
                     <div>
                         <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Rückfallpreis (€ netto)</label>
                         <x-asset-manager-input size="sm" type="number" step="0.01" min="0" wire:model="fFallbackPrice" placeholder="80.00" />
-                        @error('fFallbackPrice') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
+                        @error('fFallbackPrice') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
                     </div>
                     <div>
                         <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Steuersatz (%)</label>
                         <x-asset-manager-input size="sm" type="number" step="1" min="0" max="100" wire:model="fVat" placeholder="19" />
-                        @error('fVat') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
+                        @error('fVat') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
                     </div>
                 </div>
                 <p class="text-[10px] text-[var(--am-text-muted)]">
@@ -526,7 +526,7 @@
                             <option value="{{ $value }}">{{ $label }}</option>
                         @endforeach
                     </x-asset-manager-select>
-                    @error('fBasis') <p class="text-[10px] text-[var(--am-danger)] mt-0.5">{{ $message }}</p> @enderror
+                    @error('fBasis') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
                 </div>
                 <div>
                     <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Ausgeschlossene Domains</label>

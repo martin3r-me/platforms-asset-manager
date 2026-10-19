@@ -81,7 +81,7 @@
                         </thead>
                         <tbody>
                             @foreach($lines as $line)
-                                <tr class="border-b border-[var(--am-border-subtle)] last:border-0 align-top">
+                                <tr class="border-b border-[var(--am-border)] last:border-0 align-top">
                                     <td class="py-2 pr-3">
                                         <div>{{ $line->edition }}</div>
                                         @if($line->discount_percent > 0)

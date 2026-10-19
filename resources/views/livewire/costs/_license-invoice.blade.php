@@ -157,7 +157,7 @@
                     </thead>
                     <tbody>
                         @foreach($lic['lines'] as $line)
-                            <tr class="border-b border-[var(--am-border-subtle)] last:border-0">
+                            <tr class="border-b border-[var(--am-border)] last:border-0">
                                 <td class="py-1.5 pr-3">{{ $line['edition'] }}</td>
                                 <td class="py-1.5 pr-3">
                                     @if($line['matched'])

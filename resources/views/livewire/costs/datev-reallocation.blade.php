@@ -258,7 +258,7 @@
                                             <th class="px-2 py-1.5 text-left font-medium">Buchungstext</th>
                                         </tr>
                                     </thead>
-                                    <tbody class="divide-y divide-[color:var(--am-border-subtle)] font-mono">
+                                    <tbody class="divide-y divide-[color:var(--am-border)] font-mono">
                                         @foreach($plan['bookings'] as $booking)
                                             <tr class="{{ str_contains($booking['text'], '|diverse]') ? 'bg-[var(--am-bg)]' : '' }}">
                                                 <td class="px-2 py-1 text-right tabular-nums">{{ number_format($booking['amount_cents'] / 100, 2, ',', '.') }}</td>
