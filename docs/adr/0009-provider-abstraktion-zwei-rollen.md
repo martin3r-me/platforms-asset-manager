@@ -1,6 +1,9 @@
 # Provider-Abstraktion: zwei Rollen (MDM vs. Eigentum), `Connector` wird provider-generisch
 
-Status: akzeptiert (beschlossen 2026-06-22, Umsetzung steht aus)
+Status: akzeptiert, teilweise umgesetzt (beschlossen 2026-06-22). Gebaut: Schema `asset_device_sources`
+samt Backfill, `provider`-Feld am Connector, eine `intune`-Quellzeile je Gerät (7d1c065). Offen: der
+`DeviceSyncProvider`-Contract, der Reconcile pro Quelle, das Unique `(tenant_id, provider)` und eine
+Provider-Auswahl in der Oberfläche — bewusst erst mit einer zweiten Quelle (Dev-Issue #891).
 
 Kontext: `AssetDevice` und der Sync sind heute Intune-verdrahtet (`intune_id`, `raw_data` = Graph-Payload, Graph-spezifischer Job). Das Modul soll weitere Quellen anbinden (zunächst **Apple Business Manager**, perspektivisch Jamf). Diese Quellen sind **zweierlei Natur**: ein MDM kennt den *Zustand* eines Geräts, eine Beschaffungs-/Eigentumsquelle kennt den *Bestand*.
 

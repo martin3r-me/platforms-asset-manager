@@ -1,6 +1,8 @@
 # Geräte-Identität = Seriennummer; `intune_id` ist eine flüchtige Enrollment-Referenz
 
-Status: akzeptiert (beschlossen 2026-06-22, Umsetzung steht aus)
+Status: akzeptiert und umgesetzt (beschlossen 2026-06-22; gebaut in 8fc6098, Doppel-Enrollment-Fall 2026-10-19 #945).
+Offener Restpunkt: Der Unique-Index steht weiter auf `(tenant_id, intune_id)`, nicht auf der Seriennummer
+(Bewertung in Dev-Issue #892).
 
 Kontext: Der Geräte-Sync matcht eingehende Intune-Geräte heute **ausschließlich über `intune_id`** (= Intune `managedDevice`-id), und der Unique-Index ist `(tenant_id, intune_id)`. Wird ein Gerät plattgemacht / neu eingebunden / der Nutzer gewechselt, vergibt Intune eine **neue** `managedDevice`-id. Der Sync findet dann kein bestehendes Gerät → legt einen **neuen** Datensatz an, und reconcile soft-löscht den alten (alte id fehlt in der Antwort). Ergebnis: **ein physisches Gerät = zwei Zeilen** — Lifecycle, Kosten-Override, Garantie/Leasing und Verlauf gehen verloren, sogar das `owner_changed`-Event greift nicht (feuert nur bei *gleicher* id). Das **physische Gerät besteht aber weiter**; nur unser Modell verliert es.
 

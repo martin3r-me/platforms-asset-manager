@@ -54,6 +54,28 @@ Entscheidung: **Die Kostenstellen der Kunden bleiben fachliches Eigentum des Ass
   Modulgrenze dazwischen erzeugte mehr Schnittstelle als Nutzen. Die Abschaltbarkeit ist über
   [ADR 0008](0008-controlling-abschaltbare-schicht.md) ohnehin gelöst.
 
+## Geprüfte Alternative: lose Andockung an `platform-organization` (Juli 2026, nicht weiterverfolgt)
+
+Vor dieser Entscheidung lag ein Entwurf vor (Modul-Scan 2026-07-17, Dev-Discussion #19), der die
+Kostenstelle als **lose, additive Referenz** an Organization anbinden wollte, statt sie zu migrieren:
+
+- **Option A (dort vorgeschlagen):** `AssetCostCenter` bleibt Pivot-Achse und Wahrheitsquelle, bekommt
+  aber einen optionalen Verweis `org_cost_center_id` (Match über `code`, nur globale Org-Kostenstellen
+  mit `scope_entity_id = NULL`, weil Codes dort sonst mehrdeutig sind). Abteilung analog als optionaler
+  `org_entity_id` auf eine `OrganizationEntity` vom Typ `department`; der Entra-Freitext bleibt führend.
+  Organization nur als optionale Abhängigkeit (`class_exists`/`try/catch`, Muster wie HCM).
+- **Option B:** voller Link-Contract (`CostCenterLinkableInterface`, `asset_cost_centers` weicht
+  `OrganizationCostCenter`) — 40-Datei-Umbau, Neubau des Pivots, harte Abhängigkeit; verworfen.
+- **Option C:** umgekehrter Export über einen eigenen `EntityLinkProvider` (nur Sichtbarkeit in
+  Organization) — ergänzend denkbar, nicht entschieden.
+
+Warum nicht weiterverfolgt: Die Entscheidung oben trennt die **Kundenkostenstelle** grundsätzlich von
+der eigenen Orga. Option A bleibt als „Preis dieser Entscheidung" (oben) der Weg, falls einmal die
+eigenen BHG-IT-Kosten gegen die eigene Orga ausgewertet werden sollen. Die übrigen Nachbargebiete des
+Scans — Connector-Credentials → `platform-integrations` (blockiert: kein Azure-`client_credentials`-
+Provider), Mitarbeiter → HCM (HCM führt keine UPN), Gerätekosten → Core-`billables` (anderes Problem:
+Plattform-Abrechnung, nicht interne Kostenaufteilung) — sind dort bewertet und hier nicht entschieden.
+
 Verweise: [ADR 0003](0003-multi-tenant-tenant-modell.md),
 [ADR 0008](0008-controlling-abschaltbare-schicht.md),
 [ADR 0016](0016-tenant-als-zugriffsgrenze.md).

@@ -1,6 +1,8 @@
 # Terminaler Lifecycle pinnt ein Gerät gegen den Reconcile-Delete
 
-Status: akzeptiert (beschlossen 2026-06-22, Umsetzung steht aus)
+Status: akzeptiert und umgesetzt (beschlossen 2026-06-22; gebaut in 8fc6098/0e1bb2f).
+Der optionale Marker „zuletzt aus der Quelle verschwunden am …" ist als Verlaufs-Event `removed` (bzw.
+`restored` bei Wiederkehr) umgesetzt (2026-10-19, #963), nicht als eigene Spalte.
 
 Kontext: `reconcileDelete()` soft-löscht **jedes** Tenant-Gerät, dessen Schlüssel nicht in der aktuellen Provider-Antwort steht — **ohne** den `lifecycle_status` zu beachten. Ein Admin, der ein Gerät bewusst ausmustert (`retired`), als defekt (`defect`) oder verloren (`lost`) führt und es dabei aus dem MDM entrollt, würde es so beim nächsten Sync **lautlos verlieren**, obwohl er es als Inventar weiterführen will. Umgekehrt ist der manuelle Lifecycle die fachliche Wahrheit, die Provider-Präsenz nur ein Sync-Signal.
 
