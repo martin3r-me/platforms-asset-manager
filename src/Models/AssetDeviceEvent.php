@@ -79,6 +79,8 @@ class AssetDeviceEvent extends Model
             'lifecycle_changed'  => 'Lifecycle geändert',
             'issued'             => 'Ausgegeben',
             'returned'           => 'Zurückgenommen',
+            'removed'            => 'Aus Intune verschwunden',
+            'restored'           => 'Wieder aufgetaucht',
             default              => $this->description ?: $this->event_type,
         };
     }
@@ -95,6 +97,8 @@ class AssetDeviceEvent extends Model
             'lifecycle_changed'  => 'amber',
             'issued'             => 'indigo',
             'returned'           => 'gray',
+            'removed'            => 'gray',
+            'restored'           => 'emerald',
             default              => 'gray',
         };
     }

@@ -147,6 +147,14 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                 ->pluck('user_principal_name')
                 ->flip();
 
+            // Doppel-Enrollment (#945): nach einem Re-Enrollment stehen alter und neuer Intune-Eintrag
+            // desselben Geräts eine Weile parallel in Graph. Beide träfen über die Seriennummer dieselbe
+            // Zeile, und jeder Lauf drehte intune_id, Besitzer und Compliance hin und her. Deshalb pro
+            // Seriennummer nur den zuletzt synchronisierten Eintrag verarbeiten; die IDs der anderen
+            // zählen trotzdem als „gesehen", damit der Reconcile nichts entfernt.
+            [$devices, $shadowIds] = self::dedupeBySerial($devices);
+            $intuneIds = $shadowIds;
+
             foreach ($devices as $device) {
                 $intuneIds[] = $device['id'];
 
@@ -170,6 +178,7 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                 if ($existing) {
                     if ($existing->trashed()) {
                         $existing->restore();
+                        $this->recordEvent($existing, 'restored', 'Wieder in Intune aufgetaucht');
                     }
                     // Serial-Treffer mit abweichender intune_id → id auf DERSELBEN Zeile rotieren (die alte
                     // Enrollment-id existiert danach nirgends mehr; (tenant_id,intune_id) bleibt eindeutig).
@@ -266,13 +275,24 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                 // auch wenn sie aus Intune verschwinden — sie bleiben getrackter Inventar-Datensatz. NULL und
                 // nicht-terminale Status folgen weiter der Intune-Präsenz; NULL muss dafür explizit
                 // eingeschlossen werden (ein nacktes whereNotIn schlösse NULL-Zeilen aus → reconcile liefe leer).
-                $removed = $this->reconcileDelete(
-                    fn () => AssetDevice::where('tenant_id', $this->tenantId)
-                        ->where(fn ($q) => $q->whereNull('lifecycle_status')
-                                             ->orWhereNotIn('lifecycle_status', AssetDevice::TERMINAL_LIFECYCLE)),
-                    'intune_id',
-                    $intuneIds
-                );
+                $vanishingQuery = fn () => AssetDevice::where('tenant_id', $this->tenantId)
+                    ->where(fn ($q) => $q->whereNull('lifecycle_status')
+                                         ->orWhereNotIn('lifecycle_status', AssetDevice::TERMINAL_LIFECYCLE));
+
+                // Vor dem Soft-Delete (Builder-delete feuert keine Model-Events): offene Zuordnung mit
+                // HEUTE schließen und den Abgang im Verlauf vermerken (#963). Sonst schloss erst die
+                // Wiederkehr die alte Zuordnung — mit dem falschen Datum —, und der Abgang fehlte ganz.
+                if ($intuneIds !== []) {
+                    foreach ($vanishingQuery()->whereNotIn('intune_id', $intuneIds)->get() as $gone) {
+                        AssetAssignment::where('assignable_type', AssetAssignment::SUBJECT_DEVICE)
+                            ->where('assignable_id', $gone->id)
+                            ->whereNull('returned_at')
+                            ->update(['returned_at' => now(), 'updated_at' => now()]);
+                        $this->recordEvent($gone, 'removed', 'Aus Intune verschwunden');
+                    }
+                }
+
+                $removed = $this->reconcileDelete($vanishingQuery, 'intune_id', $intuneIds);
 
                 $log->update([
                     'status'          => 'success',
@@ -344,6 +364,51 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
      * (gültig 1970–2038) lehnt das mit Fehler 1292 ab und würde den GANZEN Sync sprengen.
      * Solche Sentinel-/Vor-Epoch-Werte sowie unparsbare Strings daher zu NULL normalisieren.
      */
+    /**
+     * Graph-Geräte je normalisierter Seriennummer auf EINEN Eintrag reduzieren (#945).
+     *
+     * Gewinner ist der Eintrag mit dem jüngsten `lastSyncDateTime` (ISO-8601, also als String
+     * vergleichbar); bei Gleichstand der zuerst gelieferte. Geräte ohne brauchbare Seriennummer
+     * bleiben unverändert — dort gibt es keine zweite Identität, über die sie kollidieren könnten.
+     *
+     * @param  list<array<string, mixed>>  $devices
+     * @return array{0: list<array<string, mixed>>, 1: list<string>} [verbleibende Geräte, IDs der verdrängten]
+     */
+    public static function dedupeBySerial(array $devices): array
+    {
+        $winners = [];
+        $shadow  = [];
+        $out     = [];
+
+        foreach ($devices as $index => $device) {
+            $serial = AssetDevice::normalizeSerial($device['serialNumber'] ?? null);
+            if ($serial === null) {
+                $out[$index] = $device;
+                continue;
+            }
+
+            if (! isset($winners[$serial])) {
+                $winners[$serial] = $index;
+                $out[$index]      = $device;
+                continue;
+            }
+
+            $current = $out[$winners[$serial]];
+            if ((string) ($device['lastSyncDateTime'] ?? '') > (string) ($current['lastSyncDateTime'] ?? '')) {
+                $shadow[] = (string) $current['id'];
+                unset($out[$winners[$serial]]);
+                $winners[$serial] = $index;
+                $out[$index]      = $device;
+            } else {
+                $shadow[] = (string) $device['id'];
+            }
+        }
+
+        ksort($out);
+
+        return [array_values($out), $shadow];
+    }
+
     protected function graphDateTime(?string $value): ?\Carbon\Carbon
     {
         if (empty($value)) {
