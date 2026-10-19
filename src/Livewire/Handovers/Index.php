@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Platform\AssetManager\Services\HandoverCoverageService;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceEvent;
@@ -83,6 +84,14 @@ class Index extends Component
     public function newHandover(): void
     {
         $this->startNew();
+    }
+
+    /** Ausgabe für ein Gerät ohne signiertes Protokoll erfassen — Gerät und Empfänger vorbefüllt (#887). */
+    public function newHandoverForDevice(int $deviceId): void
+    {
+        Gate::authorize('asset-manager.manage');
+
+        $this->startNew($deviceId);
     }
 
     protected function startNew(?int $deviceId = null, ?int $empId = null): void
@@ -469,6 +478,7 @@ class Index extends Component
             'devices'       => $devices,
             'openDeviceIds' => $openDeviceIds,
             'holders'     => $holders,
+            'coverage'    => app(HandoverCoverageService::class)->coverage($teamId),
         ])->layout('platform::layouts.app');
     }
 }

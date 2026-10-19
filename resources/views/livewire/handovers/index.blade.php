@@ -59,6 +59,35 @@
                 <h2 class="text-lg font-semibold text-[var(--am-text)] m-0">Geräteausgaben</h2>
             </div>
 
+            {{-- Abdeckung (#887, ADR 0028): Geräte in Nutzung mit Träger — wie viele haben ein signiertes Protokoll? --}}
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <x-asset-manager-stat-card label="Geräte in Nutzung" :value="$coverage['base']" sub="mit Träger, Lifecycle in Betrieb/offen" />
+                <x-asset-manager-stat-card label="Abgedeckt" :value="$coverage['covered']" sub="signiertes Protokoll vorhanden" />
+                <x-asset-manager-stat-card label="Ohne signiertes Protokoll" :value="$coverage['open']"
+                    value-class="{{ $coverage['open'] > 0 ? 'text-amber-700' : '' }}" sub="Übergabe nicht belegt" />
+            </div>
+
+            @if($coverage['open_devices'] !== [])
+                <details class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] px-4 py-3">
+                    <summary class="cursor-pointer text-sm text-[var(--am-text-secondary)]">
+                        Geräte ohne signiertes Protokoll{{ $coverage['open'] > count($coverage['open_devices']) ? ' (erste ' . count($coverage['open_devices']) . ')' : '' }}
+                    </summary>
+                    <ul class="mt-2 divide-y divide-[color:var(--am-border)] text-sm">
+                        @foreach($coverage['open_devices'] as $d)
+                            <li class="flex items-center justify-between gap-3 py-1.5">
+                                <span class="min-w-0 truncate">
+                                    <a href="{{ route('asset-manager.inventory.show', ['type' => 'intune', 'id' => $d['id']]) }}" wire:navigate class="text-[var(--am-text)] hover:underline">{{ $d['name'] }}</a>
+                                    <span class="text-xs text-[var(--am-text-muted)]">{{ $d['serial'] }} · {{ $d['holder'] }}</span>
+                                </span>
+                                @can('asset-manager.manage')
+                                    <button type="button" wire:click="newHandoverForDevice({{ $d['id'] }})" class="text-xs text-[var(--am-accent)] hover:underline flex-shrink-0">Ausgabe erfassen</button>
+                                @endcan
+                            </li>
+                        @endforeach
+                    </ul>
+                </details>
+            @endif
+
             <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm overflow-hidden">
                 @if($handovers->isEmpty())
                     <div class="p-8 text-center text-sm text-[var(--am-text-secondary)]">Noch keine Ausgaben erfasst.</div>
