@@ -80,6 +80,48 @@ class InvoiceSnapshotService
     }
 
     /**
+     * Bricht ab, wenn die Rechnung zu einem **früheren** Leistungsmonat gehört als die zuletzt
+     * importierte desselben Kontos (#948).
+     *
+     * Die Vodafone-Importer richten die Kostenpositionen auf die Datei aus und räumen alles ab, was
+     * darin fehlt. Eine nachträglich hochgeladene Vormonatsrechnung hätte deshalb den aktuellen Stand
+     * still zurückgedreht (Beträge, gekündigte Nummern gelöscht) — und den aktuellen Monatsstand
+     * dauerhaft vom „Neu festschreiben" ausgeschlossen. Dieselbe Rechnung noch einmal (Korrektur) und
+     * jeder neuere Monat bleiben erlaubt.
+     */
+    public function assertNotOlderThanLatest(int $tenantId, string $source, string $account, string $invoice, ?\DateTimeInterface $bookingMonth): void
+    {
+        if ($bookingMonth === null) {
+            return;
+        }
+
+        $latest = AssetInvoiceSnapshot::withoutTenantScope()
+            ->where('tenant_id', $tenantId)
+            ->where('source', $source)
+            ->where('account', $account)
+            ->where('invoice', '!=', $invoice)
+            ->whereNotNull('booking_month')
+            ->orderByDesc('booking_month')
+            ->first(['invoice', 'booking_month']);
+
+        if ($latest === null) {
+            return;
+        }
+
+        $month = Carbon::instance($bookingMonth)->startOfMonth();
+        if ($month->lt($latest->booking_month->copy()->startOfMonth())) {
+            throw new \RuntimeException(sprintf(
+                'Diese Rechnung (%s, Leistungsmonat %s) ist älter als die bereits importierte %s (%s). '
+                . 'Ein Import würde den aktuellen Kostenstand auf den alten Monat zurückdrehen — abgebrochen.',
+                $invoice,
+                $month->format('m/Y'),
+                $latest->invoice,
+                $latest->booking_month->format('m/Y'),
+            ));
+        }
+    }
+
+    /**
      * Verteilung aus den Kostenpositionen einer importierten Rechnung (Vodafone Mobilfunk/Festnetz):
      * alle aktiven Zeilen der Quelle, deren `raw_data` Rechnungskonto und -nummer trägt.
      *

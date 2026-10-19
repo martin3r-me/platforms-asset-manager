@@ -100,6 +100,12 @@ class VodafoneFixedNetImportService
 
         $centerId = AssetTeamSetting::where('team_id', $teamId)->value('telephony_cost_center_id');
 
+        // Leistungsmonat wie beim Monatsstand unten — eine ältere Rechnung würde den Stand zurückdrehen (#948).
+        $bookingMonth = $bill['period']['label'] !== null
+            ? new \DateTimeImmutable($bill['period']['label'] . '-01')
+            : $bill['period']['to'];
+        $this->snapshots->assertNotOlderThanLatest($this->tenantId, self::SOURCE, $bill['account'], $bill['invoice'], $bookingMonth);
+
         DB::beginTransaction();
 
         try {

@@ -73,6 +73,12 @@ class VodafoneInvoiceImportService
     /** @var ?array<string, AssetHolder> Rufnummern-Index der Träger, je Lauf neu aufgebaut. */
     protected ?array $holderIndex = null;
 
+    /** @var array<string, int> wie oft eine Posten-Bezeichnung in diesem Lauf schon vorkam (#967). */
+    protected array $postenSeen = [];
+
+    /** Rechnungskonto dieses Laufs — Teil der Zeilen-Identität und Grenze des Prune (#942). */
+    protected string $account = '';
+
     public function __construct(
         protected XlsxReader $reader = new XlsxReader(),
         protected InvoiceSnapshotService $snapshots = new InvoiceSnapshotService(),
@@ -92,6 +98,8 @@ class VodafoneInvoiceImportService
         $this->writtenHashes = [];
         $this->written       = [];
         $this->holderIndex   = null;
+        $this->postenSeen    = [];
+        $this->account       = '';
 
         // Tenant für den Global Scope setzen — der Importer läuft ohne UI-Kontext (Console/Upload).
         TenantContext::forceTenant($this->tenantId);
@@ -113,6 +121,9 @@ class VodafoneInvoiceImportService
             'account' => (string) ($header['B'] ?? ''),
             'date'    => $this->date($header['D'] ?? null),
         ];
+        $this->account = $period['account'];
+
+        $this->snapshots->assertNotOlderThanLatest($this->tenantId, self::SOURCE, $period['account'], $period['invoice'], $period['to']);
 
         DB::beginTransaction();
 
@@ -253,8 +264,14 @@ class VodafoneInvoiceImportService
         $stats['account_items']++;
         $code = $this->costCenterCode($row['M'] ?? null);
 
+        // Gleich benannte Posten (z. B. zweimal „Rabatt" auf verschiedenen Kostenstellen) sind
+        // verschiedene Zeilen. Der erste behält den bisherigen Schlüssel, weitere werden durchnummeriert —
+        // vorher überschrieb der zweite den ersten, und ein Betrag ging verloren (#967).
+        $n   = $this->postenSeen[$label] = ($this->postenSeen[$label] ?? 0) + 1;
+        $key = 'posten:' . $label . ($n > 1 ? '#' . $n : '');
+
         $this->upsertLine(
-            key: 'posten:' . $label,
+            key: $key,
             type: $type,
             vendor: $vendor,
             amount: $this->num($row['J'] ?? null),
@@ -284,7 +301,12 @@ class VodafoneInvoiceImportService
         array $period,
         array $raw,
     ): void {
-        $hash = sha1(implode('|', [self::SOURCE, $this->teamId, $this->tenantId, self::TYPE_KEY, $key]));
+        // Identität mit Rechnungskonto (#942): ohne das teilten sich zwei Mobilfunk-Konten eines Tenants
+        // die Zeilen gleicher Posten, und der Prune des einen löschte die des anderen.
+        $hash   = sha1(implode('|', [self::SOURCE, $this->teamId, $this->tenantId, self::TYPE_KEY, $this->account, $key]));
+        // Zeilen aus Läufen vor #942 tragen den Hash ohne Konto. Sie werden übernommen (Hash umgestellt),
+        // damit ihre ID, eine im UI gepflegte Kostenstelle und ein bewusstes Löschen erhalten bleiben.
+        $legacy = sha1(implode('|', [self::SOURCE, $this->teamId, $this->tenantId, self::TYPE_KEY, $key]));
 
         $values = [
             'cost_type_id'    => $type->id,
@@ -318,6 +340,21 @@ class VodafoneInvoiceImportService
             ->where('team_id', $this->teamId)
             ->where('import_hash', $hash)
             ->first();
+
+        if ($existing === null) {
+            $existing = AssetCostLine::withTrashed()
+                ->where('team_id', $this->teamId)
+                ->where('import_hash', $legacy)
+                ->first();
+
+            // Nur übernehmen, wenn die Altzeile zu DIESEM Konto gehört (oder noch keins trägt).
+            $legacyAccount = (string) ($existing?->raw_data['rechnungskonto'] ?? '');
+            if ($existing !== null && $legacyAccount !== '' && $legacyAccount !== $this->account) {
+                $existing = null;
+            }
+            // Im Probelauf nimmt der Rollback die Umstellung wieder mit.
+            $existing?->forceFill(['import_hash' => $hash])->saveQuietly();
+        }
 
         if ($existing) {
             // Wie beim Excel-Import: eine im UI bewusst gelöschte Zeile wird NICHT wiederbelebt.
@@ -403,10 +440,14 @@ class VodafoneInvoiceImportService
             return 0; // leere/falsche Datei — nichts löschen (Guard wie beim Excel-Import)
         }
 
+        // Nur Zeilen DIESES Rechnungskontos (#942) — ein zweites Mobilfunk-Konto desselben Tenants
+        // bleibt unberührt. Altzeilen ohne Konto im raw_data zählen zu diesem Lauf.
         return AssetCostLine::withTrashed()
             ->where('team_id', $this->teamId)
             ->where('tenant_id', $this->tenantId)
             ->where('source', self::SOURCE)
+            ->where(fn ($q) => $q->where('raw_data->rechnungskonto', $this->account)
+                ->orWhereNull('raw_data->rechnungskonto'))
             ->whereNotIn('import_hash', array_values(array_unique($this->writtenHashes)))
             ->forceDelete();
     }

@@ -297,4 +297,83 @@ ok('Rundung: echte Abweichung wird nicht ausgeglichen',
 ok('Rundung: echte Abweichung wird gemeldet (0,05 €)', ($res['rounding_unbalanced'] ?? null) === 0.05,
     'ist ' . var_export($res['rounding_unbalanced'] ?? null, true));
 
+
+// ---- 7: Zwei Rechnungskonten, gleich benannte Posten, ältere Rechnung (#942, #967, #948) ---
+
+/** Rechnung mit eigenem Konto und eigener Nummer. */
+function invoiceFor(string $account, string $nr, string $from, string $to, array $numbers, array $items = []): array
+{
+    $rows = invoice($from, $to, $numbers);
+    foreach ($rows as &$row) {
+        $row['B'] = $account;
+        $row['C'] = $nr;
+    }
+    unset($row);
+    $base = ['B' => $account, 'C' => $nr, 'D' => $to, 'E' => $from, 'F' => $to];
+    foreach ($items as [$label, $amount]) {
+        $rows[] = ['A' => 'Rechnungsposten'] + $base + ['J' => $amount, 'L' => $label, 'M' => ''];
+        $rows[0]['J'] += $amount;
+    }
+
+    return $rows;
+}
+
+$byAccount = fn (string $account) => AssetCostLine::where('source', 'vodafone_invoice')
+    ->where('raw_data', 'like', '%"rechnungskonto":"' . $account . '"%');
+
+// Konto A (bisheriges, Altzeilen) und ein zweites Mobilfunk-Konto B im selben Tenant.
+(new RowsVodafoneImport(invoiceFor('99999999', 'B-1', '15.11.2026', '14.12.2026', ['01701112233' => 30.0], [['Rabatt', -5.0]])))
+    ->import(TEAM, 'egal', 'test-b', false, TENANT);
+$aBefore = $byAccount('86839593')->count();
+ok('Konto B: Zeilen angelegt', $byAccount('99999999')->count() === 2, 'ist ' . $byAccount('99999999')->count());
+ok('Konto B löscht keine Zeilen von Konto A (#942)', $aBefore > 0, 'A ' . $aBefore);
+
+$aIds = $byAccount('86839593')->pluck('id')->sort()->values()->all();
+(new RowsVodafoneImport(invoiceFor('86839593', 'A-2', '15.12.2026', '14.01.2027', ['01638588153' => 10.0, '01738580129' => 10.0])))
+    ->import(TEAM, 'egal', 'test-a2', false, TENANT);
+ok('Konto A: Altzeilen behalten ihre ID (Hash übernommen)',
+    count(array_intersect($aIds, $byAccount('86839593')->pluck('id')->all())) === 2);
+ok('Konto A löscht keine Zeilen von Konto B (#942)', $byAccount('99999999')->count() === 2);
+
+// Gleich benannte Posten auf derselben Rechnung (#967).
+$res = (new RowsVodafoneImport(invoiceFor('99999999', 'B-2', '15.12.2026', '14.01.2027', ['01701112233' => 30.0], [['Rabatt', -5.0], ['Rabatt', -7.0]])))
+    ->import(TEAM, 'egal', 'test-b2', false, TENANT);
+ok('Zwei Posten „Rabatt“: beide Zeilen da (#967)', $byAccount('99999999')->where('label', 'Rabatt')->count() === 2);
+ok('Zwei Posten „Rabatt“: Summe −12,00 €', round((float) $byAccount('99999999')->where('label', 'Rabatt')->sum('amount'), 2) === -12.0);
+ok('Zwei Posten „Rabatt“: Rechnung geht auf', $res['reconciles'] === true);
+
+// Ältere Rechnung desselben Kontos (#948).
+$before = round((float) $byAccount('99999999')->sum('amount'), 2);
+$error  = null;
+try {
+    (new RowsVodafoneImport(invoiceFor('99999999', 'B-0', '15.10.2026', '14.11.2026', ['01701112233' => 99.0])))
+        ->import(TEAM, 'egal', 'test-b0', false, TENANT);
+} catch (\RuntimeException $e) {
+    $error = $e->getMessage();
+}
+ok('Ältere Rechnung wird abgelehnt (#948)', $error !== null && str_contains($error, 'älter'), (string) $error);
+ok('Ältere Rechnung: Kostenstand unverändert', round((float) $byAccount('99999999')->sum('amount'), 2) === $before);
+
+// Dieselbe Rechnung noch einmal (Korrektur) bleibt möglich.
+$res = (new RowsVodafoneImport(invoiceFor('99999999', 'B-2', '15.12.2026', '14.01.2027', ['01701112233' => 31.0], [['Rabatt', -5.0], ['Rabatt', -7.0]])))
+    ->import(TEAM, 'egal', 'test-b2-korr', false, TENANT);
+ok('Gleiche Rechnung erneut: erlaubt', $res['reconciles'] === true);
+
+
+
+// Zeile aus einem Lauf vor #942 (Hash ohne Konto) wird übernommen statt neu angelegt + gelöscht.
+$legacyId = AssetCostLine::create([
+    'team_id' => TEAM, 'tenant_id' => TENANT, 'label' => 'Mobilfunk alt', 'amount' => 1, 'frequency' => 'monthly',
+    'source' => 'vodafone_invoice', 'cost_center_id' => $ccPool,
+    'import_hash' => sha1(implode('|', ['vodafone_invoice', TEAM, TENANT, 'mobilfunk', '+491799998877'])),
+    'raw_data' => ['rechnungskonto' => '86839593', 'rechnung' => 'A-2'],
+])->id;
+(new RowsVodafoneImport(invoiceFor('86839593', 'A-3', '15.01.2027', '14.02.2027', ['01638588153' => 10.0, '01799998877' => 12.0])))
+    ->import(TEAM, 'egal', 'test-a3', false, TENANT);
+$legacy = AssetCostLine::find($legacyId);
+ok('Altzeile (Hash ohne Konto) behält ID', $legacy !== null);
+ok('Altzeile: Betrag aktualisiert', (float) $legacy?->amount === 12.0);
+ok('Altzeile: im UI gepflegte Kostenstelle bleibt', $legacy?->cost_center_id === $ccPool);
+ok('Altzeile: keine Dublette', AssetCostLine::where('raw_data', 'like', '%491799998877%')->count() === 1);
+
 check_summary();
