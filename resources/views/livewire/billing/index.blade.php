@@ -158,6 +158,16 @@
                             <p class="text-xs text-amber-700">{{ $preview['price_note'] }}</p>
                         @endif
 
+                        @if(($preview['warnings'] ?? []) !== [])
+                            <div class="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3">
+                                <ul class="list-disc list-inside space-y-0.5 text-sm text-sky-900">
+                                    @foreach($preview['warnings'] as $warning)
+                                        <li>{{ $warning }}</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
+
                         @if($preview['problems'] !== [])
                             <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
                                 <p class="text-xs font-semibold uppercase tracking-wider text-amber-900 mb-1">

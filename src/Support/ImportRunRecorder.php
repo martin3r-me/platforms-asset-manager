@@ -43,6 +43,7 @@ final class ImportRunRecorder
             AssetImportRun::SOURCE_VODAFONE        => $this->fromVodafone($result),
             AssetImportRun::SOURCE_TELEPHONY_SEATS => $this->fromTelephonySeats($result),
             AssetImportRun::SOURCE_VODAFONE_FIXEDNET => $this->fromVodafoneFixedNet($result),
+            AssetImportRun::SOURCE_DIRECTORY       => $this->fromDirectory($result),
             default                                => $this->fromExcel($result),
         };
 
@@ -118,6 +119,28 @@ final class ImportRunRecorder
     }
 
     // ---- Übersetzung je Quelle -----------------------------------------------------------------
+
+    /**
+     * Verzeichnis-Abgleich mit Entra (#954).
+     *
+     * @param array<string, mixed> $result
+     * @return array{0: array<string, string>, 1: list<string>, 2: string}
+     */
+    private function fromDirectory(array $result): array
+    {
+        $metrics = [
+            'Benutzer im Verzeichnis' => $this->number($result['count'] ?? 0, 0),
+            'Stillgelegt'             => $this->number($result['deactivated'] ?? 0, 0),
+        ];
+
+        $findings = [];
+        if ((int) ($result['count'] ?? 0) === 0) {
+            $findings[] = 'Graph lieferte keine Benutzer — der Abgleich hat nichts stillgelegt.';
+        }
+
+        return [$metrics, $findings, sprintf('%s Benutzer, %s stillgelegt',
+            $this->number($result['count'] ?? 0, 0), $this->number($result['deactivated'] ?? 0, 0))];
+    }
 
     /**
      * RingCentral-Benutzerliste (#931).

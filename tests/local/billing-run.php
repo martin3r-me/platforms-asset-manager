@@ -96,6 +96,32 @@ Schema::create('asset_billing_runs', function (Blueprint $t) {
     $t->timestamps();
 });
 
+// Verzeichnis-Abgleich (#954): Connector + Import-Protokoll, nur so weit wie gelesen.
+Schema::create('asset_connector_configs', function (Blueprint $t) {
+    $t->id();
+    $t->unsignedBigInteger('team_id');
+    $t->unsignedBigInteger('tenant_id')->nullable();
+    $t->boolean('enabled')->default(true);
+    $t->timestamps();
+});
+Schema::create('asset_import_runs', function (Blueprint $t) {
+    $t->id();
+    $t->unsignedBigInteger('team_id');
+    $t->unsignedBigInteger('tenant_id')->nullable();
+    $t->string('source');
+    $t->string('file_name')->nullable();
+    $t->string('batch_id')->nullable();
+    $t->boolean('dry_run')->default(false);
+    $t->string('status');
+    $t->string('headline')->nullable();
+    $t->text('error')->nullable();
+    $t->json('summary')->nullable();
+    $t->unsignedBigInteger('user_id')->nullable();
+    $t->timestamp('started_at')->nullable();
+    $t->unsignedInteger('duration_ms')->nullable();
+    $t->timestamps();
+});
+
 TenantContext::forceTenant(1);
 
 const TEAM = 7;
@@ -472,5 +498,23 @@ check('Im Voraus: vergangener Monat nicht', false, $runs->isAdvance('2026-08'));
 check('Monatsauswahl: Jahreswechsel', '2027-01', array_key_first($runs->selectablePeriods()));
 
 \Illuminate\Support\Carbon::setTestNow();
+
+
+// --- Veralteter Verzeichnis-Abgleich (#954) --------------------------------
+check('Ohne Anbindung: kein Hinweis', [], $runs->directoryWarnings($profile));
+
+\Illuminate\Support\Facades\DB::table('asset_connector_configs')->insert(['team_id' => $profile->team_id, 'tenant_id' => $profile->tenant_id, 'enabled' => true]);
+check('Anbindung, nie abgeglichen: Hinweis', 1, count($runs->directoryWarnings($profile)));
+
+$dirRun = \Platform\AssetManager\Models\AssetImportRun::withoutTenantScope()->create([
+    'team_id' => $profile->team_id, 'tenant_id' => $profile->tenant_id,
+    'source' => \Platform\AssetManager\Models\AssetImportRun::SOURCE_DIRECTORY, 'status' => 'ok', 'dry_run' => false,
+]);
+check('Frischer Abgleich: kein Hinweis', [], $runs->directoryWarnings($profile));
+check('Hinweis landet in der Vorschau', true, array_key_exists('warnings', $runs->preview($profile, '2026-10')));
+
+$dirRun->forceFill(['created_at' => now()->subDays(3)])->save();
+check('Abgleich 3 Tage alt: Hinweis', 1, count($runs->directoryWarnings($profile)));
+check('Hinweis blockiert den Lauf nicht', true, ! in_array($runs->directoryWarnings($profile)[0], $runs->preview($profile, '2026-10')['problems'], true));
 
 check_summary();

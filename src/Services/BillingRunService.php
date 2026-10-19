@@ -7,6 +7,8 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Platform\AssetManager\Models\AssetImportRun;
+use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Models\AssetBillingProfile;
 use Platform\AssetManager\Models\AssetBillingRun;
 use RuntimeException;
@@ -113,6 +115,7 @@ class BillingRunService
             'exceptions'       => $counted['exceptions'],
             'period_label'     => $this->periodLabel($period),
             'problems'         => $problems,
+            'warnings'         => $this->directoryWarnings($profile),
             'document'         => $cents === null || $quantity === 0
                 ? null
                 : $this->buildDocument($profile, $period, $quantity, $cents, $price),
@@ -231,6 +234,45 @@ class BillingRunService
                 . 'freigegeben am ' . Carbon::now()->format('d.m.Y H:i')
                 . ($userId ? ' (User ' . $userId . ')' : '') . ': kein Beleg in easybill'), 0, 1000),
         ]);
+    }
+
+    /**
+     * Hinweis, wenn der Verzeichnis-Abgleich des Tenants veraltet ist (#954). Die Zählregel stützt sich
+     * auf `is_active`, und das setzt nur der Abgleich — fiel er tagelang aus, stünden Ausgeschiedene
+     * mit auf der Rechnung. Nur ein Hinweis, kein Hindernis: ein Tenant ohne Anbindung hat keinen Abgleich.
+     *
+     * @return list<string>
+     */
+    public function directoryWarnings(AssetBillingProfile $profile): array
+    {
+        $hasConnector = AssetConnectorConfig::query()
+            ->where('team_id', $profile->team_id)
+            ->where('tenant_id', $profile->tenant_id)
+            ->where('enabled', true)
+            ->exists();
+
+        if (! $hasConnector) {
+            return [];
+        }
+
+        $last = AssetImportRun::withoutTenantScope()
+            ->where('tenant_id', $profile->tenant_id)
+            ->where('source', AssetImportRun::SOURCE_DIRECTORY)
+            ->where('status', '!=', AssetImportRun::STATUS_ERROR)
+            ->where('dry_run', false)
+            ->latest('id')
+            ->first(['created_at']);
+
+        if ($last === null) {
+            return ['Der Verzeichnis-Abgleich (Stilllegen ausgeschiedener Träger) ist für diesen Tenant noch nie gelaufen — die Menge kann Ausgeschiedene enthalten.'];
+        }
+
+        if ($last->created_at->lt(Carbon::now()->subHours(48))) {
+            return ['Der letzte erfolgreiche Verzeichnis-Abgleich ist vom ' . $last->created_at->format('d.m.Y H:i')
+                . ' — die Menge kann Ausgeschiedene enthalten. Abgleich unter „Anbindungen“ prüfen.'];
+        }
+
+        return [];
     }
 
     /** Der jüngste offene/unklare Versuch dieser Periode, falls es einen gibt. */

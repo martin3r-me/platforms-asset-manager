@@ -2,10 +2,10 @@
 
 namespace Platform\AssetManager\Tools\Sync;
 
+use Platform\AssetManager\Jobs\SyncIntuneDevicesJob;
+use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Jobs\ImportTenantUsersJob;
 use Platform\AssetManager\Jobs\SyncLicensesJob;
-use Platform\AssetManager\Models\AssetDevice;
-use Platform\AssetManager\Services\AssetDeviceService;
 use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
 use Platform\AssetManager\Tools\Concerns\ResolvesTenant;
@@ -78,35 +78,48 @@ class TriggerSyncTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('ACCESS_DENIED', 'Sync erfordert die Rolle Owner oder Admin im Team.');
             }
 
-            $status  = app(AssetDeviceService::class)->getConnectorStatus($teamId);
-            $dryRun  = (bool) ($arguments['dry_run'] ?? false);
+            $dryRun = (bool) ($arguments['dry_run'] ?? false);
 
-            if (!$status['configured']) {
-                return ToolResult::error('CONNECTOR_NOT_CONFIGURED', 'Der Connector ist nicht konfiguriert (Azure-Zugangsdaten fehlen).');
+            // Nur die Connectoren des AUFGELÖSTEN Tenants (#954). Vorher löste das Tool den Tenant auf,
+            // dispatchte dann aber team-weit — ein User mit gewähltem Kunden A synchronisierte alle Kunden.
+            // Dieselben Bedingungen wie dispatchForTeam: aktiv, konfiguriert, Admin-Consent bestätigt.
+            $connectors = AssetConnectorConfig::where('team_id', $teamId)
+                ->where('tenant_id', $tenantId)
+                ->where('enabled', true)
+                ->get()
+                ->filter(fn (AssetConnectorConfig $c) => $c->isConfigured() && $c->isConsentConfirmed())
+                ->values();
+
+            if ($connectors->isEmpty()) {
+                return ToolResult::error('CONNECTOR_NOT_CONFIGURED', 'Für diesen Tenant gibt es keinen aktiven, konfigurierten Connector mit bestätigtem Admin-Consent.');
             }
 
             if ($dryRun) {
                 return ToolResult::success([
                     'dry_run'        => true,
                     'target'         => $target,
-                    'would_dispatch' => true,
-                    'connector'      => ['configured' => $status['configured'], 'enabled' => $status['enabled']],
-                    'message'        => "Vorschau: Sync '{$target}' würde gestartet. Kein Job dispatcht.",
+                    'tenant_id'      => $tenantId,
+                    'would_dispatch' => $connectors->count(),
+                    'message'        => "Vorschau: Sync '{$target}' würde für {$connectors->count()} Connector(en) gestartet. Kein Job dispatcht.",
                 ]);
             }
 
-            // Fan-out je aktivem Connector des Teams (Multi-Tenant).
-            match ($target) {
-                'devices'  => app(AssetDeviceService::class)->dispatchSync($teamId),
-                'licenses' => SyncLicensesJob::dispatchForTeam($teamId),
-                'users'    => ImportTenantUsersJob::dispatchForTeam($teamId),
+            $job = match ($target) {
+                'devices'  => SyncIntuneDevicesJob::class,
+                'licenses' => SyncLicensesJob::class,
+                'users'    => ImportTenantUsersJob::class,
             };
+            foreach ($connectors as $connector) {
+                $job::dispatch($connector->id);
+            }
 
             return ToolResult::success([
-                'dry_run'  => false,
-                'target'   => $target,
-                'status'   => 'queued',
-                'message'  => "Sync '{$target}' wurde in die Queue gestellt. Status via asset-manager.sync.GET abfragen.",
+                'dry_run'    => false,
+                'target'     => $target,
+                'tenant_id'  => $tenantId,
+                'status'     => 'queued',
+                'dispatched' => $connectors->count(),
+                'message'    => "Sync '{$target}' wurde in die Queue gestellt. Status via asset-manager.sync.GET abfragen.",
             ]);
         } catch (\Throwable $e) {
             return ToolResult::error('EXECUTION_ERROR', 'Fehler beim Starten des Syncs: ' . $e->getMessage());

@@ -31,6 +31,9 @@ class AssetImportRun extends Model
     /** Vodafone-Festnetzrechnung: Internet + RingCentral (#931). */
     public const SOURCE_VODAFONE_FIXEDNET = 'vodafone_fixednet';
 
+    /** Verzeichnis-Abgleich mit Entra (Träger anlegen/stilllegen, ADR 0023, #954). */
+    public const SOURCE_DIRECTORY = 'directory';
+
     /** Durchgelaufen, keine Auffälligkeiten. */
     public const STATUS_OK = 'ok';
 
@@ -87,6 +90,7 @@ class AssetImportRun extends Model
             self::SOURCE_LICENSE_INVOICE => 'Lizenz-Abrechnung',
             self::SOURCE_TELEPHONY_SEATS => 'RingCentral-Benutzerliste',
             self::SOURCE_VODAFONE_FIXEDNET => 'Vodafone-Festnetz',
+            self::SOURCE_DIRECTORY       => 'Verzeichnis-Abgleich',
             default                      => $this->source,
         };
     }
@@ -100,6 +104,7 @@ class AssetImportRun extends Model
             self::SOURCE_LICENSE_INVOICE => 'sky',
             self::SOURCE_TELEPHONY_SEATS => 'indigo',
             self::SOURCE_VODAFONE_FIXEDNET => 'orange',
+            self::SOURCE_DIRECTORY       => 'emerald',
             default                      => 'gray',
         };
     }

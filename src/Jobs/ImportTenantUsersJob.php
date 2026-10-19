@@ -2,6 +2,9 @@
 
 namespace Platform\AssetManager\Jobs;
 
+use Platform\AssetManager\Support\ImportRunRecorder;
+use Platform\AssetManager\Models\AssetImportRun;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Services\HolderClassifier;
 use Platform\AssetManager\Services\HolderService;
@@ -14,9 +17,21 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
-class ImportTenantUsersJob implements ShouldQueue
+class ImportTenantUsersJob implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    /**
+     * Eindeutig je Connector wie die beiden anderen Sync-Jobs (#954): ein manueller Lauf (UI/MCP) und
+     * der 01:30-Zeitplan sollen nicht zwei Stilllegungs-Abgleiche gleichzeitig fahren. Die Sperre gibt
+     * sich nach 20 Min. selbst frei (> $timeout), damit ein abgestürzter Worker sie nicht ewig hält.
+     */
+    public int $uniqueFor = 1200;
+
+    public function uniqueId(): string
+    {
+        return (string) $this->connectorId;
+    }
 
     public int $timeout = 600;
     public int $tries   = 1;
@@ -31,6 +46,8 @@ class ImportTenantUsersJob implements ShouldQueue
         $count = 0;
         foreach (AssetConnectorConfig::where('team_id', $teamId)->where('enabled', true)->get() as $config) {
             if (!$config->isConfigured()) continue;
+            // Consent-Guard wie bei Geräte-/Lizenz-Sync: ohne Admin-Zustimmung liefe der Abruf in 403.
+            if (!$config->isConsentConfirmed()) continue;
             self::dispatch($config->id);
             $count++;
         }
@@ -62,13 +79,18 @@ class ImportTenantUsersJob implements ShouldQueue
 
         Log::info('AssetManager: Tenant-User-Import gestartet', ['connector_id' => $this->connectorId, 'tenant_id' => $tenantId]);
 
+        $startedAt = microtime(true);
+
         $users = $graph->getUsersWithLicenses($config);
         if ($users === null) {
             Log::error('AssetManager: Tenant-User-Import fehlgeschlagen', [
                 'connector_id' => $this->connectorId,
                 'error'        => $graph->lastError ?? 'unbekannt',
             ]);
-            $config->update(['sync_error' => 'Tenant-User-Import: ' . ($graph->lastError ?? 'unbekannt')]);
+            // Ins Import-Protokoll, NICHT in config.sync_error (#954): das Feld gehört dem Geräte-Sync,
+            // und dessen nächster Erfolg hätte den Fehler still überschrieben.
+            app(ImportRunRecorder::class)->recordFailure(AssetImportRun::SOURCE_DIRECTORY, $teamId, $tenantId,
+                'Verzeichnis-Abgleich: ' . ($graph->lastError ?? 'unbekannt'), null, false, null, $startedAt);
             return;
         }
 
@@ -106,6 +128,11 @@ class ImportTenantUsersJob implements ShouldQueue
         }
 
         $deactivated = $this->reconcileHolders($teamId, $tenantId, $seenUpns);
+
+        // Nachweis, dass der Abgleich lief — die Weiterberechnung zählt `is_active`, und ein still
+        // ausgefallener Abgleich rechnete Ausgeschiedene weiter ab (#954).
+        app(ImportRunRecorder::class)->record(AssetImportRun::SOURCE_DIRECTORY, $teamId, $tenantId,
+            ['count' => $count, 'deactivated' => $deactivated], null, false, null, $startedAt);
 
         Log::info('AssetManager: Tenant-User-Import abgeschlossen', [
             'connector_id' => $this->connectorId,
@@ -174,5 +201,19 @@ class ImportTenantUsersJob implements ShouldQueue
         ]);
 
         return $stale->count();
+    }
+
+    /** Unerwarteter Abbruch (Exception, Timeout): ins Import-Protokoll, damit er nicht nur in failed_jobs steht. */
+    public function failed(\Throwable $e): void
+    {
+        try {
+            $config = AssetConnectorConfig::find($this->connectorId);
+            if ($config && $config->tenant_id) {
+                app(ImportRunRecorder::class)->recordFailure(AssetImportRun::SOURCE_DIRECTORY, (int) $config->team_id,
+                    (int) $config->tenant_id, 'Verzeichnis-Abgleich abgebrochen: ' . $e->getMessage(), null, false, null);
+            }
+        } catch (\Throwable) {
+            // Protokollieren darf das Fehlschlagen nicht verdecken.
+        }
     }
 }
