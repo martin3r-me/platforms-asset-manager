@@ -10,9 +10,8 @@
  *
  * Inhalt:
  * - routing / guard / navigation / sidebar — Andockpunkte an den Core (Modul-Template-Vertrag).
- *   Hinweis: der env-Schlüssel für den Routing-Modus heißt aus der Template-Zeit noch
- *   `MODULE_TEMPLATE_MODE` (im Code nicht umbenannt — eine Umbenennung muss bestehende
- *   .env-Einträge der Host-App mitziehen).
+ *   Routing-Modus über `ASSET_MANAGER_MODE`; der Template-Schlüssel `MODULE_TEMPLATE_MODE`
+ *   wirkt als Rückfall weiter (bestehende .env-Einträge der Host-App bleiben gültig).
  * - azure — zentrale Multi-Tenant-Azure-App für alle Microsoft-Connectoren (`.env`:
  *   ASSET_MANAGER_AZURE_*). Pro Connector liegt nur das Kunden-Verzeichnis; Consent ist manuell
  *   („Anbindung prüfen"), siehe docs/connector-microsoft-onboarding.md.
@@ -32,7 +31,9 @@ return [
      * 'prefix': URL-Präfix für alle Routes
      */
     'routing' => [
-        'mode' => env('MODULE_TEMPLATE_MODE', 'path'),
+        // Eigener Schlüssel ASSET_MANAGER_MODE (#878); der Template-Name bleibt als Rückfall, damit
+        // bestehende .env-Einträge der Host-App weiter wirken.
+        'mode' => env('ASSET_MANAGER_MODE', env('MODULE_TEMPLATE_MODE', 'path')),
         'prefix' => 'asset-manager',
     ],
     
