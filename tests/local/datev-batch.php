@@ -95,6 +95,8 @@ function fails(callable $fn): ?array
 
 $sepA = snapshot('M-SEP', '2026-09-01', 100.0, ['1520' => 40.0, '8090' => 60.0]);
 $octA = snapshot('M-OKT', '2026-10-01', 50.0, ['1520' => 30.0, '2000' => 20.0]);
+// Direkt gebuchte Rechnung (eine KST) — die Buchhaltung bucht sie selbst auf 2890 (#951).
+$sepD = snapshot('I-SEP', '2026-09-01', 369.0, ['2890' => 369.0]);
 
 $service = new DatevBatchService();
 $sep     = new DateTimeImmutable('2026-09-01');
@@ -115,6 +117,8 @@ check('Benutzer festgehalten', USER, $batch->user_id);
 check('Monatsstand September gesperrt', $batch->id, $sepA->fresh()->datev_batch_id);
 check('Oktober bleibt offen', null, $octA->fresh()->datev_batch_id);
 check('Protokoll nennt die Rechnung', ['M-SEP'], array_column($batch->summary['snapshots'] ?? [], 'invoice'));
+check('Direkt gebuchte Rechnung mitgesperrt (#951)', $batch->id, $sepD->fresh()->datev_batch_id);
+check('Protokoll nennt die direkt gebuchte', ['I-SEP'], array_column($batch->summary['direct'] ?? [], 'invoice'));
 
 // ---- 2: zweiter Stapel desselben Monats ----------------------------------------------------
 

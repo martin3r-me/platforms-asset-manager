@@ -96,14 +96,24 @@ class DatevReallocationService
             ->get(['id', 'key', 'name', 'datev_account'])
             ->keyBy('id');
 
-        $blocks   = [];
-        $skipped  = [];
-        $findings = [];
+        $blocks     = [];
+        $skipped    = [];
+        $findings   = [];
+        $violations = [];
 
         foreach ($open as $snapshot) {
             $rows = array_values((array) $snapshot->distribution);
             $weights = array_map(fn ($r) => (int) round((float) $r['amount'] * 100), $rows);
             $total   = (int) round((float) $snapshot->total_net * 100);
+
+            // Verteilung ≠ Rechnungsnetto (#950): verteilt wird nach Anteilen, eine größere Lücke würde
+            // also still auf alle Kostenstellen hochskaliert (z. B. eine im UI gelöschte Zeile). Bis 1 €
+            // ist das Rundung; darüber fehlt eine Position. Lizenzrechnungen tragen nur einen Schlüssel.
+            $gap = $total - array_sum($weights);
+            if ($snapshot->source !== LicenseInvoiceImportService::SOURCE && abs($gap) >= 100) {
+                $violations[] = "Rechnung {$snapshot->invoice}: Verteilung {$this->euro(array_sum($weights))} weicht um "
+                    . "{$this->euro($gap)} vom Rechnungsnetto {$this->euro($total)} ab — Kostenpositionen prüfen und den Monatsstand neu festschreiben.";
+            }
 
             if (array_sum($weights) === 0) {
                 if ($total !== 0) {
@@ -156,6 +166,11 @@ class DatevReallocationService
         foreach ($skippedByType as $key => $cents) {
             $name = $types->firstWhere('key', $key)?->name ?? $key;
             $findings[] = "{$name}: {$this->euro($cents)} ohne DATEV-Sachkonto — nicht umgebucht (Stammdaten → Kostenart).";
+            // Ein Stapel sperrt seine Monatsstände. Ein übersprungener Betrag wäre danach nie mehr
+            // buchbar — auch nicht, wenn das Sachkonto später gepflegt wird (#949). Deshalb blockieren.
+            if ($cents !== 0) {
+                $violations[] = "{$name}: {$this->euro($cents)} ohne DATEV-Sachkonto — erst das Sachkonto an der Kostenart pflegen, sonst wäre der Betrag nach dem Stapel nicht mehr buchbar.";
+            }
         }
 
         $withoutMonth = AssetInvoiceSnapshot::withoutTenantScope()
@@ -182,7 +197,7 @@ class DatevReallocationService
             'blocks'     => $blocks,
             'skipped'    => $skipped,
             'bookings'   => $calculation['bookings'],
-            'violations' => $calculation['violations'],
+            'violations' => array_merge($violations, $calculation['violations']),
             'findings'   => $findings,
             'summary'    => $calculation['blocks'],
         ];

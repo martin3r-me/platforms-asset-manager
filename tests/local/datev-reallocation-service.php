@@ -123,17 +123,18 @@ check('Text Stil C', 'Umb. [1520|diverse] Vodafone Mobilfunk Sep26', $r['booking
 
 // ---- 4: Befunde ----------------------------------------------------------------------------
 
-check('Keine blockierenden Verstöße', [], $r['violations']);
+// Übersprungener Betrag blockiert (#949): nach dem Stapel wäre er nie mehr buchbar.
+check('Einziger Verstoß: Kostenart ohne Sachkonto', true, count($r['violations']) === 1 && str_contains($r['violations'][0], 'Sonstiges') && str_contains($r['violations'][0], 'Sachkonto'));
 check('Befund: Kostenart ohne Sachkonto', true, (bool) array_filter($r['findings'], fn ($f) => str_contains($f, 'Sonstiges') && str_contains($f, '10,00')));
 check('Befund: Monatsstand ohne Buchungsmonat', true, (bool) array_filter($r['findings'], fn ($f) => str_contains($f, '1 Rechnung') && str_contains($f, 'ohne Buchungsmonat')));
 
 snapshot('vodafone_invoice', 'M-SEP-2', '2026-09-01', 10.0, [[$tMobil, null, 10.0]]);
 $r2 = $service->prepare(TEAM, TENANT, $sep, client: '530');
-check('Anteil ohne KST blockiert', true, count($r2['violations']) === 1 && str_contains($r2['violations'][0], 'ohne Kostenstelle'));
+check('Anteil ohne KST blockiert', true, (bool) array_filter($r2['violations'], fn ($v) => str_contains($v, 'ohne Kostenstelle')));
 AssetInvoiceSnapshot::withoutTenantScope()->where('invoice', 'M-SEP-2')->delete();
 
 $r3 = $service->prepare(TEAM, TENANT, $sep, client: '530', knownCostCenters: ['1520', '2599']);
-check('DATEV-KST-Liste wird durchgereicht', true, count($r3['violations']) === 1 && str_contains($r3['violations'][0], '8090'));
+check('DATEV-KST-Liste wird durchgereicht', true, (bool) array_filter($r3['violations'], fn ($v) => str_contains($v, '8090')));
 
 $oct = $service->prepare(TEAM, TENANT, new DateTimeImmutable('2026-10-01'), client: '530');
 check('Oktober: nur der Oktober-Stand', ['H 5000 1520 680510', 'S 3000 1520 680510', 'S 2000 2000 680510'], rows($oct['bookings']));
@@ -157,5 +158,17 @@ $meta = [
     'label' => 'CTRL Umb IT Sep 2026', 'initials' => 'KI', 'created_at' => new DateTimeImmutable('2026-10-15 12:00'),
 ];
 check('Writer nimmt den September-Stapel an', [], DatevExtfWriter::fromTemplate()->violations($meta, $r['bookings']));
+
+
+// ---- #950: Verteilung weicht vom Rechnungsnetto ab -----------------------------------------
+snapshot('vodafone_invoice', 'M-SEP-GAP', '2026-09-01', 60.0, [[$tMobil, '1520', 10.0], [$tMobil, '2599', 40.0]]);
+$rGap = $service->prepare(TEAM, TENANT, $sep, client: '530');
+check('Lücke ≥ 1 € blockiert (#950)', true, (bool) array_filter($rGap['violations'], fn ($v) => str_contains($v, 'M-SEP-GAP') && str_contains($v, '10,00')));
+AssetInvoiceSnapshot::withoutTenantScope()->where('invoice', 'M-SEP-GAP')->delete();
+
+snapshot('vodafone_invoice', 'M-SEP-RND', '2026-09-01', 50.02, [[$tMobil, '1520', 10.0], [$tMobil, '2599', 40.0]]);
+$rRnd = $service->prepare(TEAM, TENANT, $sep, client: '530');
+check('Rundung < 1 € blockiert nicht', false, (bool) array_filter($rRnd['violations'], fn ($v) => str_contains($v, 'M-SEP-RND')));
+AssetInvoiceSnapshot::withoutTenantScope()->where('invoice', 'M-SEP-RND')->delete();
 
 check_summary();

@@ -64,7 +64,10 @@ class DatevBatchService
                 throw new \RuntimeException('Für ' . DatevBookingText::month($from) . ' gibt es keine offenen Monatsstände mit DATEV-Sachkonto — kein Stapel erzeugt.');
             }
 
-            $ids    = array_column($plan['snapshots'], 'id');
+            // Direkt gebuchte Rechnungen (eine KST) mitsperren (#951): die Buchhaltung hat sie schon direkt
+            // auf ihre Kostenstelle gebucht. Ohne Sperre rutschten sie nach einer nachträglich ergänzten
+            // zweiten Kostenstelle in „Teil 2" und würden ein zweites Mal von der Quell-KST umgebucht.
+            $ids    = array_merge(array_column($plan['snapshots'], 'id'), array_column($plan['direct'], 'id'));
             $locked = AssetInvoiceSnapshot::withoutTenantScope()
                 ->whereIn('id', $ids)
                 ->whereNull('datev_batch_id')
@@ -102,6 +105,7 @@ class DatevBatchService
                 'summary'        => [
                     'blocks'    => $plan['summary'],
                     'snapshots' => $plan['snapshots'],
+                    'direct'    => $plan['direct'],
                     'skipped'   => $plan['skipped'],
                     'findings'  => $plan['findings'],
                 ],
