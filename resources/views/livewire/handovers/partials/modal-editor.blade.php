@@ -1,14 +1,22 @@
 {{-- Ausgabe anlegen/bearbeiten inkl. Positionen, Rückgabe und Unterschrift. Lag bis S8b in einer
      zugeklappten rechten Sidebar (w-96) — für ein Formular dieser Länge zu eng (ADR 0012). --}}
 <x-ui-modal model="showEditor" size="lg">
-    <x-slot name="header">{{ $editId ? 'Ausgabe bearbeiten' : 'Neue Ausgabe' }}</x-slot>
+    <x-slot name="header">{{ $editId ? ($locked ? 'Ausgabe (unterschrieben)' : 'Ausgabe bearbeiten') : 'Neue Ausgabe' }}</x-slot>
 
     <div class="space-y-4">
+        {{-- Unterschrieben (#956): Kopf, Geräte und Unterschrift gesperrt. --}}
+        @if($locked)
+            <div class="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
+                @svg('heroicon-o-lock-closed', 'w-4 h-4 flex-shrink-0 mt-0.5')
+                <span>Unterschrieben am {{ $lockedSignedAt }}. Empfänger, Datum, Geräte und Unterschrift sind gesperrt — möglich sind noch Rückgaben und Zeilen-Notizen. Für weitere Geräte eine neue Ausgabe anlegen.</span>
+            </div>
+        @endif
+
         {{-- Kopf: Empfänger + Datum --}}
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
                 <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Empfänger *</label>
-                <x-asset-manager-select size="sm" wire:model="fHolderId">
+                <x-asset-manager-select size="sm" wire:model="fHolderId" :disabled="$locked">
                     <option value="">– wählen –</option>
                     @foreach($holders as $e)
                         <option value="{{ $e->id }}">{{ $e->display_name ?: $e->user_principal_name }}</option>
@@ -18,7 +26,7 @@
             </div>
             <div>
                 <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Ausgabedatum</label>
-                <x-asset-manager-input size="sm" type="date" wire:model="fIssuedAt" />
+                <x-asset-manager-input size="sm" type="date" wire:model="fIssuedAt" :disabled="$locked" />
                 @error('fIssuedAt') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
             </div>
         </div>
@@ -62,7 +70,7 @@
                     @if(empty($line['returned_at']))
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             <x-asset-manager-input size="sm" type="text" wire:model="fLines.{{ $i }}.accessories"
-                                                   placeholder="Zubehör (kommagetrennt: Ladegerät, Hülle, SIM …)" />
+                                                   placeholder="Zubehör (kommagetrennt: Ladegerät, Hülle, SIM …)" :disabled="$locked" />
                             <x-asset-manager-input size="sm" type="text" wire:model="fLines.{{ $i }}.notes"
                                                    placeholder="Notiz" />
                         </div>
@@ -92,16 +100,23 @@
                 </div>
             @endforeach
 
-            <x-asset-manager-button variant="secondary" size="sm" class="w-full" wire:click="addLine">
-                @svg('heroicon-o-plus', 'w-3.5 h-3.5') Gerät hinzufügen
-            </x-asset-manager-button>
+            @if(! $locked)
+                <x-asset-manager-button variant="secondary" size="sm" class="w-full" wire:click="addLine">
+                    @svg('heroicon-o-plus', 'w-3.5 h-3.5') Gerät hinzufügen
+                </x-asset-manager-button>
+            @endif
         </div>
 
         {{-- Unterschrift (optional/nachholbar) --}}
         <div class="rounded-lg border border-[color:var(--am-border)] p-3 space-y-2">
             <span class="text-[10px] font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Unterschrift (optional)</span>
-            <x-asset-manager-input size="sm" type="text" wire:model="fSignerName" placeholder="Name des Unterzeichners" />
+            <x-asset-manager-input size="sm" type="text" wire:model="fSignerName" placeholder="Name des Unterzeichners" :disabled="$locked" />
 
+            @if($locked)
+                @if($fSignatureData)
+                    <img src="{{ $fSignatureData }}" alt="Unterschrift" class="w-full h-32 object-contain rounded-md border border-[color:var(--am-border)] bg-[var(--am-surface)]">
+                @endif
+            @else
             <div wire:ignore
                  x-data="{
                     ctx:null, drawing:false,
@@ -126,11 +141,13 @@
                     <button type="button" @click="clear()" class="text-[10px] text-red-600 hover:text-red-700">Löschen</button>
                 </div>
             </div>
+            @endif
+            @error('fSignatureData') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
         </div>
 
         <div>
             <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Notiz (Protokoll)</label>
-            <x-asset-manager-textarea wire:model="fNotes" rows="2" />
+            <x-asset-manager-textarea wire:model="fNotes" rows="2" :disabled="$locked" />
             @error('fNotes') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
         </div>
     </div>

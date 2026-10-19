@@ -34,6 +34,14 @@ class Index extends Component
     public ?int  $editId        = null;
     public bool  $includeIssued = false; // belegte Geräte (mit offener Ausgabe) im Picker zeigen
 
+    /**
+     * Unterschriebenes Protokoll (#956): Kopf, Geräte und Unterschrift sind gesperrt — sonst zeigte das
+     * PDF eine Unterschrift unter Angaben, die nachträglich geändert wurden. Offen bleiben Rückgaben
+     * und Zeilen-Notizen.
+     */
+    public bool  $locked        = false;
+    public ?string $lockedSignedAt = null;
+
     // Kopf-Formular
     public ?int    $fHolderId    = null;
     public string  $fIssuedAt      = '';
@@ -111,6 +119,12 @@ class Index extends Component
 
     public function edit(int $id): void
     {
+        // Das Modal gibt es nur für Owner/Admin; ohne die Rolle setzte der Klick sonst nur einen Zustand,
+        // der nie sichtbar wird (#956).
+        if (! Gate::allows('asset-manager.manage')) {
+            return;
+        }
+
         $teamId   = $this->teamId();
         $handover = AssetHandover::where('team_id', $teamId)->with('lines')->findOrFail($id);
 
@@ -121,6 +135,8 @@ class Index extends Component
         $this->fSignerName    = $handover->signer_name ?? '';
         $this->fSignatureData = $handover->signature_data;
         $this->fNotes         = $handover->notes ?? '';
+        $this->locked         = $handover->signed_at !== null && ! empty($handover->signature_data);
+        $this->lockedSignedAt = $handover->signed_at?->format('d.m.Y H:i');
 
         $this->fLines = $handover->lines->map(fn (AssetHandoverLine $l) => [
             'id'               => $l->id,
@@ -183,6 +199,9 @@ class Index extends Component
             'fIssuedAt'           => 'nullable|date',
             'fSignerName'         => 'nullable|string|max:255',
             'fNotes'              => 'nullable|string|max:2000',
+            // Nur eine PNG-Data-URL aus dem Unterschriftenfeld, in vernünftiger Größe (#956) — der Wert
+            // landet ungeprüft im <img src> des PDF-Templates.
+            'fSignatureData'      => ['nullable', 'string', 'max:400000', 'starts_with:data:image/png;base64'], // ohne Komma: Laravel trennt Parameter daran
             'fLines'              => 'required|array|min:1',
             'fLines.*.device_id'  => ['required', 'integer', Rule::exists('asset_devices', 'id')->where('team_id', $teamId)],
         ], [], [
@@ -199,13 +218,36 @@ class Index extends Component
 
         $holder = AssetHolder::where('team_id', $teamId)->findOrFail($this->fHolderId);
 
-        $isNew = $this->editId === null;
-        $signatureJustAdded = $this->fSignatureData
-            && (! $this->editId || ! AssetHandover::where('team_id', $teamId)->find($this->editId)?->signature_data);
+        $isNew    = $this->editId === null;
+        $existing = $isNew ? null : AssetHandover::where('team_id', $teamId)->findOrFail($this->editId);
+
+        // Unterschriebenes Protokoll: nur Zeilen-Notizen speichern, alles andere bleibt (#956).
+        if ($existing !== null && $existing->signed_at !== null && ! empty($existing->signature_data)) {
+            if (collect($this->fLines)->contains(fn ($row) => empty($row['id']) && ! empty($row['device_id']))) {
+                $this->addError('fLines', 'Ein unterschriebenes Protokoll nimmt keine neuen Geräte auf — dafür eine neue Ausgabe anlegen.');
+                return;
+            }
+            foreach ($this->fLines as $row) {
+                if (! empty($row['id'])) {
+                    $existing->lines()->where('id', $row['id'])
+                        ->update(['notes' => ($row['notes'] ?? '') !== '' ? $row['notes'] : null]);
+                }
+            }
+            $this->flash = 'Notizen gespeichert. Kopf, Geräte und Unterschrift sind nach der Unterschrift gesperrt.';
+            $this->resetEditor();
+            $this->showEditor = false;
+            return;
+        }
+
+        // Zeitpunkt der Unterschrift folgt der Unterschrift (#956): neu gezeichnet → jetzt, entfernt →
+        // leer. Vorher blieb bei einer neu gezeichneten Unterschrift der alte Zeitstempel stehen.
+        $signatureChanged   = ($this->fSignatureData ?: null) !== ($existing?->signature_data ?: null);
+        $signatureJustAdded = $this->fSignatureData && $signatureChanged;
+        $signatureRemoved   = ! $this->fSignatureData && $signatureChanged;
 
         $closed = [];
 
-        DB::transaction(function () use ($teamId, $holder, $signatureJustAdded, &$closed) {
+        DB::transaction(function () use ($teamId, $holder, $signatureJustAdded, $signatureRemoved, &$closed) {
             $header = [
                 'team_id'            => $teamId,
                 'tenant_id'          => $holder->tenant_id,
@@ -219,8 +261,8 @@ class Index extends Component
 
             if ($this->editId) {
                 $handover = AssetHandover::where('team_id', $teamId)->findOrFail($this->editId);
-                // signed_at nur überschreiben, wenn gerade neu unterschrieben wurde.
-                if (! $signatureJustAdded) {
+                // signed_at nur anfassen, wenn sich die Unterschrift geändert hat.
+                if (! $signatureJustAdded && ! $signatureRemoved) {
                     unset($header['signed_at']);
                 }
                 $handover->update($header);
@@ -369,6 +411,8 @@ class Index extends Component
 
     protected function resetEditor(): void
     {
+        $this->locked         = false;
+        $this->lockedSignedAt = null;
         $this->reset(['editId', 'fHolderId', 'fSignerName', 'fSignatureData', 'fNotes', 'fLines', 'returningLineId', 'returnCondition']);
         $this->fIssuedAt = now()->toDateString();
     }
