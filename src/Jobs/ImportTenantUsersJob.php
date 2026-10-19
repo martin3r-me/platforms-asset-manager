@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Jobs;
 
 use Platform\AssetManager\Models\AssetConnectorConfig;
+use Platform\AssetManager\Services\HolderClassifier;
 use Platform\AssetManager\Services\HolderService;
 use Platform\AssetManager\Services\IntuneGraphService;
 use Platform\AssetManager\Services\TenantContext;
@@ -38,6 +39,10 @@ class ImportTenantUsersJob implements ShouldQueue
 
     public function handle(IntuneGraphService $graph, HolderService $holders): void
     {
+        // Regeln frisch lesen: der Cache ist statisch und lebt im Queue-Worker sonst bis zum Neustart —
+        // eine in den Einstellungen geänderte Typisierungsregel wirkte im Sync nie (#946).
+        HolderClassifier::forget();
+
         $config = AssetConnectorConfig::where('id', $this->connectorId)
             ->where('enabled', true)
             ->first();

@@ -2,6 +2,7 @@
 
 namespace Platform\AssetManager\Services;
 
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetHolder;
@@ -75,7 +76,18 @@ class HolderService
             // bis zum naechsten applyGraphProfile() eine `person` — und Funktionskonten, die ueber
             // diesen Pfad entstehen, wuerden zwischenzeitlich als Personen gezaehlt.
             $holder->holder_type  = app(HolderClassifier::class)->classify($holder, $tenantId);
-            $holder->save();
+
+            try {
+                $holder->save();
+            } catch (UniqueConstraintViolationException) {
+                // Geräte- und Lizenz-Sync laufen parallel und können denselben neuen Träger im selben
+                // Moment anlegen. Der Verlierer liest den Gewinner, statt den ganzen Sync scheitern zu
+                // lassen (#964).
+                return AssetHolder::withoutTenantScope()
+                    ->where('tenant_id', $tenantId)
+                    ->where('user_principal_name', $upn)
+                    ->firstOrFail();
+            }
         } else {
             $dirty = false;
             if ($displayName && empty($holder->display_name)) {
@@ -262,20 +274,29 @@ class HolderService
     {
         // Bestehende Asset-Träger des Tenants EINMAL vorladen — statt je UPN ein exists() PLUS ein
         // firstOrNew (~2 Queries je UPN in einer Schleife, die nach jedem Sync läuft).
+        // Schlüssel = normalisierte UPN in Kleinschreibung (#939): Entra liefert dieselbe UPN auf Gerät
+        // und Lizenz in unterschiedlicher Schreibweise, und eine Papierkorb-UPN (32-Hex-Präfix) gehört
+        // zum selben Träger wie vor der Löschung. Ein case-sensitiver Schlüssel ohne Normalisierung hat
+        // hier nach jedem Sync einen zweiten, aktiven Träger angelegt.
+        $key = fn (string $upn): string => mb_strtolower(self::normalizeUpn($upn));
+
         $existing = AssetHolder::withoutTenantScope()->where('tenant_id', $tenantId)
             ->whereNotNull('user_principal_name')
             ->get(['id', 'user_principal_name', 'display_name'])
-            ->keyBy('user_principal_name');
+            ->keyBy(fn (AssetHolder $h) => $key((string) $h->user_principal_name));
 
-        // Kandidaten (UPN → bester Anzeigename) aus Geräten + Lizenz-Zuweisungen dedupliziert sammeln.
-        // Erster nicht-leerer Name gewinnt (Geräte zuerst), damit eine UPN nur EINMAL angelegt wird.
+        // Kandidaten (Schlüssel → [UPN, bester Anzeigename]) aus Geräten + Lizenz-Zuweisungen dedupliziert
+        // sammeln. Erster nicht-leerer Name gewinnt (Geräte zuerst), damit eine UPN nur EINMAL angelegt wird.
         $candidates = [];
-        $collect = function ($rows, string $nameField) use (&$candidates) {
+        $collect = function ($rows, string $nameField) use (&$candidates, $key) {
             foreach ($rows as $row) {
-                $upn = $row->user_principal_name;
-                if (!$upn) continue;
-                if (!array_key_exists($upn, $candidates) || empty($candidates[$upn])) {
-                    $candidates[$upn] = $row->{$nameField} ?: ($candidates[$upn] ?? null);
+                $upn = trim((string) $row->user_principal_name);
+                if ($upn === '') continue;
+                $k = $key($upn);
+                if (!isset($candidates[$k])) {
+                    $candidates[$k] = ['upn' => self::normalizeUpn($upn), 'name' => $row->{$nameField} ?: null];
+                } elseif (empty($candidates[$k]['name']) && $row->{$nameField}) {
+                    $candidates[$k]['name'] = $row->{$nameField};
                 }
             }
         };
@@ -292,23 +313,16 @@ class HolderService
         );
 
         $created = 0;
-        foreach ($candidates as $upn => $displayName) {
-            $emp = $existing->get($upn);
+        foreach ($candidates as $k => $candidate) {
+            $emp = $existing->get($k);
             if ($emp === null) {
-                // Neu anlegen (verhaltensgleich zu findOrCreateByUpn: source=derived, email=upn, aktiv).
-                AssetHolder::create([
-                    'team_id'             => $teamId,
-                    'tenant_id'           => $tenantId,
-                    'user_principal_name' => $upn,
-                    'email'               => $upn,
-                    'display_name'        => $displayName,
-                    'is_active'           => true,
-                    'source'              => 'derived',
-                ]);
+                // Über findOrCreateByUpn: derselbe Weg wie der Inline-Pfad der Syncs — normalisiert UND
+                // klassifiziert (vorher blieb jeder hier angelegte Träger `person`, #939).
+                $this->findOrCreateByUpn($teamId, $tenantId, $candidate['upn'], $candidate['name']);
                 $created++;
-            } elseif ($displayName && empty($emp->display_name)) {
+            } elseif ($candidate['name'] && empty($emp->display_name)) {
                 // Anzeigename nur ergänzen, wenn bisher leer (wie findOrCreateByUpn).
-                $emp->update(['display_name' => $displayName]);
+                $emp->update(['display_name' => $candidate['name']]);
             }
         }
 

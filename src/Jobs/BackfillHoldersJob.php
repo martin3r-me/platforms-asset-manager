@@ -2,6 +2,7 @@
 
 namespace Platform\AssetManager\Jobs;
 
+use Platform\AssetManager\Services\HolderClassifier;
 use Platform\AssetManager\Services\HolderService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -23,6 +24,10 @@ class BackfillHoldersJob implements ShouldQueue
 
     public function handle(HolderService $service): void
     {
+        // Regeln frisch lesen: der Cache ist statisch und lebt im Queue-Worker sonst bis zum Neustart —
+        // eine in den Einstellungen geänderte Typisierungsregel wirkte im Sync nie (#946).
+        HolderClassifier::forget();
+
         $created = $service->backfillForTeam($this->teamId);
         Log::info('AssetManager: Traeger-Backfill', [
             'team_id' => $this->teamId,

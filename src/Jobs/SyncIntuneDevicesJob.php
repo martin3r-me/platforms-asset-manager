@@ -11,6 +11,7 @@ use Platform\AssetManager\Models\AssetDeviceSource;
 use Platform\AssetManager\Models\AssetDeviceSyncLog;
 use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Concerns\RunsTeamSync;
+use Platform\AssetManager\Services\HolderClassifier;
 use Platform\AssetManager\Services\HolderService;
 use Platform\AssetManager\Services\IntuneGraphService;
 use Platform\AssetManager\Services\TenantContext;
@@ -72,6 +73,10 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
 
     public function handle(IntuneGraphService $service, HolderService $holderService): void
     {
+        // Regeln frisch lesen: der Cache ist statisch und lebt im Queue-Worker sonst bis zum Neustart —
+        // eine in den Einstellungen geänderte Typisierungsregel wirkte im Sync nie (#946).
+        HolderClassifier::forget();
+
         $config = AssetConnectorConfig::where('id', $this->connectorId)
             ->where('enabled', true)
             ->first();
@@ -363,9 +368,13 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
     protected function syncDeviceAssignment(AssetDevice $device): void
     {
         try {
-            $upn = $device->user_principal_name;
+            // Normalisiert + ohne Groß-/Kleinschreibung (#939): sonst hängt eine Papierkorb-UPN oder eine
+            // abweichende Schreibweise die Zuordnung an einen anderen (bzw. keinen) Träger.
+            $upn = !empty($device->user_principal_name) ? HolderService::normalizeUpn($device->user_principal_name) : null;
             $holderId = !empty($upn)
-                ? AssetHolder::where('tenant_id', $this->tenantId)->where('user_principal_name', $upn)->value('id')
+                ? AssetHolder::withoutTenantScope()->where('tenant_id', $this->tenantId)
+                    ->whereRaw('LOWER(user_principal_name) = ?', [mb_strtolower($upn)])
+                    ->value('id')
                 : null;
 
             $open = AssetAssignment::where('assignable_type', AssetAssignment::SUBJECT_DEVICE)
