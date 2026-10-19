@@ -458,6 +458,20 @@ final class ImportRunRecorder
             ? 'ohne Buchungsmonat'
             : sprintf('%s %s (%d Zeilen)', $month, ($result['dry_run'] ?? false) ? 'würde festgeschrieben' : 'festgeschrieben', (int) ($snapshot['rows'] ?? 0));
 
+        // Veränderung zum Vormonat derselben Rechnung (#972).
+        $delta = $snapshot['delta'] ?? null;
+        if (is_array($delta)) {
+            $top = array_slice((array) ($delta['by_cost_center'] ?? []), 0, 3, true);
+            $metrics['Gegenüber Vormonat'] = sprintf('%s%s (%s)%s',
+                $delta['total_delta'] >= 0 ? '+' : '',
+                $this->money($delta['total_delta']),
+                $delta['ratio'] !== null ? sprintf('%+.0f %%', $delta['ratio'] * 100) : $delta['previous_month'],
+                $top !== [] ? ' · ' . implode(', ', array_map(
+                    fn ($code, $d) => 'KST ' . $code . ' ' . ($d >= 0 ? '+' : '') . $this->money($d),
+                    array_keys($top), $top,
+                )) : '');
+        }
+
         if ($withFindings) {
             $findings = [...$findings, ...array_values((array) ($snapshot['findings'] ?? []))];
         }

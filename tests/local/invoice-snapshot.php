@@ -222,4 +222,27 @@ check('Monat zurücksetzen: nur offene Stände', 1, $service->resetMonth(TEAM, T
 check('Monat zurücksetzen: September leer, gebuchter Oktober bleibt', [null, true], [snap('SEP-1'), snap('OKT-1') !== null]);
 check('Monat zurücksetzen: Oktober (nur gebucht) → 0', 0, $service->resetMonth(TEAM, TENANT, new DateTimeImmutable('2026-10-15')));
 
+
+// ---- Vormonatsvergleich und Verlauf (#972) -------------------------------------------------
+use Platform\AssetManager\Services\InvoiceSnapshotService as SnapSvc;
+
+$mk = fn (string $inv, string $month, float $total, array $byCode) => AssetInvoiceSnapshot::withoutTenantScope()->create([
+    'team_id' => TEAM, 'tenant_id' => TENANT, 'source' => 'test_source', 'account' => 'T1', 'invoice' => $inv,
+    'booking_month' => $month, 'total_net' => $total,
+    'distribution' => array_map(fn ($code, $amt) => ['cost_type_id' => 1, 'cost_center_code' => $code, 'amount' => $amt], array_keys($byCode), $byCode),
+]);
+$prev = $mk('H-1', now()->startOfMonth()->subMonth()->toDateString(), 100.0, ['1520' => 60.0, '2599' => 40.0]);
+$curr = $mk('H-2', now()->startOfMonth()->toDateString(), 123.0, ['1520' => 60.0, '2599' => 63.0]);
+
+$d = SnapSvc::deltaToPrevious($curr);
+check('Delta: Vormonat erkannt', $prev->booking_month->format('Y-m'), $d['previous_month'] ?? null);
+check('Delta: +23,00 €', 23.0, $d['total_delta'] ?? null);
+check('Delta: +23 %', 0.23, $d['ratio'] ?? null);
+check('Delta: nur die veränderte KST', ['2599' => 23.0], $d['by_cost_center'] ?? null);
+check('Delta: erster Monat ohne Vergleich', null, SnapSvc::deltaToPrevious($prev));
+
+$h = app(SnapSvc::class)->history(TEAM, TENANT, 2);
+check('Verlauf: zwei Monate', 2, count($h['months']));
+check('Verlauf: KST 2599 im aktuellen Monat enthält 63', true, ($h['rows']['2599'][now()->format('Y-m')] ?? 0) >= 63.0);
+
 check_summary();

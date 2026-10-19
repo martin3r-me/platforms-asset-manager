@@ -338,6 +338,8 @@ class DatevReallocation extends Component
             'directIds'   => collect($plan['direct'])->pluck('cost_center', 'id'),
             'predistributedIds' => collect($plan['predistributed'])->pluck('id')->flip(),
             'canCreate'   => $missing === [] && $plan['violations'] === [] && $plan['bookings'] !== [],
+            // Monatsverlauf je Kostenstelle aus den Monatsständen (#972).
+            'history'     => app(\Platform\AssetManager\Services\InvoiceSnapshotService::class)->history($this->teamId(), $this->tenantId()),
         ])->layout('platform::layouts.app');
     }
 }

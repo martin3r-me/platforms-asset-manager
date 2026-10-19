@@ -337,6 +337,40 @@
                     </div>
                 @endif
             </x-asset-manager-panel>
+
+            {{-- Monatsverlauf (#972): Rechnungskosten je Kostenstelle × Leistungsmonat aus den Monatsständen. --}}
+            @if($history['rows'] !== [])
+                <x-asset-manager-panel title="Verlauf je Kostenstelle" subtitle="Rechnungen der letzten 6 Leistungsmonate laut Monatsstand" bodyClass="p-0">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-xs">
+                            <thead>
+                                <tr class="text-left text-[var(--am-text-muted)] border-b border-[color:var(--am-border)]">
+                                    <th class="px-4 py-2">Kostenstelle</th>
+                                    @foreach($history['months'] as $m)
+                                        <th class="px-3 py-2 text-right">{{ $m }}</th>
+                                    @endforeach
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($history['rows'] as $code => $values)
+                                    <tr class="border-b border-[color:var(--am-border)] last:border-0">
+                                        <td class="px-4 py-1.5 font-medium text-[var(--am-text)]">{{ $code }}</td>
+                                        @foreach($history['months'] as $m)
+                                            <td class="px-3 py-1.5 text-right tabular-nums text-[var(--am-text-secondary)]">{{ $values[$m] != 0 ? number_format($values[$m], 2, ',', '.') : '—' }}</td>
+                                        @endforeach
+                                    </tr>
+                                @endforeach
+                                <tr class="bg-[var(--am-bg)] font-semibold">
+                                    <td class="px-4 py-1.5 text-[var(--am-text)]">Summe</td>
+                                    @foreach($history['months'] as $m)
+                                        <td class="px-3 py-1.5 text-right tabular-nums text-[var(--am-text)]">{{ number_format($history['totals'][$m], 2, ',', '.') }}</td>
+                                    @endforeach
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </x-asset-manager-panel>
+            @endif
         </div>
     </div>
 </x-ui-page>

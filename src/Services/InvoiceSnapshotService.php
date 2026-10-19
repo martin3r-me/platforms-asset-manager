@@ -246,7 +246,98 @@ class InvoiceSnapshotService
             'total'    => $s !== null ? (float) $s->total_net : null,
             'rows'     => count((array) $s?->distribution),
             'findings' => $captured['findings'],
+            'delta'    => $s !== null ? self::deltaToPrevious($s) : null,
         ];
+    }
+
+    /**
+     * Veränderung gegenüber dem vorigen Monatsstand derselben Quelle und desselben Kontos (#972) — die
+     * Snapshots sind die einzige Monatshistorie der Rechnungskosten (Kostenpositionen halten nur den
+     * aktuellen Stand, ADR 0018). So fällt „Mobilfunk +23 %" beim Import auf statt erst in der Buchhaltung.
+     *
+     * @return array{previous_month: string, previous_total: float, total_delta: float, ratio: ?float, by_cost_center: array<string, float>}|null
+     */
+    public static function deltaToPrevious(AssetInvoiceSnapshot $snapshot): ?array
+    {
+        if ($snapshot->booking_month === null) {
+            return null;
+        }
+
+        $previous = AssetInvoiceSnapshot::withoutTenantScope()
+            ->where('tenant_id', $snapshot->tenant_id)
+            ->where('source', $snapshot->source)
+            ->where('account', $snapshot->account)
+            ->where('booking_month', '<', $snapshot->booking_month->format('Y-m-d'))
+            ->orderByDesc('booking_month')
+            ->first();
+
+        if ($previous === null) {
+            return null;
+        }
+
+        $byCenter = fn (AssetInvoiceSnapshot $s) => collect((array) $s->distribution)
+            ->groupBy(fn ($r) => (string) ($r['cost_center_code'] ?? '') ?: '—')
+            ->map(fn ($g) => round((float) $g->sum('amount'), 2));
+
+        $now    = $byCenter($snapshot);
+        $before = $byCenter($previous);
+        $deltas = $now->keys()->merge($before->keys())->unique()
+            ->mapWithKeys(fn ($code) => [$code => round(($now[$code] ?? 0) - ($before[$code] ?? 0), 2)])
+            ->filter(fn ($d) => abs($d) >= 0.01)
+            ->sortByDesc(fn ($d) => abs($d))
+            ->take(5)
+            ->all();
+
+        $prevTotal = (float) $previous->total_net;
+        $delta     = round((float) $snapshot->total_net - $prevTotal, 2);
+
+        return [
+            'previous_month'  => $previous->booking_month->format('Y-m'),
+            'previous_total'  => $prevTotal,
+            'total_delta'     => $delta,
+            'ratio'           => $prevTotal != 0.0 ? round($delta / $prevTotal, 4) : null,
+            'by_cost_center'  => $deltas,
+        ];
+    }
+
+    /**
+     * Verlauf der Rechnungskosten je Kostenstelle × Leistungsmonat aus den Monatsständen (#972).
+     *
+     * @return array{months: list<string>, rows: array<string, array<string, float>>, totals: array<string, float>}
+     */
+    public function history(int $teamId, int $tenantId, int $months = 6): array
+    {
+        $from = Carbon::now()->startOfMonth()->subMonths($months - 1);
+
+        $snapshots = AssetInvoiceSnapshot::withoutTenantScope()
+            ->where('team_id', $teamId)
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('booking_month')
+            ->where('booking_month', '>=', $from->toDateString())
+            ->get(['booking_month', 'distribution']);
+
+        $monthKeys = [];
+        for ($i = 0; $i < $months; $i++) {
+            $monthKeys[] = $from->copy()->addMonths($i)->format('Y-m');
+        }
+
+        $rows   = [];
+        $totals = array_fill_keys($monthKeys, 0.0);
+        foreach ($snapshots as $s) {
+            $m = $s->booking_month->format('Y-m');
+            if (! array_key_exists($m, $totals)) {
+                continue;
+            }
+            foreach ((array) $s->distribution as $r) {
+                $code = (string) ($r['cost_center_code'] ?? '') ?: '—';
+                $rows[$code] ??= array_fill_keys($monthKeys, 0.0);
+                $rows[$code][$m] = round($rows[$code][$m] + (float) $r['amount'], 2);
+                $totals[$m]      = round($totals[$m] + (float) $r['amount'], 2);
+            }
+        }
+        ksort($rows, SORT_NATURAL);
+
+        return ['months' => $monthKeys, 'rows' => $rows, 'totals' => $totals];
     }
 
     /**
