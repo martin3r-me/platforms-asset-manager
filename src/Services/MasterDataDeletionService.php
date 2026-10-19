@@ -2,6 +2,9 @@
 
 namespace Platform\AssetManager\Services;
 
+use Platform\AssetManager\Models\AssetTeamSetting;
+use Platform\AssetManager\Models\AssetDevice;
+use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetCostType;
@@ -24,23 +27,80 @@ use Platform\AssetManager\Models\AssetVendor;
  */
 class MasterDataDeletionService
 {
+    /** Einstellungs-Rollen, die auf eine Kostenstelle zeigen — Spalte am AssetTeamSetting → Bezeichnung. */
+    public const COST_CENTER_SETTING_ROLES = [
+        'license_pool_cost_center_id'     => 'Lizenz-Pool',
+        'license_overflow_cost_center_id' => 'Lizenz-Überhang',
+        'telephony_cost_center_id'        => 'Telefonie-Sammelstelle',
+        'datev_source_cost_center_id'     => 'DATEV-Quellkostenstelle',
+    ];
+
     /**
      * Kostenstelle löschen. Kinder werden NICHT mitgelöscht: `parent_id` ist nullOnDelete, sie
      * rutschen also zu obersten Knoten hoch und brauchen danach eine neue `depth`. Die übrigen FKs
-     * (Träger, Kostenpositionen) sind ebenfalls nullOnDelete — die Zuordnung fällt weg, die
+     * (Träger, Kostenpositionen, Geräte) sind ebenfalls nullOnDelete — die Zuordnung fällt weg, die
      * Datensätze bleiben.
      *
-     * @return array{ok: bool, message: string, code?: string, promoted_children?: int}
+     * Gesperrt, solange eine Einstellung auf die Kostenstelle zeigt (#966): Pool, Überhang,
+     * Telefonie-Sammelstelle und DATEV-Quelle wären sonst still genullt worden — die Lizenz-Kaskade,
+     * der Festnetz-Import und die DATEV-Umbuchung liefen danach ohne Ziel.
+     *
+     * @return array{ok: bool, message: string, code?: string, promoted_children?: int, impact?: array<string, int>, dry_run?: bool}
      */
-    public function deleteCostCenter(int $teamId, int $id): array
+    public function deleteCostCenter(int $teamId, int $id, bool $dryRun = false): array
     {
         $center = AssetCostCenter::where('team_id', $teamId)->find($id);
         if (! $center) {
             return ['ok' => false, 'message' => 'Kostenstelle nicht gefunden.'];
         }
 
-        $code       = $center->code;
-        $childCount = AssetCostCenter::where('parent_id', $center->id)->count();
+        $code = $center->code;
+
+        $roles = [];
+        $settings = AssetTeamSetting::withoutTenantScope()->where('team_id', $teamId)->get();
+        foreach ($settings as $setting) {
+            foreach (self::COST_CENTER_SETTING_ROLES as $column => $label) {
+                if ((int) $setting->{$column} === (int) $center->id) {
+                    $roles[] = $label;
+                }
+            }
+        }
+        if ($roles !== []) {
+            return [
+                'ok'      => false,
+                'code'    => $code,
+                'message' => "Kostenstelle {$code} ist in den Einstellungen als " . implode(', ', array_unique($roles))
+                    . ' hinterlegt — dort erst eine andere Kostenstelle wählen, dann ist sie löschbar.',
+            ];
+        }
+
+        $impact = [
+            'children'   => AssetCostCenter::where('parent_id', $center->id)->count(),
+            'holders'    => AssetHolder::where('team_id', $teamId)->where('cost_center_id', $center->id)->count(),
+            'cost_lines' => AssetCostLine::where('team_id', $teamId)->where('cost_center_id', $center->id)->count(),
+            'devices'    => AssetDevice::where('team_id', $teamId)->where('cost_center_id', $center->id)->count(),
+        ];
+
+        $summary = sprintf('%d Träger, %d Kostenpositionen, %d Geräte verlieren die Zuordnung; %d untergeordnete Kostenstelle(n) werden oberste Knoten.',
+            $impact['holders'], $impact['cost_lines'], $impact['devices'], $impact['children']);
+
+        if ($dryRun) {
+            return [
+                'ok'      => true,
+                'dry_run' => true,
+                'code'    => $code,
+                'impact'  => $impact,
+                'message' => "Vorschau: Kostenstelle {$code} löschen — {$summary}",
+            ];
+        }
+
+        // Der alte Code-String am Träger (`cost_center`) bliebe sonst als Altwert neben einer leeren
+        // `cost_center_id` stehen und tauchte in Auswertungen über den Freitext wieder auf.
+        AssetHolder::where('team_id', $teamId)->where('cost_center_id', $center->id)->update(['cost_center' => null]);
+
+        // Kinder ausdrücklich abhängen statt sich nur auf nullOnDelete zu verlassen — ohne aktive
+        // FK-Prüfung (SQLite) blieben sie sonst unter einer gelöschten Kostenstelle hängen.
+        AssetCostCenter::where('parent_id', $center->id)->update(['parent_id' => null]);
 
         $center->delete();
 
@@ -51,10 +111,9 @@ class MasterDataDeletionService
         return [
             'ok'                => true,
             'code'              => $code,
-            'promoted_children' => $childCount,
-            'message'           => $childCount > 0
-                ? "Kostenstelle {$code} gelöscht — {$childCount} untergeordnete Kostenstelle(n) sind jetzt oberste Knoten, Zuordnungen wurden entfernt."
-                : "Kostenstelle {$code} gelöscht (Zuordnungen wurden entfernt).",
+            'promoted_children' => $impact['children'],
+            'impact'            => $impact,
+            'message'           => "Kostenstelle {$code} gelöscht — {$summary}",
         ];
     }
 

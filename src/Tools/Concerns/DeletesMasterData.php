@@ -29,7 +29,8 @@ trait DeletesMasterData
         return [
             'type'       => 'object',
             'properties' => array_merge([
-                'id' => ['type' => 'integer', 'description' => $idDescription],
+                'id'      => ['type' => 'integer', 'description' => $idDescription],
+                'dry_run' => ['type' => 'boolean', 'description' => 'Nur Kostenstelle: Vorschau mit betroffenen Trägern/Positionen/Geräten, ohne zu löschen.'],
             ], $this->tenantSchemaProperty()),
             'required' => ['id'],
         ];
@@ -71,7 +72,11 @@ trait DeletesMasterData
                 return ToolResult::error('VALIDATION_ERROR', 'id ist erforderlich.');
             }
 
-            $result = app(MasterDataDeletionService::class)->{$method}($teamId, $id);
+            // dry_run (#966): nur die Kostenstelle kennt eine Vorschau mit Mengen; die anderen Löschungen
+            // haben keine stillen Nebenwirkungen, die man vorher sehen müsste.
+            $result = $method === 'deleteCostCenter'
+                ? app(MasterDataDeletionService::class)->deleteCostCenter($teamId, $id, (bool) ($arguments['dry_run'] ?? false))
+                : app(MasterDataDeletionService::class)->{$method}($teamId, $id);
 
             if (! $result['ok']) {
                 // Nicht gefunden vs. bewusst gesperrt unterscheiden: das erste ist eine falsche ID,
