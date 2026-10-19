@@ -10,6 +10,8 @@ use Platform\AssetManager\Models\AssetLicenseContractLine;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Services\LicenseInvoiceImportService;
 use Platform\AssetManager\Services\LicenseSeatAllocator;
+use Platform\AssetManager\Services\ControllingContext;
+use Platform\AssetManager\Support\LicenseContractInsights;
 use Platform\AssetManager\Support\LicensePriceBook;
 
 /**
@@ -30,6 +32,14 @@ class Contracts extends Component
     use AuthorizesTeamRole;
 
     public string $period = '';
+
+    /** Kündigungs-Radar (#883): '' | 'cancel_soon' (Fenster ≤ 90 Tage) | 'cancel_missing' (Datum fehlt). */
+    public string $filter = '';
+
+    protected $queryString = [
+        'period' => ['except' => ''],
+        'filter' => ['except' => ''],
+    ];
 
     /** Zeile, die gerade zugeordnet wird (Modal). */
     public ?int $assigningLineId = null;
@@ -181,6 +191,20 @@ class Contracts extends Component
                 ->orderBy('edition')
                 ->get();
 
+        // Kennzahlen, die bisher nur angezeigt, nie ausgewertet wurden (#882, #883) — kaufmännisch,
+        // also nur mit aktivem Controlling (ADR 0008).
+        $controllingEnabled = app(ControllingContext::class)->enabledFor($teamId);
+        $insights = $controllingEnabled ? [
+            'overflow' => LicenseContractInsights::overflowSavings($lines),
+            'radar'    => LicenseContractInsights::cancellationRadar($lines, now()),
+        ] : null;
+
+        $allLines = $lines;
+        if ($insights !== null && in_array($this->filter, ['cancel_soon', 'cancel_missing'], true)) {
+            $ids   = $insights['radar'][$this->filter === 'cancel_soon' ? 'soon_ids' : 'missing_ids'];
+            $lines = $lines->filter(fn ($l) => in_array((int) $l->id, $ids, true))->values();
+        }
+
         $skus = AssetLicenseSku::where('team_id', $teamId)
             ->orderBy('display_name')
             ->get(['sku_id', 'sku_part_number', 'display_name', 'purchased_units', 'consumed_units']);
@@ -195,14 +219,17 @@ class Contracts extends Component
             'skus'     => $skus,
             'skuNames' => $skuNames,
             'totals'   => [
-                'invoice'  => round($lines->sum(fn ($l) => $l->monthlyAmount()), 2),
-                'seats'    => round($lines->sum('assigned_quantity'), 2),
-                'overflow' => round($lines->sum(fn ($l) => (float) $l->unit_price * (float) $l->overflow_quantity), 2),
-                'pool'     => round($lines->sum(fn ($l) => (float) $l->unit_price * (float) $l->pool_quantity), 2),
-                'open'     => $lines->filter(fn ($l) => ! $l->isMatched()
+                'invoice'  => round($allLines->sum(fn ($l) => $l->monthlyAmount()), 2),
+                'seats'    => round($allLines->sum('assigned_quantity'), 2),
+                'overflow' => round($allLines->sum(fn ($l) => (float) $l->unit_price * (float) $l->overflow_quantity), 2),
+                'pool'     => round($allLines->sum(fn ($l) => (float) $l->unit_price * (float) $l->pool_quantity), 2),
+                'open'     => $allLines->filter(fn ($l) => ! $l->isMatched()
                     && $l->match_state !== AssetLicenseContractLine::MATCH_IGNORED)->count(),
             ],
             'canManage' => $this->canManage(),
+            'controllingEnabled' => $controllingEnabled,
+            'insights'  => $insights,
+            'monthEmpty' => $allLines->isEmpty(),
         ])->layout('platform::layouts.app');
     }
 }

@@ -37,7 +37,7 @@
             </div>
         @endif
 
-        @if($lines->isEmpty())
+        @if($monthEmpty)
             <x-asset-manager-panel title="Noch keine Vertragszeilen">
                 <p class="text-sm text-[var(--am-text-secondary)]">
                     Vertragszeilen entstehen beim Import der Lizenz-Abrechnung. Der Upload liegt unter
@@ -55,6 +55,25 @@
                     sub="bezahlt, unbesetzt" />
             </div>
 
+            {{-- Überhang-Ersparnis (#882) und Kündigungs-Radar (#883) — nur mit Controlling (ADR 0008). --}}
+            @if($insights)
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <x-asset-manager-stat-card label="Ersparnis Jahresbindung"
+                        :value="$money($insights['overflow']['savings'])"
+                        :sub="$seats($insights['overflow']['overflow_quantity']) . ' Überhang-Seats auf Jahresbindung' . ($insights['overflow']['without_yearly_price'] > 0 ? ' · ' . $insights['overflow']['without_yearly_price'] . ' ohne Jahrespreis' : '')" />
+                    <button type="button" wire:click="$set('filter', '{{ $filter === 'cancel_soon' ? '' : 'cancel_soon' }}')" class="text-left">
+                        <x-asset-manager-stat-card label="Kündigungsfenster ≤ 90 Tage"
+                            :value="$insights['radar']['soon_count'] . ' Zeile(n)'"
+                            :sub="$money($insights['radar']['soon_amount']) . ' / Monat' . ($filter === 'cancel_soon' ? ' · Filter aktiv' : ' · anzeigen')" />
+                    </button>
+                    <button type="button" wire:click="$set('filter', '{{ $filter === 'cancel_missing' ? '' : 'cancel_missing' }}')" class="text-left">
+                        <x-asset-manager-stat-card label="Kündbar-Datum fehlt"
+                            :value="$insights['radar']['missing_count'] . ' Jahresbindung(en)'"
+                            :sub="$filter === 'cancel_missing' ? 'Filter aktiv' : 'Pflegelücke anzeigen'" />
+                    </button>
+                </div>
+            @endif
+
             @if($totals['open'] > 0)
                 <div class="rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm text-amber-800">
                     @svg('heroicon-o-exclamation-triangle', 'w-4 h-4 inline')
@@ -63,7 +82,7 @@
                 </div>
             @endif
 
-            <x-asset-manager-panel title="Vertragszeilen {{ $period }}">
+            <x-asset-manager-panel title="Vertragszeilen {{ $period }}{{ $filter === 'cancel_soon' ? ' · Kündigungsfenster ≤ 90 Tage' : ($filter === 'cancel_missing' ? ' · Kündbar-Datum fehlt' : '') }}">
                 <div class="overflow-x-auto">
                     <table class="min-w-full text-sm">
                         <thead>
