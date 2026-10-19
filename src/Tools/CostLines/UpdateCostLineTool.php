@@ -3,11 +3,8 @@
 namespace Platform\AssetManager\Tools\CostLines;
 
 use Illuminate\Support\Facades\Gate;
-use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostLine;
-use Platform\AssetManager\Models\AssetCostType;
-use Platform\AssetManager\Models\AssetHolder;
-use Platform\AssetManager\Models\AssetVendor;
+use Platform\AssetManager\Services\CostLineWriteService;
 use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
 use Platform\AssetManager\Tools\Concerns\ResolvesTenant;
@@ -99,64 +96,17 @@ class UpdateCostLineTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('NOT_FOUND', 'Kostenposition nicht gefunden.');
             }
 
-            if (array_key_exists('cost_type_id', $arguments) && $arguments['cost_type_id']) {
-                $costType = AssetCostType::where('team_id', $teamId)->find((int) $arguments['cost_type_id']);
-                if (!$costType) {
-                    return ToolResult::error('VALIDATION_ERROR', 'cost_type_id gehört nicht zum Team.');
-                }
-                if ($costType->aggregation_source !== AssetCostType::SOURCE_COST_LINE) {
-                    return ToolResult::error('INVALID_COST_TYPE', "Kostenart '{$costType->name}' ist nicht cost_line — sie würde aus der Aufteilung fallen.");
-                }
-                $line->cost_type_id = $costType->id;
+            // Alle fachlichen Regeln im Service — geprueft wird der EFFEKTIVE Stand nach dem Update
+            // (Kostenart x Betrag, Waehrung x Kurs), nicht nur die uebergebenen Felder (#938).
+            $changesType = ! empty($arguments['cost_type_id']);
+            $result      = app(CostLineWriteService::class)->update($line, $arguments, requireCostLineSource: $changesType);
+            if (! $result['ok']) {
+                return ToolResult::error(
+                    isset($result['errors']['cost_type_id']) ? 'INVALID_COST_TYPE' : 'VALIDATION_ERROR',
+                    implode(' ', $result['errors'])
+                );
             }
-            if (array_key_exists('frequency', $arguments)) {
-                if (!in_array($arguments['frequency'], self::FREQUENCIES, true)) {
-                    return ToolResult::error('VALIDATION_ERROR', 'frequency ungültig.');
-                }
-                $line->frequency = $arguments['frequency'];
-            }
-            foreach (['vendor_id' => AssetVendor::class, 'cost_center_id' => AssetCostCenter::class, 'assignee_id' => AssetHolder::class] as $field => $class) {
-                if (array_key_exists($field, $arguments)) {
-                    $val = $arguments[$field];
-                    if ($val) {
-                        if (!$class::where('team_id', $teamId)->whereKey((int) $val)->exists()) {
-                            return ToolResult::error('VALIDATION_ERROR', "{$field} gehört nicht zum Team.");
-                        }
-                        $line->{$field} = (int) $val;
-                    } else {
-                        $line->{$field} = null;
-                    }
-                }
-            }
-            foreach (['amount', 'currency', 'fx_rate', 'label', 'valid_from', 'valid_to'] as $f) {
-                if (array_key_exists($f, $arguments)) {
-                    $line->{$f} = ($arguments[$f] === '' ) ? null : $arguments[$f];
-                }
-            }
-            if (array_key_exists('active', $arguments)) {
-                $line->active = (bool) $arguments['active'];
-            }
-
-            // Betrag prüfen, wenn er geändert wurde: 0 ablehnen; negativ nur bei allow_negative-Kostenart
-            // (Gutschrift) — verhindert stilles Netting durch Tippfehler-Minusbeträge.
-            if (array_key_exists('amount', $arguments)) {
-                $amount = (float) $line->amount;
-                if ($amount == 0.0) {
-                    return ToolResult::error('VALIDATION_ERROR', 'amount darf nicht 0,00 sein.');
-                }
-                if ($amount < 0 && ! (bool) AssetCostType::where('team_id', $teamId)->whereKey($line->cost_type_id)->value('allow_negative')) {
-                    return ToolResult::error('VALIDATION_ERROR', 'Negativer Betrag ist nur für Kostenarten mit allow_negative (Gutschrift) zulässig.');
-                }
-            }
-
-            // Effektive Währung/Kurs prüfen (nach Anwenden der Argumente): Nicht-EUR ohne positiven
-            // fx_rate ablehnen, sonst bewertet computeMonthlyAmount den Betrag still 1:1 als EUR.
-            $effCurrency = strtoupper(trim((string) $line->currency)) ?: 'EUR';
-            if ($effCurrency !== 'EUR' && (!is_numeric($line->fx_rate) || (float) $line->fx_rate <= 0)) {
-                return ToolResult::error('VALIDATION_ERROR', "Nicht-EUR-Position (currency={$effCurrency}) benötigt einen positiven fx_rate (Umrechnungskurs zu EUR) — sonst würde der Betrag still 1:1 als EUR gewertet.");
-            }
-
-            $line->save();
+            $line = $result['line'];
 
             return ToolResult::success([
                 'id'             => $line->id,

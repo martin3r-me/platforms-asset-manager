@@ -17,6 +17,7 @@ use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetVendor;
 use Platform\AssetManager\Services\CostBootstrapService;
+use Platform\AssetManager\Services\CostLineWriteService;
 use Platform\AssetManager\Services\CostLineReassignService;
 use Platform\AssetManager\Services\CostPlausibilityService;
 use Platform\AssetManager\Services\MasterDataDeletionService;
@@ -220,6 +221,21 @@ class Index extends Component
         $this->resetValidation();
     }
 
+    /** Spaltenname aus dem {@see CostLineWriteService} → Formularfeld dieses Editors. */
+    private const FORM_FIELDS = [
+        'cost_type_id'   => 'fCostType',
+        'cost_center_id' => 'fCostCenter',
+        'vendor_id'      => 'fVendor',
+        'assignee_id'    => 'fAssignee',
+        'label'          => 'fLabel',
+        'amount'         => 'fAmount',
+        'currency'       => 'fCurrency',
+        'fx_rate'        => 'fFxRate',
+        'frequency'      => 'fFrequency',
+        'valid_from'     => 'fValidFrom',
+        'valid_to'       => 'fValidTo',
+    ];
+
     public function save(CostBootstrapService $bootstrap): void
     {
         Gate::authorize('asset-manager.manage');
@@ -258,65 +274,42 @@ class Index extends Component
             'fAssignee'  => 'Asset-Traeger',
         ]);
 
-        // Team-aufgelöste Instanzen laden und deren IDs persistieren (nie die rohe Request-ID).
-        $type = AssetCostType::where('team_id', $teamId)->find($this->fCostType);
-        if ($type === null) {
-            $this->addError('fCostType', 'Kostenart gehört nicht zum Team.');
-            return;
-        }
-        $vendor = $this->fVendor
-            ? AssetVendor::where('team_id', $teamId)->find($this->fVendor)
-            : null;
+        // Kostenstelle kommt im Editor als Code; aufloesen (legt bei Bedarf an), dann alle fachlichen
+        // Regeln im Service — dieselben, die auch die MCP-Tools nutzen (#938).
         $center = $bootstrap->resolveCostCenter($teamId, $this->fCostCenter ?: null, $tenantId);
 
-        // Team-aufgeloeste Instanz laden und deren ID persistieren, nie die rohe Request-ID.
-        $holder = $this->fAssignee
-            ? AssetHolder::where('team_id', $teamId)->find($this->fAssignee)
-            : null;
-        if ($this->fAssignee && $holder === null) {
-            $this->addError('fAssignee', 'Asset-Träger gehört nicht zum Team.');
-            return;
-        }
-
-        // Betrag 0 ablehnen; negativ nur bei allow_negative-Kostenart (Gutschrift) — verhindert stilles
-        // Netting durch Tippfehler-Minusbeträge. Inline-Fehler, Editor bleibt offen.
-        $amount = (float) $this->fAmount;
-        if ($amount == 0.0 || ($amount < 0 && ! $type?->allow_negative)) {
-            $this->addError('fAmount', $amount == 0.0
-                ? 'Betrag darf nicht 0,00 sein.'
-                : 'Negativer Betrag ist nur für Gutschrift-Kostenarten (allow_negative) zulässig.');
-            return;
-        }
-
-        $data = [
-            'team_id'           => $teamId,
-            'tenant_id'         => $tenantId,
-            'cost_type_id'      => $type->id,
-            'vendor_id'         => $vendor?->id ?: $type->vendor_default_id,
-            'cost_center_id'    => $center?->id,
-            'assignee_id'       => $holder?->id,
-            'label'             => $this->fLabel,
-            'amount'            => (float) $this->fAmount,
-            'currency'          => $currency,
-            // Bei EUR explizit auf NULL: sonst bliebe nach EUR -> USD -> EUR ein Zombie-Kurs
-            // stehen und monthly_amount waere dauerhaft falsch.
-            'fx_rate'           => $currency === 'EUR' ? null : (float) $this->fFxRate,
-            'frequency'         => $this->fFrequency,
-            'valid_from'        => $this->fValidFrom ?: null,
-            'valid_to'          => $this->fValidTo ?: null,
-            'accounting_system' => $type?->system_default,
-            'active'            => $this->fActive,
+        $input = [
+            'cost_type_id'   => $this->fCostType,
+            'cost_center_id' => $center?->id,
+            'vendor_id'      => $this->fVendor,
+            'assignee_id'    => $this->fAssignee,
+            'label'          => $this->fLabel,
+            'amount'         => $this->fAmount,
+            'currency'       => $currency,
+            'fx_rate'        => $this->fFxRate,
+            'frequency'      => $this->fFrequency,
+            'valid_from'     => $this->fValidFrom,
+            'valid_to'       => $this->fValidTo,
+            'active'         => $this->fActive,
         ];
 
+        $writer = app(CostLineWriteService::class);
+
         if ($this->editId) {
-            $line = AssetCostLine::where('team_id', $teamId)->findOrFail($this->editId);
-            $line->update($data);
-            $this->flash = 'Kostenposition aktualisiert.';
+            $line   = AssetCostLine::where('team_id', $teamId)->findOrFail($this->editId);
+            $result = $writer->update($line, $input);
         } else {
-            $data['source'] = 'manual';
-            AssetCostLine::create($data);
-            $this->flash = 'Kostenposition angelegt.';
+            $result = $writer->create($teamId, $tenantId, $input);
         }
+
+        if (! $result['ok']) {
+            foreach ($result['errors'] as $field => $message) {
+                $this->addError(self::FORM_FIELDS[$field] ?? 'fAmount', $message);
+            }
+            return;
+        }
+
+        $this->flash = $this->editId ? 'Kostenposition aktualisiert.' : 'Kostenposition angelegt.';
 
         $this->forgetPlausibility();
         $this->resetEditor();
