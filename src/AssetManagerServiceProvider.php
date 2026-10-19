@@ -183,6 +183,14 @@ class AssetManagerServiceProvider extends ServiceProvider
             $registry->register(new \Platform\AssetManager\Tools\Devices\ListDeviceModelsTool());
             $registry->register(new \Platform\AssetManager\Tools\Devices\UpsertDeviceModelTool());
             $registry->register(new \Platform\AssetManager\Tools\Devices\DeviceStatusOverviewTool());
+            $registry->register(new \Platform\AssetManager\Tools\Devices\ListDeviceEventsTool());
+
+            // Geräteausgaben
+            $registry->register(new \Platform\AssetManager\Tools\Handovers\ListHandoversTool());
+
+            // Weiterberechnung + DATEV (read-only)
+            $registry->register(new \Platform\AssetManager\Tools\Billing\BillingPreviewTool());
+            $registry->register(new \Platform\AssetManager\Tools\Costs\DatevStatusTool());
 
             // Lizenzen
             $registry->register(new \Platform\AssetManager\Tools\Licenses\ListLicensesTool());

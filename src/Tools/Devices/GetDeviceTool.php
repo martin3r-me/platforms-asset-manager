@@ -91,6 +91,38 @@ class GetDeviceTool implements ToolContract, ToolMetadataContract
                 'assignee'            => $d->assignee ? ['id' => $d->assignee->id, 'name' => $d->assignee->name] : null,
                 'enrolled_at'         => $d->enrolled_at?->toIso8601String(),
                 'last_check_in_at'    => $d->last_check_in_at?->toIso8601String(),
+                'lifecycle_status'    => $d->lifecycle_status,
+                'warranty_until'      => $d->warranty_until?->toDateString(),
+                'lease_until'         => $d->lease_until?->toDateString(),
+                // Verlauf (#975): bisher nur auf der Detailseite lesbar.
+                'history' => [
+                    'events' => \Platform\AssetManager\Models\AssetDeviceEvent::where('asset_device_id', $d->id)
+                        ->with('actor')->orderByDesc('created_at')->orderByDesc('id')->limit(20)->get()
+                        ->map(fn ($e) => [
+                            'at'          => $e->created_at?->toIso8601String(),
+                            'event_type'  => $e->event_type,
+                            'label'       => $e->eventLabel(),
+                            'description' => $e->description,
+                            'by'          => $e->actor?->name,
+                        ])->values()->all(),
+                    'assignments' => \Platform\AssetManager\Models\AssetAssignment::where('assignable_type', \Platform\AssetManager\Models\AssetAssignment::SUBJECT_DEVICE)
+                        ->where('assignable_id', $d->id)->with('holder')->orderByDesc('assigned_at')->limit(20)->get()
+                        ->map(fn ($a) => [
+                            'holder'      => $a->holder?->display_name ?: $a->holder?->user_principal_name,
+                            'assigned_at' => $a->assigned_at?->toIso8601String(),
+                            'returned_at' => $a->returned_at?->toIso8601String(),
+                            'source'      => $a->source,
+                        ])->values()->all(),
+                    'handovers' => \Platform\AssetManager\Models\AssetHandoverLine::where('asset_device_id', $d->id)
+                        ->with('handover.holder')->orderByDesc('id')->limit(20)->get()
+                        ->map(fn ($l) => [
+                            'handover_id' => $l->handover_id,
+                            'holder'      => $l->handover?->holder?->display_name ?: $l->handover?->holder?->user_principal_name,
+                            'issued_at'   => $l->handover?->issued_at?->toDateString(),
+                            'signed'      => $l->handover?->signed_at !== null,
+                            'returned_at' => $l->returned_at?->toDateString(),
+                        ])->values()->all(),
+                ],
                 'cost' => [
                     'resolved_monthly'    => $d->resolvedMonthlyCost(),
                     'resolved_cost_type'  => $d->resolvedCostTypeId(),

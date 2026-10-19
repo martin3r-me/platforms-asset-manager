@@ -34,7 +34,8 @@ class UpdateDeviceTool implements ToolContract, ToolMetadataContract
         return 'PUT /asset-manager/device - Aktualisiert EIN Gerät (per id). Optionale Felder: '
             . 'monthly_cost (Leasing-Rate, hat Vorrang) ODER purchase_price + depreciation_months (Kauf/AfA), '
             . 'purchase_date, cost_type_id, cost_center_id (müssen zum Team gehören), user_principal_name '
-            . '(Neuzuordnung; "" entfernt die Zuordnung). Zahlenfelder auf null/"" setzen löscht den Override.';
+            . '(nur Nicht-Intune-Geräte), lifecycle_status, warranty_until, lease_until (mit Audit-Eintrag). '
+            . 'Zahlenfelder auf null/"" setzen löscht den Override.';
     }
 
     public function getSchema(): array
@@ -49,7 +50,10 @@ class UpdateDeviceTool implements ToolContract, ToolMetadataContract
                 'purchase_date'       => ['type' => 'string', 'description' => 'Kaufdatum YYYY-MM-DD.'],
                 'cost_type_id'        => ['type' => 'integer', 'description' => 'Kostenart-ID (Team).'],
                 'cost_center_id'      => ['type' => 'integer', 'description' => 'Kostenstellen-ID (Team).'],
-                'user_principal_name' => ['type' => 'string', 'description' => 'UPN-Neuzuordnung; "" entfernt.'],
+                'user_principal_name' => ['type' => 'string', 'description' => 'UPN-Neuzuordnung nur für Nicht-Intune-Geräte; "" entfernt.'],
+                'lifecycle_status'    => ['type' => 'string', 'enum' => \Platform\AssetManager\Models\AssetDevice::LIFECYCLE_STATUSES, 'description' => 'Lifecycle (in_use|spare|repair|defect|retired|lost); terminal = retired/lost/defect schützt vor dem Reconcile.'],
+                'warranty_until'      => ['type' => 'string', 'description' => 'Garantie bis YYYY-MM-DD ("" leert).'],
+                'lease_until'         => ['type' => 'string', 'description' => 'Leasing bis YYYY-MM-DD ("" leert).'],
             ], $this->tenantSchemaProperty()),
             'required' => ['id'],
         ];
@@ -129,6 +133,30 @@ class UpdateDeviceTool implements ToolContract, ToolMetadataContract
 
             $d->save();
 
+            // Lifecycle (#975) über denselben Weg wie die Detailseite — schreibt das Audit-Event mit
+            // Urheber (ADR 0007). Nur übergebene Felder ändern sich.
+            if (array_intersect_key($arguments, array_flip(['lifecycle_status', 'warranty_until', 'lease_until'])) !== []) {
+                $status = $arguments['lifecycle_status'] ?? $d->lifecycle_status;
+                if ($status !== null && $status !== '' && ! in_array($status, AssetDevice::LIFECYCLE_STATUSES, true)) {
+                    return ToolResult::error('VALIDATION_ERROR', 'lifecycle_status muss einer von ' . implode('|', AssetDevice::LIFECYCLE_STATUSES) . ' sein.');
+                }
+                foreach (['warranty_until', 'lease_until'] as $f) {
+                    if (! empty($arguments[$f]) && ! preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $arguments[$f])) {
+                        return ToolResult::error('VALIDATION_ERROR', "{$f} muss das Format YYYY-MM-DD haben.");
+                    }
+                }
+                app(AssetWriteService::class)->updateDeviceLifecycle($d, [
+                    'status'    => $status,
+                    'warranty'  => array_key_exists('warranty_until', $arguments) ? $arguments['warranty_until'] : $d->warranty_until?->toDateString(),
+                    'lease'     => array_key_exists('lease_until', $arguments) ? $arguments['lease_until'] : $d->lease_until?->toDateString(),
+                    'vendor'    => $d->vendor_id,
+                    'orderNo'   => $d->order_no,
+                    'orderDate' => $d->order_date?->toDateString(),
+                    'location'  => $d->location,
+                ], $context->user?->id ? (int) $context->user->id : null);
+                $d->refresh();
+            }
+
             return ToolResult::success([
                 'id'                  => $d->id,
                 'device_name'         => $d->device_name,
@@ -136,6 +164,9 @@ class UpdateDeviceTool implements ToolContract, ToolMetadataContract
                 'user_principal_name' => $d->user_principal_name,
                 'cost_type_id'        => $d->cost_type_id,
                 'cost_center_id'      => $d->cost_center_id,
+                'lifecycle_status'    => $d->lifecycle_status,
+                'warranty_until'      => $d->warranty_until?->toDateString(),
+                'lease_until'         => $d->lease_until?->toDateString(),
                 'warnings'            => $warnings,
                 'message'             => "Gerät '{$d->device_name}' aktualisiert.",
             ]);

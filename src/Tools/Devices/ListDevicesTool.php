@@ -64,13 +64,17 @@ class ListDevicesTool implements ToolContract, ToolMetadataContract
             }
             TenantContext::forceTenant($tenantId);
 
+            // Lifecycle-, Fristen- und Zuordnungsfelder filterbar (#975): „veraltete Geräte", „Leasing läuft
+            // aus", „unverschlüsselt", „ohne Kostenstelle" waren vorher nicht abfragbar.
             $allowed = ['device_name', 'operating_system', 'os_version', 'compliance_state', 'management_state',
-                'manufacturer', 'model', 'serial_number', 'user_principal_name', 'device_type', 'source'];
+                'manufacturer', 'model', 'serial_number', 'user_principal_name', 'device_type', 'source',
+                'lifecycle_status', 'last_check_in_at', 'warranty_until', 'lease_until', 'is_encrypted',
+                'cost_center_id', 'cost_type_id'];
 
             $query = AssetDevice::where('team_id', $teamId)->with('assignee');
             $this->applyStandardFilters($query, $arguments, $allowed);
             $this->applyStandardSearch($query, $arguments, ['device_name', 'serial_number', 'model', 'user_principal_name']);
-            $this->applyStandardSort($query, $arguments, array_merge($allowed, ['last_check_in_at', 'enrolled_at', 'monthly_cost']), 'device_name', 'asc');
+            $this->applyStandardSort($query, $arguments, array_merge($allowed, ['enrolled_at', 'monthly_cost']), 'device_name', 'asc');
 
             $result  = $this->applyStandardPaginationResult($query, $arguments);
 
@@ -113,6 +117,10 @@ class ListDevicesTool implements ToolContract, ToolMetadataContract
                     'cost_type'           => $typeId !== null ? ($typeNames[$typeId] ?? null) : null,
                     'cost_center'         => $ccId !== null ? ($ccLabels[$ccId] ?? null) : null,
                     'last_check_in_at'    => $d->last_check_in_at?->toIso8601String(),
+                    'lifecycle_status'    => $d->lifecycle_status,
+                    'warranty_until'      => $d->warranty_until?->toDateString(),
+                    'lease_until'         => $d->lease_until?->toDateString(),
+                    'is_encrypted'        => $d->is_encrypted,
                 ];
             })->values()->all();
 
