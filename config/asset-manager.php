@@ -1,15 +1,25 @@
 <?php
 
 /**
- * Asset Manager Configuration
- * 
- * Diese Config-Datei definiert die Konfiguration für das Modul.
- * 
- * WICHTIG FÜR LLMs:
- * - Ersetze "asset-manager" durch deinen Modul-Namen
- * - Ersetze "AssetManager" durch deinen Modul-Namen (PascalCase)
- * - Alle Routes müssen mit dem Modul-Prefix beginnen
- * 
+ * Asset Manager — Modul-Konfiguration (`config('asset-manager.*')`).
+ *
+ * Wird in AssetManagerServiceProvider::register() per mergeConfigFrom() geladen; boot() meldet
+ * `routing`, `guard`, `navigation` und `sidebar` über PlatformCore::registerModule() an den Core.
+ * Die Sidebar, die man im Modul sieht, rendert resources/views/livewire/sidebar.blade.php —
+ * Änderungen an der Navigation gehören dorthin.
+ *
+ * Inhalt:
+ * - routing / guard / navigation / sidebar — Andockpunkte an den Core (Modul-Template-Vertrag).
+ *   Hinweis: der env-Schlüssel für den Routing-Modus heißt aus der Template-Zeit noch
+ *   `MODULE_TEMPLATE_MODE` (im Code nicht umbenannt — eine Umbenennung muss bestehende
+ *   .env-Einträge der Host-App mitziehen).
+ * - azure — zentrale Multi-Tenant-Azure-App für alle Microsoft-Connectoren (`.env`:
+ *   ASSET_MANAGER_AZURE_*). Pro Connector liegt nur das Kunden-Verzeichnis; Consent ist manuell
+ *   („Anbindung prüfen"), siehe docs/connector-microsoft-onboarding.md.
+ *
+ * Kein `billables`-Block: das Modul rechnet seine Kosten nicht über die Plattform-Abrechnung ab.
+ * Tenant-/Team-spezifische Einstellungen leben in der DB (asset_team_settings), nicht hier.
+ *
  * @see Platform\Core\PlatformCore::registerModule() für Details zur Modul-Registrierung
  */
 

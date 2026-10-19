@@ -32,13 +32,13 @@ die für **alle** Kunden-Connectoren genutzt wird.
 
    > Admin-Consent hier **nicht** in BHGs Tenant klicken — der Consent erfolgt pro **Kunden**-Tenant (Teil 2).
 
-3. **Credential anlegen** (Entscheidung offen — siehe Anhang):
-   - **Zertifikat** (empfohlen für app-only Produktion), **oder**
-   - **Client-Secret** (einfacher; läuft ab → Rotation einplanen)
+3. **Credential anlegen:** **Client-Secret** — das ist der einzige Weg, den der Code heute kann
+   (`IntuneGraphService::fetchToken()`, Client-Credentials-Flow mit `client_secret`). Das Secret läuft ab →
+   Rotation einplanen. Ein Zertifikat wäre sicherer, ist aber nicht implementiert (siehe Anhang).
 
 4. **Werte hinterlegen** (einmalig, geteilt über alle Connectoren) in `.env` der Host-App:
    - `ASSET_MANAGER_AZURE_CLIENT_ID` = Application (client) ID
-   - `ASSET_MANAGER_AZURE_CLIENT_SECRET` = das Secret (bzw. künftig Zertifikat)
+   - `ASSET_MANAGER_AZURE_CLIENT_SECRET` = das Secret
    - `ASSET_MANAGER_AZURE_REDIRECT_URI` = die registrierte Redirect-URI (optional; Default s. o.)
    - (Tenant-GUIDs der Kunden werden **nicht** hier, sondern pro Connector gespeichert)
 
@@ -50,7 +50,8 @@ die für **alle** Kunden-Connectoren genutzt wird.
 ## Teil 2 — Pro Kunde: Connector verbinden (du)
 
 1. Im Asset Manager den **Tenant** wählen (oder über **„+ Tenant"** neu anlegen).
-2. Rechts im Tenant-Detail **„Connector hinzufügen → Microsoft"**.
+2. Rechts im Tenant-Detail, Abschnitt **„Microsoft-Anbindung"**, das Formular ausfüllen und **„Connector hinzufügen"**
+   klicken (Seite `asset-manager.connectors.index`; nur Team-Owner/-Admin).
 3. **Kunden-Verzeichnis** angeben: Domain (`kunde.de`) **oder** Tenant-GUID. (Eigene App-Credentials nur unter
    „Erweitert", falls nicht die zentrale App genutzt wird.) Speichern → Status **„Consent ausstehend"**.
 4. Es erscheint ein **Admin-Consent-Link** (zum Kopieren). Der Link hat die Form:
@@ -94,12 +95,15 @@ Bist du selbst Admin des Kunden-Tenants, klickst du den Link direkt und danach �
 | `AADSTS65004` / Consent abgebrochen | Admin hat „Ablehnen" geklickt oder Vorgang abgebrochen → Link erneut öffnen. |
 | Graph **403** beim Sync trotz aktivem Connector | Eine der drei Anwendungsberechtigungen fehlt oder Consent unvollständig → Berechtigungen prüfen, Consent erneut erteilen. |
 | Sync liefert 0 Geräte, aber kein Fehler | Tenant hat keine Intune-verwalteten Geräte, oder falsche GUID/Domain hinterlegt. |
-| `tenant`-GUID im Callback ≠ eingegebene Domain | Domain gehört zu anderem Verzeichnis → GUID aus dem Callback ist maßgeblich; Eingabe korrigieren. |
+| „Anbindung prüfen" scheitert, obwohl der Admin zugestimmt hat | Domain/GUID gehört zu einem anderen Verzeichnis als das, in dem zugestimmt wurde → Kunden-Verzeichnis prüfen (im Zweifel die Tenant-GUID aus dem Entra-Portal des Kunden eintragen). Nach einer Änderung des Verzeichnisses muss der Consent erneut geprüft werden. |
 
 ---
 
 ## Anhang — Offene Punkte
 
-- **Credential-Typ:** Zertifikat (empfohlen) vs. Client-Secret — noch zu entscheiden.
-- **Finale Redirect-/Callback-URL:** ergibt sich aus der Route in M2; muss exakt mit der App-Registrierung übereinstimmen.
-- **Wer darf Connectoren anlegen/verwalten:** aktuell Team-`owner`/`admin` (bestehende Policy) — bestätigen.
+- **Credential-Typ:** implementiert ist nur das Client-Secret. Zertifikat (empfohlen für app-only Produktion) wäre
+  eine Erweiterung von `IntuneGraphService::fetchToken()` — noch nicht entschieden.
+- **Redirect-URI:** es gibt **keine** eigene Callback-Route; die Redirect-URI muss nur in der App-Registrierung
+  stehen und exakt `ASSET_MANAGER_AZURE_REDIRECT_URI` (Default `…/oauth2/nativeclient`) entsprechen.
+- **Wer darf Connectoren anlegen/verwalten:** Team-`owner`/`admin` — `AssetDevicePolicy::manageConnector()` bzw.
+  `sync()` (siehe ADR 0004).

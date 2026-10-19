@@ -8,8 +8,8 @@ Primary**, Violett nur als sparsamer Akzent (Intune/Fokus). **Keine** Frosted-Gl
 Gradient-Akzente, keine verspielten Animationen.
 
 Die Page-Shell-Komponenten (`x-ui-page`, `x-ui-page-navbar`, `x-ui-page-actionbar`, `x-ui-page-container`,
-`x-ui-page-sidebar`, `x-ui-sidebar-list`) bleiben unverändert (UI-Modul = tabu). Alles im Content-Bereich
-nutzt die modul-lokalen Komponenten + Tokens unten.
+`x-ui-page-sidebar`, `x-ui-sidebar-list`) und `x-ui-modal` bleiben unverändert (UI-Modul = tabu). Alles im
+Content-Bereich nutzt die modul-lokalen Komponenten + Tokens unten.
 
 > Frühere Ausrichtung „Linear/Raycast" (Frosted-Glass + violett-indigo-Gradient) wurde 2026-06-29 auf
 > diesen flachen Look umgestellt. Begründung & Token-Herkunft: `docs/adr/0013-modul-design-token-schicht.md`.
@@ -35,6 +35,12 @@ Prefix `--am-` → keine Kollision mit `--ui-*`.
 | `--am-focus` | `0 0 0 3px rgba(96,14,188,.14)` | Fokus-Ring (als `focus:shadow-[var(--am-focus)]`) |
 | `--am-success` / `--am-warning` / `--am-error` / `--am-info` | `#15BB80` / `#F59E0B` / `#EF4444` / `#6366F1` | semantische Akzente |
 
+Die Tabelle ist **vollständig** — es gibt genau diese 18 Tokens. Namen wie `--am-danger` oder
+`--am-border-subtle` existieren **nicht** (Fehler → `--am-error`, Trennlinie → `--am-border`): eine nicht
+definierte CSS-Variable löst zu nichts auf, die Eigenschaft fällt still weg (#893). `php tests/guardrails.php`
+(Check 8) gleicht jedes in `resources/views/**/*.blade.php` benutzte `var(--am-*)` gegen `theme.blade.php` ab.
+Ein neues Token also immer zuerst dort definieren, dann hier eintragen.
+
 **Radius / Shadow / Spacing** = Tailwind-Utilities (kein eigenes Token nötig, deckt sich mit dem Mockup):
 Cards `rounded-xl` (12px), Inputs/Buttons `rounded-lg` (8px), klein `rounded-md` (6px); Shadows dezent
 (`shadow-sm`, Hover über Border-Wechsel); 8px-Spacing-Raster.
@@ -50,18 +56,21 @@ Konsum in Blades stets über **literale** Arbitrary-Values (Tailwind-`@source`-S
 |------------|-------|------------|
 | `<x-asset-manager-theme>` | `components/theme.blade.php` | Token-Injektion. Einmal oben in `sidebar.blade.php`. |
 | `<x-asset-manager-button>` | `components/button.blade.php` | `variant=primary\|secondary\|ghost\|danger`, `size=sm\|md\|lg`, `href`. Navy-Primary. |
-| `<x-asset-manager-panel>` | `components/panel.blade.php` | Flache weiße Card. `title`, `actions`-Slot, `body-class` (`p-0` für bündige Listen/Tabellen). |
+| `<x-asset-manager-panel>` | `components/panel.blade.php` | Flache weiße Card. `title`, `subtitle`, `actions`-Slot, `body-class` (`p-0` für bündige Listen/Tabellen). |
 | `<x-asset-manager-stat-card>` | `components/stat-card.blade.php` | KPI-Kachel: `label`, `value`, `sub`, `icon`, `accent`, `href`, `value-class`. |
 | `<x-asset-manager-input>` / `-select` / `-textarea` | `components/input\|select\|textarea.blade.php` | Felder, `$attributes`-Pass-through (`wire:model` …), `size=sm\|md`. |
 | `<x-asset-manager-filter-section>` | `components/filter-section.blade.php` | Filter-Block (`title`, `note`) für Listen-Sidebars. |
 | `<x-asset-manager-nav-item>` | `components/nav-item.blade.php` | Sidebar-Link mit Navy-Active (`href`, `active`, `icon`, `label`). |
 | `<x-asset-manager-detail-list>` + `-detail-row>` | `components/detail-list\|detail-row.blade.php` | Label/Value-Zeilen. List: `cols=1\|2`. Row: `label`, `mono`, `bordered`. |
 | `<x-asset-manager-tabs>` | `components/tabs.blade.php` | Tab-Leiste (Navy-Active-Pill). `:tabs`-Map; erwartet Eltern-Alpine-Scope mit `tab`. |
-| `<x-asset-manager-badge>` | `components/badge.blade.php` | Status-/Kategorie-Badge (WCAG-AA, **unverändert**, siehe ADR 0011). |
+| `<x-asset-manager-badge>` | `components/badge.blade.php` | Status-/Kategorie-Badge (WCAG-AA, **unverändert**, siehe ADR 0011). `color`, `dot`, `size`. |
+| `<x-asset-manager-page-actionbar>` | `components/page-actionbar.blade.php` | Adapter um `x-ui-page-actionbar`: reicht den benannten `actions`-Slot in dessen Default-Slot durch (`breadcrumbs`). Einzige Kopplung an den Slot-Vertrag des UI-Moduls. |
+| `<x-asset-manager-all-tenants-notice>` | `components/all-tenants-notice.blade.php` | Hinweis auf Auswertungs-Sichten im Modus „Alle Tenants" (`:active`), ADR 0016. |
 
-Genutzt in: `dashboard`, `inventory/index`, `inventory/show`, `sidebar` (Runde 1). Weitere Views
-(employees, licenses, costs, compliance, master-data, devices, printers, internet, reports) folgen in
-Runde 2 mit denselben Komponenten.
+Genutzt in **allen** Modul-Views (Runde 1: `dashboard`, `inventory`, `sidebar`; Runde 2 2026-06-29: alle
+übrigen Views — heute u. a. `holders`, `licenses`, `costs`, `cost-lines`, `billing`, `master-data`,
+`devices`, `handovers`, `printers`, `internet`, `reports`, `connectors`, `settings`). Neue Views verwenden
+dieselben Komponenten.
 
 ## Tabellen (kein eigener Wrapper — dokumentiertes Klassenset)
 
@@ -71,9 +80,10 @@ Runde 2 mit denselben Komponenten.
 
 ## Regeln
 
-1. **Keine `x-ui-*`-Komponenten im Content-Bereich** (außer Page-Shell-Slots).
+1. **Keine `x-ui-*`-Komponenten im Content-Bereich** (außer Page-Shell-Slots und `x-ui-modal`; Modals immer innerhalb von `<x-ui-page>`).
 2. **Tokens statt Magic Numbers**: Farben über `--am-*`; Radius/Shadow/Spacing über die o. g. Tailwind-Utilities.
 3. **Flach** — kein `backdrop-blur`, keine Gradient-Flächen/-Linien, keine Card-Lift-Animation.
 4. **Farbe sparsam** — Navy + Neutraltöne tragen; Violett/Semantik nur als Akzent.
 5. **Light-first** — am Mockup orientiert; vorhandene `dark:`-Reste werden nicht entfernt, aber nicht ausgebaut.
 6. **Literale Klassen** — keine dynamisch zusammengesetzten Klassennamen (Tailwind-`@source`).
+7. **Bedingtes `disabled` als Prop** (`:disabled="…"`), nie `@if … @endif` im Komponenten-Tag — das kompiliert nicht (HTTP 500).

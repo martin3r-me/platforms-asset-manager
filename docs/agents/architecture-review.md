@@ -8,9 +8,13 @@ Komplementär zu [`logic-audit.md`](logic-audit.md): **Logic-Audit = Korrektheit
 **Architecture-Review = Struktur / Grenzen / Clutter / sichere Refactorings**. Wer Bugs sucht,
 nimmt den Logic-Audit; wer Struktur und Boundaries beurteilt, nimmt diesen Prompt.
 
-- **Stand:** 2026-06-13 — die genannten Layer (`src/Livewire`, `Services`, `Models`, `Jobs`,
-  `Console/Commands`, `Http/Controllers/Api`, `Policies`, `Tools`, `Support`) und die konkreten
-  Datei-Anker wurden gegen `src/` verifiziert. Beim Pflegen: bei Code-Umbau die Anker nachziehen.
+- **Stand 2026-10-19** — die genannten Layer (`src/Livewire`, `Services`, `Models`, `Jobs`,
+  `Console/Commands`, `Http/Controllers`, `Http/Middleware`, `Policies`, `Tools`, `Support`,
+  `Concerns`) und die konkreten Datei-Anker wurden gegen `src/` verifiziert (Erstfassung 2026-06-13;
+  2026-10-19 nachgezogen: Asset-Träger statt Mitarbeiter (ADR 0017), Tenant-Grenze + Global Scope
+  (ADR 0016), Gesellschaft = Wurzelknoten des Kostenstellen-Baums, drei Test-Ebenen unter `tests/`,
+  entfernte Klassen wie `Livewire/Test.php` und das Compliance-Cockpit). Beim Pflegen: bei
+  Code-Umbau die Anker nachziehen.
 - **Sprache:** Audit-Framing Englisch, Domänen-Begriffe Deutsch (wie in Code / `CONTEXT.md`).
 - **Geltung:** nur `platforms-asset-manager` (Goldene Regeln) — `platform-core`, das UI-Modul und
   Fremdmodule nur lesen, **nie** umstrukturieren. Ein Strukturvorschlag, der Core/UI berührt, ist
@@ -23,8 +27,10 @@ nimmt den Logic-Audit; wer Struktur und Boundaries beurteilt, nimmt diesen Promp
 You are a senior software architect reviewing the **`platforms-asset-manager` repository** — a
 **production, multi-tenant Laravel platform module** (`Platform\AssetManager\`) that plugs into a
 larger platform (Core + UI + sibling `platform-*` modules) and whose output — the
-**Kostenaufteilung** (Kostenstelle × Kostenart pivot) and per-employee cost figures — feeds **real
-accounting and cost-allocation decisions across multiple Gesellschaften**.
+**Kostenaufteilung** (Kostenstelle × Kostenart pivot), per-holder (Asset-Träger) cost figures, the
+easybill **Weiterberechnung** and the **DATEV-Umbuchung** — feeds **real accounting, invoicing and
+cost-allocation decisions for multiple customers (Tenants)** and their Gesellschaften (the root nodes
+of each tenant's cost-center tree).
 
 Your task is to analyze structure, eliminate clutter, and propose **safe, incremental architectural
 improvements** that respect the platform's module contract and the data-sensitivity of the domain.
@@ -39,18 +45,25 @@ material production or tenant-isolation risk justifies them.
 Concretely:
 - **Behavior preservation** — refactors are non-breaking by default; the pivot, the import, and the
   sync must produce identical results before and after.
-- **Tenant isolation** — there is **no** Eloquent global scope / `BelongsToTeam` trait; isolation
-  rests on each query's explicit `->where('team_id', $teamId)` plus the *caller* passing the right
-  team id (`Tools/Concerns/ResolvesTeam`, Livewire `Auth::user()->currentTeam`). A structural change
-  must never move a `team_id` guard to where a caller can bypass it. (Detailed isolation correctness
-  lives in [`logic-audit.md`](logic-audit.md); here, judge whether the *structure* makes isolation
-  easy to get right and hard to get wrong.)
+- **Tenant isolation** — two boundaries (ADR 0016). **Team** (`team_id`, outer security boundary):
+  there is **no** team-level global scope / `BelongsToTeam` trait; it rests on each query's explicit
+  `->where('team_id', $teamId)` plus the *caller* passing the right team id
+  (`Concerns/ResolvesCurrentTeam`, `Tools/Concerns/ResolvesTeam`). **Tenant** (`tenant_id`, inner
+  access boundary): enforced centrally by a **Global Scope** — `Concerns/TenantScopable` registers
+  `Support/TenantScope`, resolved through `Services/TenantContext`; the only sanctioned exits are
+  `withoutTenantScope()` (+ `forTenant()`) and `TenantContext::runFor()`/`forceTenant()`, and MCP tools
+  resolve the tenant via `Tools/Concerns/ResolvesTenant`. A structural change must never move a
+  `team_id` guard or a tenant pin to where a caller can bypass it, and must not add new unexplained
+  scope exits. (Detailed isolation correctness lives in [`logic-audit.md`](logic-audit.md); here,
+  judge whether the *structure* makes isolation easy to get right and hard to get wrong.)
 - **Module-boundary integrity** — the module's only sanctioned surface to the rest of the platform
   is the documented andock pattern (ServiceProvider boot → `PlatformCore::registerModule`,
   `ModuleRouter`, `x-ui-*`, MCP `ToolContract`). Hidden coupling to Core/UI internals is a finding.
 - **Auditability & reproducibility** — the import trail (`import_hash` / `import_batch_id` on
-  `asset_cost_lines`), the sync-logs (`AssetDeviceSyncLog`, `AssetLicenseSyncLog`), and
-  config-driven boot must stay visible and reproducible. Do not propose structure that hides them.
+  `asset_cost_lines`), the import protocol (`AssetImportRun` via `Support/ImportRunRecorder`), the
+  sync-logs (`AssetDeviceSyncLog`, `AssetLicenseSyncLog`), the device lifecycle events
+  (`AssetDeviceEvent`), the revision trails `AssetBillingRun` / `AssetDatevBatch`, and config-driven
+  boot must stay visible and reproducible. Do not propose structure that hides them.
 
 ---
 
@@ -58,30 +71,44 @@ Concretely:
 
 Before making structural judgments, read and use these as anchors when present:
 
-- `CONTEXT.md` — domain language (Gesellschaft, Kostenstelle, Kostenart, Kreditor, Kostenposition,
-  Funktionskonto, Frequenz, Buchungssystem) and the **four-source double-counting rule**. Docs can
+- `CONTEXT.md` — domain language (Tenant, Connector, Asset-Träger + Träger-Typ, Kostenstelle as a
+  tree whose root nodes are the Gesellschaften, Kostenart, Kreditor, Kostenposition, Funktionskonto,
+  Frequenz, Buchungssystem, Weiterberechnung) and the **four-source double-counting rule**. Docs can
   lag code — trust `src/` where they disagree.
-- `docs/adr/` — accepted decisions, esp. `0001-cost-lines-modell.md` (the `asset_cost_lines`
-  backbone + the `aggregation_source` invariant). These are the intended-architecture record.
+- `docs/adr/` — accepted decisions (0001–0028), esp. `0001` (the `asset_cost_lines` backbone + the
+  `aggregation_source` invariant), `0008` (Controlling as a switchable layer), `0012` (Inventory as the
+  primary asset surface), `0013` (module-local `--am-*` design tokens), `0016` (Tenant = access
+  boundary), `0017` (Asset-Träger instead of Mitarbeiter), `0022` (deploy via lock pointer). These are
+  the intended-architecture record.
 - `docs/agents/logic-audit.md` — the correctness lens. Read it so you don't duplicate logic findings
   and so you understand the failure-mode landscape your structural changes must not worsen.
-- `composer.json` — **`require` is empty by design**: the host app provides the Laravel framework,
-  and the Excel import uses a **native** `ZipArchive`+`SimpleXML` reader
-  (`CostExcelImportService::readWorkbook()`), **not** `phpoffice/phpspreadsheet`. Do **not** flag a
-  "missing phpspreadsheet / missing framework dependency" — it is genuinely host-provided. This is a
-  Composer **path package**.
-- `config/asset-manager.php` — routing, guard, navigation, sidebar (the config-driven surface Core
-  reads; the reproducibility contract). No `billables` key in this module — do not assume one.
+- `composer.json` — `require` holds only `php`, `ext-zip`, `ext-simplexml` and
+  `barryvdh/laravel-dompdf` (handover/billing PDFs); the **Laravel framework is host-provided**, and
+  the Excel import uses a **native** `ZipArchive`+`SimpleXML` reader (`Support/XlsxReader`;
+  `CostExcelImportService::readWorkbook()` delegates to it), **not** `phpoffice/phpspreadsheet`. Do
+  **not** flag a "missing phpspreadsheet / missing framework dependency" — it is genuinely
+  host-provided. This is a Composer **path package**; `autoload` also maps
+  `Platform\AssetManager\Database\Factories\` for the host feature tests.
+- `config/asset-manager.php` — routing, guard, central Azure app (`azure.*`), navigation, sidebar
+  (the config-driven surface Core reads; the reproducibility contract). The in-module sidebar actually
+  renders from `resources/views/livewire/sidebar.blade.php`, not from `config['sidebar']`. No
+  `billables` key in this module — do not assume one.
 - `src/AssetManagerServiceProvider.php` — the **composition root** and fixed boot sequence:
-  `register()` runs `mergeConfigFrom` (correctly here, not in `boot()`) and registers the 4 console
-  commands; `boot()` does `registerModule` → `ModuleRouter::group` + `apiGroup` → `Gate::policy`
-  (×2) → migrations → config publish → views → **Livewire auto-registration** (recursive scan of
-  `src/Livewire/`) → **explicit MCP tool registration** (`registerTools()`, a hardcoded list of all
-  28 tools — *no auto-discovery*, so adding/removing a tool requires editing the ServiceProvider) →
-  **scheduler** (`asset-manager:sync-intune` hourly, `asset-manager:sync-licenses` daily 02:00).
+  `register()` runs `mergeConfigFrom` (correctly here, not in `boot()`), binds
+  `Services/BillingGateway` → `EasybillBillingGateway` (swappable in tests, ADR 0021) and registers
+  the 7 console commands; `boot()` does `registerModule` → `ModuleRouter::group` + `apiGroup` →
+  `Gate::policy` (×2) → `Gate::define('asset-manager.manage')` (ADR 0004) → migrations → config
+  publish → views → module Blade components (`asset-manager-*`) → **Livewire auto-registration**
+  (recursive scan of `src/Livewire/`) → **explicit MCP tool registration** (`registerTools()`, a
+  hardcoded list — Stand 2026-10-19: ~45 tools + 4 deprecated `…employee(s)…` aliases from
+  `Tools/Holders/Legacy`; *no auto-discovery*, so adding/removing a tool requires editing the
+  ServiceProvider) → **scheduler** (`asset-manager:sync-intune` hourly, `asset-manager:import-users`
+  daily 01:30, `asset-manager:sync-licenses` daily 02:00).
 - `routes/web.php`, `routes/api.php` — the import surfaces (web routes are name-only; prefix +
-  middleware come from `ModuleRouter`).
-- `README.md`, `LLM_GUIDE.md`, `DESIGN.md` — intended structure, andock points, LLM-first contract.
+  middleware come from `ModuleRouter`; the cost/controlling routes sit in a
+  `Http/Middleware/EnsureControllingEnabled` group, ADR 0008).
+- `README.md`, `LLM_GUIDE.md`, `DESIGN.md`, `tests/README.md` — intended structure, andock points,
+  LLM-first contract, the three test levels.
 - The platform-wide `C:\Coding\Platforms\CLAUDE.md` (Standard module structure, Boot-Sequenz, Goldene
   Regeln, Core-Wissensbasis) and the module `CLAUDE.md` (skill config) — these define the **boundary
   contract** every module is measured against.
@@ -139,11 +166,14 @@ All refactoring recommendations must:
 - preserve auditability (import trail / sync-logs) and operator visibility
 - preserve config- and ADR-driven behavior — never hide config-driven behavior inside implicit defaults
 
-Because this module feeds authoritative cost figures across Gesellschaften:
-- **never merge aggregation/import/sync logic into the Livewire/Tools/Controller layer** — the
-  `Services/` layer is the single home for that risk-sensitive logic, and currently is
-  (`CostAggregationService` = pivot, `CostExcelImportService` = import, `IntuneGraphService` /
-  `AssetDeviceService` = sync). Routine CRUD list/detail views and CRUD tools reading Models
+Because this module feeds authoritative cost figures and invoices for several customers (Tenants):
+- **never merge aggregation/import/sync/billing logic into the Livewire/Tools/Controller layer** —
+  the `Services/` layer (plus framework-free calculators in `Support/`) is the single home for that
+  risk-sensitive logic, and currently is (`CostAggregationService` = pivot, `CostExcelImportService`
+  / `VodafoneInvoiceImportService` / `VodafoneFixedNetImportService` / `LicenseInvoiceImportService`
+  = imports, `IntuneGraphService` / `AssetDeviceService` + the `Jobs/` = sync, `BillingRunService` =
+  Weiterberechnung, `DatevReallocationService` + `Support/DatevExtfWriter` = DATEV, shared write rules
+  in `CostLineWriteService` / `AssetWriteService` used by UI **and** MCP). Routine CRUD list/detail views and CRUD tools reading Models
   **directly** is idiomatic Livewire and **not** a finding — do not propose forcing every Model
   access through a service. The boundary to defend is: a *new* pivot/import/sync rule, or a
   *duplicated* one, leaking into a component or tool instead of living in (or reusing) its service.
@@ -151,8 +181,9 @@ Because this module feeds authoritative cost figures across Gesellschaften:
   stay at or above the call site).
 - **never reduce observability** of import or sync (the `import_hash`/`import_batch_id` trail, the
   sync-log rows) or of the pivot aggregation path.
-- **never collapse the three write paths** (manual Livewire CRUD, Excel import, Graph-Sync) into a
-  shape that hides which path wrote a row or makes incident review harder.
+- **never collapse the write paths** (manual Livewire CRUD, MCP write tools, Excel import, invoice
+  imports, Graph-Sync — distinguishable via `source` and the import/sync logs) into a shape that
+  hides which path wrote a row or makes incident review harder.
 - **never blur the Excel-bootstrap boundary**: per the project's decouple-from-Excel decision, the
   Excel import is treated as a throwaway bootstrap (the master data it seeds is meant to live in the
   UI) — do not propose elevating the importer into a long-lived domain dependency.
@@ -167,22 +198,49 @@ Map and assess the real layers:
 
 - **Composition root** — `src/AssetManagerServiceProvider.php` (boot order, what it wires).
 - **Config / routing surface** — `config/asset-manager.php`, `routes/web.php`, `routes/api.php`.
-- **UI layer** — `src/Livewire/` (feature folders: `Assets`, `Costs`, `Devices`, `Employees`,
-  `Licenses`, `MasterData`, `CostLines`, `Printers`, `Internet`, `DeviceModels`; plus top-level
-  `Dashboard`, `Sidebar`, `ConnectorSetup`, `Test`) + Blade views.
-- **Domain / business logic** — `src/Services/` (`CostAggregationService`, `CostExcelImportService`,
-  `IntuneGraphService`, `AssetDeviceService`, `EmployeeService`, `CostResetService`,
-  `CostBootstrapService`).
-- **Persistence / domain model** — `src/Models/` (`AssetCostLine`, `AssetCostType`, `AssetEmployee`,
-  `AssetDevice`, `AssetConnectorConfig`, sync logs, master-data models).
+- **UI layer** — `src/Livewire/` (feature folders: `Assets`, `Billing`, `Connectors`, `CostLines`,
+  `Costs` (`Allocation`, `Dashboard`, `DatevReallocation`, `Import`), `DeviceModels`, `Devices`
+  (`Index`, `Status`), `Handovers`, `Holders`, `Internet`, `Inventory` (`Index`, `Show` — the one
+  detail page for items **and** devices, ADR 0012), `Licenses` (`Index`, `Show`, `Contracts`),
+  `MasterData`, `Printers`, `Reports`, `Settings`; plus top-level `Dashboard`, `Sidebar` (embedded by
+  Core on every module page; hosts the theme tokens and the tenant switcher)) + Blade views
+  (`resources/views/livewire/**`, module components in `resources/views/components/`).
+- **Shared component/model traits** — `src/Concerns/` (`TenantScopable`, `GuardsTenantBoundary`,
+  `ResolvesCurrentTeam`, `ReportsAcrossTenants`, `AuthorizesTeamRole`, `ClampsListState`,
+  `CustomizesTableView`, `RunsTeamSync`).
+- **Domain / business logic** — `src/Services/` (37 classes; core ones: `CostAggregationService`,
+  `CostExcelImportService`, `IntuneGraphService`, `AssetDeviceService`, `AssetWriteService`,
+  `InventoryService`, `HolderService`, `HolderClassifier`, `HolderTypeService`, `HolderMergeService`,
+  `CostLineWriteService`, `CostLineReassignService`, `CostPlausibilityService`, `CostResetService`,
+  `AssetResetService`, `CostBootstrapService`, `MasterDataDeletionService`, `TenantContext`,
+  `ControllingContext`, the invoice importers, `BillingRunService` / `BillableHolderResolver` /
+  `BillingGateway` / `EasybillBillingGateway`, `DatevReallocationService` / `DatevBatchService`,
+  `InvoiceSnapshotService`, `HandoverCoverageService`, `TableViewService`).
+- **Persistence / domain model** — `src/Models/` (~33 models: `AssetCostLine`, `AssetCostType`,
+  `AssetCostCenter` (tree), `AssetVendor`, `AssetHolder`, `AssetDevice`, `AssetDeviceModel` (+`Cost`),
+  `AssetItem`, `AssetAssignment`, `AssetHandover` (+`Line`), `AssetTenant`, `AssetConnectorConfig`,
+  `AssetUserLicense`, `AssetLicenseSku`, `AssetLicenseContractLine`, sync/import logs, billing/DATEV
+  models, settings). There is **no** `AssetEmployee` / `AssetCompany` any more (ADR 0017 / 0016 — the
+  Gesellschaft is a root node of `AssetCostCenter`).
 - **Ingestion / sync** — `src/Jobs/` (`SyncIntuneDevicesJob`, `SyncLicensesJob`,
-  `ImportTenantUsersJob`, `BackfillEmployeesJob`) + `src/Console/Commands/` (4 commands) + the
-  ServiceProvider scheduler (sync-intune hourly, sync-licenses daily).
-- **LLM / MCP surface** — `src/Tools/` (28 tools across `CostLines`, `Costs`, `Devices`,
-  `Employees`, `Licenses`, `MasterData`, `Sync`, plus `OverviewTool`; shared `Concerns/ResolvesTeam`),
-  all explicitly registered in `AssetManagerServiceProvider::registerTools()`.
-- **HTTP API** — `src/Http/Controllers/Api/` + `src/Policies/`.
-- **Support** — `src/Support/` (`CostBootstrap` const definitions).
+  `ImportTenantUsersJob` — the three are `ShouldBeUnique` per connector — and `BackfillHoldersJob`) +
+  `src/Console/Commands/` (7 commands: `sync-intune`, `sync-licenses`, `import-users`,
+  `backfill-employees` (`BackfillHoldersCommand`, old name kept), `classify-holders`,
+  `merge-deleted-holders`, `import-costs`) + the ServiceProvider scheduler (sync-intune hourly,
+  import-users 01:30, sync-licenses 02:00).
+- **LLM / MCP surface** — `src/Tools/` (folders `Billing`, `CostLines`, `Costs`, `Devices`,
+  `Handovers`, `Holders` (+ `Legacy` aliases), `Licenses`, `MasterData`, `Sync`, plus
+  `OverviewTool`; shared `Concerns/` `ResolvesTeam`, `ResolvesTenant`, `DeletesMasterData`,
+  `DeprecatedToolAlias`), all explicitly registered in
+  `AssetManagerServiceProvider::registerTools()`.
+- **HTTP** — `src/Http/Controllers/Api/AssetDeviceController` (+ `src/Policies/`),
+  `src/Http/Controllers/HandoverPdfController`, `BillingAttachmentPdfController`,
+  `src/Http/Middleware/EnsureControllingEnabled`.
+- **Support** — `src/Support/` (framework-free building blocks: `CostBootstrap` const definitions,
+  `XlsxReader`, `DeviceCostResolver`, `LicensePriceBook` / `LicenseSeatCascade` / `LicenseSkuMatcher`,
+  `LicenseContractInsights`, `DatevExtfWriter` / `DatevReallocationCalculator`, `TableViewState` /
+  `PivotTableShaper`, `TenantScope`, `TeamRole`, `DecimalInput`, `PhoneNumber`, `ImportRunRecorder`,
+  …).
 
 Assess: package/module boundaries · dependency direction (`Services` → `Models`; UI/Tools/Controllers
 → `Services` for the pivot/import/sync paths, and → `Models` directly for routine CRUD — both are
@@ -192,35 +250,45 @@ entrypoints and import surfaces (ServiceProvider, routes, Livewire aliases, MCP 
 
 Detect: monolith files · circular `use`/dependency · hidden cross-layer calls (a *new or duplicated*
 pivot/import/sync rule living in Livewire/Tools instead of its Service — **not** ordinary CRUD Model
-access) · unclear domain ownership · dead modules (`Livewire/Test.php` is a self-described disposable
-demo — confirm it is unrouted/unreferenced) · stale compatibility shims (e.g. the legacy master-data
-single routes in `routes/web.php:53-56` now redirect to the combined page — intentional back-compat,
-confirm before touching) · duplicate abstractions (e.g. `Support/CostBootstrap` vs
+access) · unclear domain ownership · dead modules (verify any candidate is unrouted and
+unreferenced before recommending removal — the stranded `Livewire/Assets/Create`/`Show` pages were
+removed 2026-10-19, #880; `Livewire/Assets/Index` is still routed at `/assets`) · stale
+compatibility shims (intentional back-compat, confirm before touching: the legacy master-data single
+routes `routes/web.php:112-115` → combined page, `/employees*` → `/holders*`, `/devices/{device}`
+and `/assets/{item}` → `inventory.show`, `/assets/create` → inventory create modal, `/compliance` →
+devices list, `/setup` → connectors; the deprecated MCP aliases in `Tools/Holders/Legacy` and
+`asset-manager.companies.GET`, which stay until the live connector shows no more calls) · duplicate
+abstractions (e.g. `Support/CostBootstrap` vs
 `Services/CostBootstrapService` — **confirm**: verified here as a legitimate data/behavior split, a
 const table consumed by the seeding service, *not* duplication) · boundary leaks between UI,
 ingestion/sync, the MCP tool surface, the HTTP API, and the domain services.
 
 Monolith guidance: flag files larger than ~500 lines **only if** size also creates ownership,
-testability, or change-risk problems. `CostAggregationService` (the pivot engine) and
-`CostExcelImportService` (the native XLSX reader) are the obvious size candidates — judge them on
-change-risk and testability, not line count alone.
+testability, or change-risk problems. Size candidates (Stand 2026-10-19): `Livewire/CostLines/Index`
+(~1060 lines), `Services/CostAggregationService` (~880, the pivot engine), `VodafoneInvoiceImportService`
+(~670), `Livewire/MasterData/Index`, `Livewire/Holders/Index`, `Livewire/Costs/Import`,
+`LicenseInvoiceImportService`, `Jobs/SyncIntuneDevicesJob`, `CostExcelImportService` (~550–650 each)
+— judge them on change-risk and testability, not line count alone.
 
 ### 2) Clutter detection
 
 Systematically detect: duplicate logic · unused functions/classes · stale compatibility layers ·
-outdated comments/docstrings · temporary/debug/demo code (`Livewire/Test.php` and its
-`asset-manager::livewire.test` view are explicit candidates — verify they are unreferenced and
-unrouted before recommending removal) · inconsistent naming that causes ownership confusion · dead
-exports · MCP tools or routes registered but never used · passive wrappers with no abstraction value.
+outdated comments/docstrings (e.g. leftover `employee`/`Mitarbeiter` wording after ADR 0017 —
+but note the deliberately kept external names: tool `asset-manager.costs.top-employees.GET`
+(`TopEmployeesByCostTool`), command `asset-manager:backfill-employees`, column `assignee_id`) ·
+temporary/debug/demo code (the former `Livewire/Test.php` demo is already gone — verify any new
+candidate is unreferenced and unrouted before recommending removal) · inconsistent naming that causes
+ownership confusion · dead exports · MCP tools or routes registered but never used · passive wrappers with no abstraction value.
 
-For the **`Tools/` layer specifically**: 28 thin MCP wrappers exist by design (LLM-first). Do **not**
-flag them as "passive wrappers" wholesale — the value is the MCP contract + team resolution
-(`Concerns/ResolvesTeam`). Flag a tool only if it (a) contains pivot/import/sync logic that belongs in
+For the **`Tools/` layer specifically**: ~45 thin MCP wrappers (+ 4 deprecated aliases) exist by
+design (LLM-first). Do **not** flag them as "passive wrappers" wholesale — the value is the MCP
+contract + team/tenant resolution (`Concerns/ResolvesTeam`, `Concerns/ResolvesTenant`) + the
+`asset-manager.manage` gate for writes. Flag a tool only if it (a) contains pivot/import/sync logic that belongs in
 a Service, (b) duplicates another tool, or (c) is in `src/Tools/` but missing from
 `registerTools()` (dead/unregistered) — the explicit registration list is the source of truth.
 
 Do **not** suggest new helpers/utilities if a similar abstraction may already exist
-(`Services/`, `Support/`, `Tools/Concerns/ResolvesTeam`). Confirm first.
+(`Services/`, `Support/`, `Concerns/`, `Tools/Concerns/`). Confirm first.
 
 ### 3) Refactoring opportunities
 
@@ -244,7 +312,7 @@ recursively scans `src/Livewire/` and derives each alias by kebab-casing the fol
 renaming a component folder silently changes its string alias. `routes/web.php` dodges this by binding
 **class-based references** (`Devices\Index as DevicesIndex`), the safe pattern — but any `<livewire:…>`
 / `@livewire('alias')` string usage in Blade is exposed to alias mangling (see module memory
-`reference_livewire_alias_mangling`). Do not propose moves that break the template contract or silently
+`reference_livewire_alias_mangling`; `tests/guardrails.php` Check 3 rejects both string forms). Do not propose moves that break the template contract or silently
 rename Livewire aliases / MCP tool names.
 
 Design principles: clear domain boundaries · consistent layering · isolation of runtime vs
@@ -255,24 +323,49 @@ over-modularization.
 
 Recommend only high-value safeguards, and **confirm presence first** (`require` is empty by design, so
 dev tooling may not be wired):
-- static analysis / type checking — Larastan/PHPStan **as a candidate** (confirm it is configured
-  before assuming it runs); `php -l` per file always works.
+- static analysis / type checking — Larastan/PHPStan **as a candidate** (not configured in this repo
+  — no `phpstan.neon`; confirm before assuming it runs); `php -l` per file always works.
 - Blade compilation check (this module's standing trap — a stray `@endif` is an HTTP 500; verify by
-  compiling, not counting tags; see module memory `reference_blade_local_verify`).
-- import/dependency-direction guard — a lightweight check that no Livewire component or Tool
-  re-implements pivot/import/sync logic a Service already owns (e.g. a component doing its own
-  normalization instead of calling `CostAggregationService`), and that no `Model`/`Service` `use`s
-  Livewire/Tools. **Not** a blanket "UI must not touch Models" rule — routine CRUD Model access is fine.
-- coverage — **no `tests/` directory exists** (verified 2026-06-13): there is zero automated safety
-  net, so any medium/high structural move must add the **smallest** characterization tests first
-  (pivot output, import idempotency, tenant scoping) — treat this as a precondition, not a nicety.
+  compiling, not counting tags): **exists** as `php tests/local/blade-lint.php <files>` (compiles
+  Blade → PHP against a host app and lints the result).
+- import/dependency-direction guard — **exists** as `tests/guardrails.php` Check 2 (no file in
+  `src/Models` or `src/Services` imports the Livewire/Tools/Http layers). Still not covered: a
+  Livewire component or Tool re-implementing pivot/import/sync logic a Service already owns (e.g. a
+  component doing its own normalization instead of calling `CostAggregationService`). **Not** a
+  blanket "UI must not touch Models" rule — routine CRUD Model access is fine.
+- coverage — there **are** three test levels (see `tests/README.md`); know what they cover before
+  proposing new ones:
+  1. `tests/guardrails.php` — framework-free static checks, runs anywhere (`php tests/guardrails.php`,
+     exit 0 = green): (1) tool-registration completeness, (2) layer dependency direction, (3) no
+     Blade alias mangling, (4) every eager-loaded relation exists, (5) device-model cost loaded with
+     cost type + vendor, (6) per-instance device cost resolution only on single-object paths,
+     (7) `AssetResetService` covers every model with `team_id` (or an explicit, reasoned exemption),
+     (8) every `var(--am-*)` used in a Blade is defined in `components/theme.blade.php`,
+     (9) every MCP tool resolves the tenant via `resolveTenant()` and every writing tool checks the
+     `asset-manager.manage` gate against the context team.
+  2. `tests/local/` — 42 check scripts (41 PHP + `pivot-grid.mjs`) plus `blade-lint.php` and the
+     shared `bootstrap.php`; they boot an existing host app as a library on SQLite in-memory
+     (`AM_HOST_APP` overrides the host path) and exercise real services/components/tools (pivot
+     grouping, billing, DATEV, invoice imports, holder lifecycle, N+1 budgets, list-state clamping,
+     tenant isolation across all scoped models, an MCP tool smoke suite, …).
+     Limits: SQLite is lax on `GROUP BY`, module migrations don't run (each script builds its own
+     columns), no authenticated user.
+  3. `tests/Feature/` — 7 PHPUnit classes on the host's `Tests\TestCase` + `RefreshDatabase`
+     (`CostLineScopingTest`, `CostReconciliationTest`, `ExcelImportIdempotencyTest`,
+     `GraphReconcileDeleteTest`, `LifecycleAuditTest`, `SerialIdentityTest`,
+     `VodafoneInvoiceImportTest`); they need the full Core bootstrap and run **only in the host app
+     after deploy**.
+  A medium/high structural move must still add the **smallest** characterization test for the path
+  it touches if none of the three levels covers it (pivot output, import idempotency, tenant
+  scoping) — check the existing scripts first.
 - CI checks that prevent unsafe structural drift (Livewire-alias mangling regressions, boot-sequence
-  order, cross-module `use`).
+  order, cross-module `use`) — no CI is wired in the module repo; the guardrails script is the
+  candidate to run there.
 
 Recommendations must be executable from CLI or PhpStorm using safe rename/move workflows. Note: as a
 path package, running framework-aware tooling (artisan, Blade compile, Larastan with framework stubs)
-may require the host/sandbox app (`demo.bhgdigital.de` booted as a library); if you cannot execute,
-downgrade those checks to **Inferred**.
+requires a host/sandbox app (`demo.bhgdigital.de` booted as a library — exactly what
+`tests/local/bootstrap.php` does); if you cannot execute, downgrade those checks to **Inferred**.
 
 ---
 
@@ -296,7 +389,8 @@ Do not stop early unless the missing tree makes architecture assessment impossib
 
 Every finding must include at least one of: exact `file:line` · exact symbol/class/Livewire
 component/MCP tool name · exact `use`/import path · exact config key/path · exact migration name ·
-exact test name · exact command/tool result (`php -l`, Blade compile, `composer` output).
+exact test name · exact command/tool result (`php -l`, `php tests/guardrails.php`, Blade compile,
+`composer` output).
 
 Do not write vague evidence ("architecture seems mixed", "naming is inconsistent", "there may be
 duplication", "module ownership is unclear"). If visibility is incomplete, say so explicitly. Do not
