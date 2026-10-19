@@ -158,6 +158,28 @@
                             <p class="text-xs text-amber-700">{{ $preview['price_note'] }}</p>
                         @endif
 
+                        {{-- Vormonatsvergleich (#971): wer ist neu, wer ist weg. --}}
+                        @if(($preview['comparison']['previous_quantity'] ?? null) !== null)
+                            <div class="rounded-lg border border-[color:var(--am-border)] bg-[var(--am-bg)] px-4 py-2.5 text-sm text-[var(--am-text-secondary)]">
+                                <span>Gegenüber {{ $preview['comparison']['previous_period'] }} ({{ $preview['comparison']['previous_quantity'] }}):</span>
+                                <strong class="text-emerald-700">+{{ count($preview['comparison']['added']) }} neu</strong>,
+                                <strong class="text-red-700">−{{ count($preview['comparison']['removed']) }} weg</strong>
+                                @if($preview['comparison']['added'] !== [] || $preview['comparison']['removed'] !== [])
+                                    <details class="mt-1">
+                                        <summary class="cursor-pointer text-xs text-[var(--am-accent)]">Namen anzeigen</summary>
+                                        <ul class="mt-1 space-y-0.5 text-xs">
+                                            @foreach($preview['comparison']['added'] as $p)
+                                                <li class="text-emerald-800">+ {{ $p['name'] ?: $p['upn'] }} <span class="text-[var(--am-text-muted)]">{{ $p['upn'] }}</span></li>
+                                            @endforeach
+                                            @foreach($preview['comparison']['removed'] as $p)
+                                                <li class="text-red-800">− {{ $p['name'] ?: $p['upn'] }} <span class="text-[var(--am-text-muted)]">{{ $p['upn'] }}</span></li>
+                                            @endforeach
+                                        </ul>
+                                    </details>
+                                @endif
+                            </div>
+                        @endif
+
                         @if(($preview['warnings'] ?? []) !== [])
                             <div class="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3">
                                 <ul class="list-disc list-inside space-y-0.5 text-sm text-sky-900">
@@ -337,6 +359,12 @@
                                                         <span class="ml-1 text-[10px] text-amber-700" title="Die Aufstellung liegt nicht am easybill-Beleg — bitte von Hand anhängen.">
                                                             nicht angehängt
                                                         </span>
+                                                        @if($canManage)
+                                                            <button type="button" wire:click="reattachStatement({{ $run->id }})"
+                                                                    class="ml-1 text-[10px] text-[var(--am-accent)] hover:underline">
+                                                                erneut anhängen
+                                                            </button>
+                                                        @endif
                                                     @endif
                                                 @else
                                                     <span class="text-xs text-[var(--am-text-muted)]">—</span>

@@ -302,6 +302,24 @@ class Index extends Component
             . 'Festschreiben und Versenden passieren in easybill.';
     }
 
+    /** Aufstellung (PDF) erneut an den easybill-Beleg hängen (#971). */
+    public function reattachStatement(int $runId, BillingRunService $runs): void
+    {
+        abort_unless($this->canManage(), 403);
+
+        $run = AssetBillingRun::query()
+            ->where('team_id', $this->teamId())
+            ->findOrFail($runId);
+
+        $this->error = null;
+        $this->flash = $runs->reattachStatement($run)
+            ? 'Aufstellung an den Beleg angehängt.'
+            : null;
+        if ($this->flash === null) {
+            $this->error = 'Die Aufstellung konnte wieder nicht angehängt werden — bitte in easybill von Hand anhängen.';
+        }
+    }
+
     /**
      * Einen unklar ausgegangenen Versuch freigeben (#940) — erst nachdem in easybill nachgesehen
      * wurde, dass dort kein Beleg liegt. Danach ist der Monat wieder frei.

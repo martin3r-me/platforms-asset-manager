@@ -517,4 +517,20 @@ $dirRun->forceFill(['created_at' => now()->subDays(3)])->save();
 check('Abgleich 3 Tage alt: Hinweis', 1, count($runs->directoryWarnings($profile)));
 check('Hinweis blockiert den Lauf nicht', true, ! in_array($runs->directoryWarnings($profile)[0], $runs->preview($profile, '2026-10')['problems'], true));
 
+
+// --- Vormonatsvergleich (#971) -----------------------------------------
+$sepRun = AssetBillingRun::withoutTenantScope()->where('period', '2026-09')->latest('id')->first();
+$before = (array) ($sepRun->snapshot['principals'] ?? []);
+check('Vorbedingung: September-Lauf mit UPNs', true, count($before) >= 2);
+
+$now = array_slice($before, 1);           // erster ist weg
+$now[] = 'NEU.PERSON@BROICHCATERING.COM'; // einer ist neu
+$cmp = $runs->compareWithPrevious($profile, '2026-10', $now);
+check('Vergleich: Vormonat erkannt', '2026-09', $cmp['previous_period']);
+check('Vergleich: einer neu', ['NEU.PERSON@BROICHCATERING.COM'], array_column($cmp['added'], 'upn'));
+check('Vergleich: einer weg', [$before[0]], array_column($cmp['removed'], 'upn'));
+check('Vergleich: Schreibweise egal', [], $runs->compareWithPrevious($profile, '2026-10', array_map('strtolower', $before))['added']);
+check('Vergleich: 2 Köpfe Änderung bei kleiner Basis → Hinweis (≥ 5 %)', count($before) <= 40, $cmp['warnings'] !== []);
+check('Ohne Vormonatslauf: kein Vergleich', null, $runs->compareWithPrevious($profile, '2025-01', $now)['previous_quantity']);
+
 check_summary();

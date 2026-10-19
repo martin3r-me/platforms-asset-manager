@@ -97,6 +97,8 @@ class BillingRunService
 
         $total = $cents === null ? 0 : $cents * $quantity;
 
+        $comparison = $this->compareWithPrevious($profile, $period, $counted['principals'], $counted['rows']);
+
         return [
             'quantity'         => $quantity,
             'unit_price_cents' => $cents,
@@ -115,7 +117,8 @@ class BillingRunService
             'exceptions'       => $counted['exceptions'],
             'period_label'     => $this->periodLabel($period),
             'problems'         => $problems,
-            'warnings'         => $this->directoryWarnings($profile),
+            'warnings'         => array_merge($this->directoryWarnings($profile), $comparison['warnings']),
+            'comparison'       => $comparison,
             'document'         => $cents === null || $quantity === 0
                 ? null
                 : $this->buildDocument($profile, $period, $quantity, $cents, $price),
@@ -273,6 +276,92 @@ class BillingRunService
         }
 
         return [];
+    }
+
+    /** Ab so vielen Köpfen Unterschied zum Vormonat warnt die Vorschau (#971). */
+    public const CHANGE_WARN_HEADS = 3;
+
+    /** … oder ab diesem Anteil (5 %). */
+    public const CHANGE_WARN_RATIO = 0.05;
+
+    /**
+     * Vergleich mit dem letzten Lauf des Vormonats (#971): wer ist neu, wer ist weg. Jeder Lauf speichert
+     * die abgerechneten UPNs im Snapshot — bisher sah man nur die Menge. Ab 3 Köpfen oder 5 % Abweichung
+     * kommt ein Hinweis vor „Entwurf anlegen": genau dort fällt ein vergessener Austritt oder ein
+     * plötzlich mitgezähltes Funktionskonto auf, bevor es auf der Kundenrechnung steht.
+     *
+     * @param  list<string>  $principals
+     * @param  list<array<string, mixed>>  $rows
+     * @return array{previous_period: string, previous_quantity: int|null, added: list<array{upn: string, name: string|null}>, removed: list<array{upn: string, name: string|null}>, warnings: list<string>}
+     */
+    public function compareWithPrevious(AssetBillingProfile $profile, string $period, array $principals, array $rows = []): array
+    {
+        $previousPeriod = Carbon::createFromFormat('Y-m-d', $this->normalizePeriod($period) . '-01')->subMonthNoOverflow()->format('Y-m');
+
+        $previous = AssetBillingRun::query()
+            ->withoutTenantScope()
+            ->where('billing_profile_id', $profile->id)
+            ->where('period', $previousPeriod)
+            ->whereIn('status', [AssetBillingRun::STATUS_DRAFT, AssetBillingRun::STATUS_DISCARDED])
+            ->latest('id')
+            ->first();
+
+        $empty = ['previous_period' => $previousPeriod, 'previous_quantity' => null, 'added' => [], 'removed' => [], 'warnings' => []];
+        if ($previous === null) {
+            return $empty;
+        }
+
+        $key    = fn (string $upn) => mb_strtolower(trim($upn));
+        $before = [];
+        foreach ((array) ($previous->snapshot['rows'] ?? []) as $row) {
+            $before[$key((string) ($row['upn'] ?? ''))] = $row;
+        }
+        foreach ((array) ($previous->snapshot['principals'] ?? []) as $upn) {
+            $before[$key((string) $upn)] ??= ['upn' => $upn];
+        }
+        $now = [];
+        foreach ($rows as $row) {
+            $now[$key((string) ($row['upn'] ?? ''))] = $row;
+        }
+        foreach ($principals as $upn) {
+            $now[$key((string) $upn)] ??= ['upn' => $upn];
+        }
+        unset($before[''], $now['']);
+
+        $describe = fn (array $row) => ['upn' => (string) ($row['upn'] ?? ''), 'name' => $row['name'] ?? $row['display_name'] ?? null];
+        $added    = array_values(array_map($describe, array_diff_key($now, $before)));
+        $removed  = array_values(array_map($describe, array_diff_key($before, $now)));
+
+        $warnings = [];
+        $change   = count($added) + count($removed);
+        $base     = max(1, count($before));
+        if ($change >= self::CHANGE_WARN_HEADS || $change / $base >= self::CHANGE_WARN_RATIO) {
+            $warnings[] = sprintf('Gegenüber %s: %d neu, %d weg (%d → %d). Bitte vor dem Entwurf prüfen.',
+                $this->periodLabel($previousPeriod), count($added), count($removed), count($before), count($now));
+        }
+
+        return [
+            'previous_period'   => $previousPeriod,
+            'previous_quantity' => (int) $previous->quantity,
+            'added'             => $added,
+            'removed'           => $removed,
+            'warnings'          => $warnings,
+        ];
+    }
+
+    /**
+     * Aufstellung erneut an den Beleg hängen (#971) — für Läufe, bei denen das Anhängen gescheitert ist.
+     * Gleicher Weg wie beim Anlegen; scheitert er wieder, bleibt `easybill_attachment_id` leer.
+     */
+    public function reattachStatement(AssetBillingRun $run): bool
+    {
+        if (! $run->isDraft() || $run->easybill_attachment_id) {
+            return false;
+        }
+
+        $this->attachStatement($run);
+
+        return (bool) $run->fresh()->easybill_attachment_id;
     }
 
     /** Der jüngste offene/unklare Versuch dieser Periode, falls es einen gibt. */
