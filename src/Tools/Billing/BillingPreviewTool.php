@@ -39,7 +39,8 @@ class BillingPreviewTool implements ToolContract, ToolMetadataContract
     {
         return 'GET /asset-manager/billing/preview - Vorschau der Weiterberechnung (User-Pauschale) für einen '
             . 'Monat: Menge, Stückpreis und Summe (Cent und Euro), Preisquelle, Zählregel, Hinderungsgründe '
-            . '(problems), Hinweise (warnings), Ausnahmen und — optional — die gezählten Träger. Ohne profile_id '
+            . '(problems), Hinweise (warnings), Ausnahmen, nicht gezählte Träger mit Grund (skipped, skipped_by_reason) '
+            . 'und — optional — die gezählten Träger. Ohne profile_id '
             . 'für alle aktiven Profile des Tenants. period = YYYY-MM (Default: aktueller Monat). Read-only, '
             . 'sendet nichts an easybill. Zeigt auch, ob für den Monat schon ein Entwurf existiert.';
     }
@@ -120,6 +121,9 @@ class BillingPreviewTool implements ToolContract, ToolMetadataContract
                     'price_source'     => $preview['price_source'],
                     'price_note'       => $preview['price_note'],
                     'skipped_count'    => count($preview['skipped']),
+                    // Ausschlussgründe je Träger (#885): „warum nicht 152?" ist die eigentliche Frage.
+                    'skipped_by_reason' => collect($preview['skipped'])->countBy('reason')->sortDesc()->all(),
+                    'skipped'          => array_slice(array_values($preview['skipped']), 0, self::MAX_ROWS),
                     'exceptions'       => array_values($preview['exceptions']),
                     'problems'         => $preview['problems'],
                     'warnings'         => $preview['warnings'] ?? [],
