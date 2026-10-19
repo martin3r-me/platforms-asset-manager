@@ -5,6 +5,10 @@ namespace Platform\AssetManager\Services;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Platform\AssetManager\Models\AssetInvoiceSnapshot;
+use Platform\AssetManager\Models\AssetTelephonySeat;
+use Platform\AssetManager\Models\AssetLicenseBillingAlias;
+use Platform\AssetManager\Models\AssetLicenseContractLine;
 use Platform\AssetManager\Models\AssetAssignment;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostLine;
@@ -30,6 +34,14 @@ use Platform\AssetManager\Models\AssetVendor;
  *   - asset_tenants, asset_connector_configs, asset_tenant_selections — die Intune-/Azure-Anbindung
  *   - asset_team_settings — u. a. der Controlling-Schalter ({@see ControllingContext})
  *   - asset_categories — GLOBAL (von allen Teams geteilt), niemals team-scoped löschbar
+ *   - asset_billing_profiles — Abrechnungs-Einstellungen (easybill-Kunde, Zählregel), wie die Anbindung
+ *   - asset_billing_runs, asset_datev_batches, asset_import_runs — Revisionsspur: was an easybill bzw.
+ *     DATEV ging oder importiert wurde, bleibt nachvollziehbar, auch wenn die Daten dahinter weg sind
+ *   - asset_table_views — persönliche Tabellen-Ansichten der User
+ *
+ * Seit #953 gehören auch Vertragszeilen, Lizenz-Aliasse, Telefonie-Plätze und Monatsstände (Rechnungs-
+ * Snapshots) zum Reset. Vorher blieben sie stehen: ein „leeres" Team zeigte über die Vertragszeilen
+ * weiter Lizenzkosten, und die DATEV-Seite listete alte Monate mit nicht mehr existierenden Kostenarten.
  *
  * Nach dem Reset holt der nächste Intune-Sync die Geräte automatisch zurück.
  *
@@ -85,11 +97,17 @@ class AssetResetService
             $items     = AssetItem::withoutTenantScope()->withTrashed()->where('team_id', $teamId)->forceDelete();
             $devices   = AssetDevice::withoutTenantScope()->withTrashed()->where('team_id', $teamId)->forceDelete();
 
-            // 5) Lizenzen.
+            // 5) Lizenzen — Vertragszeilen und Aliasse zuerst (#953): die Zeilen verweisen auf SKUs, und
+            //    stünden sie nach dem Reset noch da, zeigte das Team weiter Überhang-/Pool-Kosten.
+            $contractLines   = AssetLicenseContractLine::withoutTenantScope()->where('team_id', $teamId)->delete();
+            $billingAliases  = AssetLicenseBillingAlias::withoutTenantScope()->where('team_id', $teamId)->delete();
             $userLicenses = AssetUserLicense::withoutTenantScope()->where('team_id', $teamId)->delete();
             $licenseSkus  = AssetLicenseSku::withoutTenantScope()->where('team_id', $teamId)->delete();
 
-            // 6) Asset-Träger (ADR 0017).
+            // 6) Telefonie-Plätze (holder_id ohne FK — sonst zeigten sie nach dem Reset ins Leere),
+            //    Monatsstände der Rechnungen, dann die Asset-Träger (ADR 0017).
+            $telephonySeats = AssetTelephonySeat::withoutTenantScope()->where('team_id', $teamId)->delete();
+            $snapshots      = AssetInvoiceSnapshot::withoutTenantScope()->where('team_id', $teamId)->delete();
             $holders = AssetHolder::withoutTenantScope()->where('team_id', $teamId)->delete();
 
             // 7) Team-eigene Stammdaten (untereinander nur nullOnDelete-FKs → Reihenfolge unkritisch).
@@ -110,6 +128,10 @@ class AssetResetService
                 'devices'       => (int) $devices,
                 'user_licenses' => (int) $userLicenses,
                 'license_skus'  => (int) $licenseSkus,
+                'contract_lines' => (int) $contractLines,
+                'billing_aliases' => (int) $billingAliases,
+                'telephony_seats' => (int) $telephonySeats,
+                'invoice_snapshots' => (int) $snapshots,
                 'holders'       => (int) $holders,
                 'device_models' => (int) $deviceModels,
                 'cost_centers'  => (int) $costCenters,

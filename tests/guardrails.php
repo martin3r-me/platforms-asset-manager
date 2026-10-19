@@ -231,6 +231,35 @@ foreach (array_keys($unexpectedCallers) as $rel) {
         . ' $singleObjectCallers in this guardrail if it really handles a single device.';
 }
 
+// ---- Check 7: Team-Reset kennt jede Team-Tabelle ----------------------------------------
+// AssetResetService soll „alle fachlichen Einträge" eines Teams löschen. Jede neue Tabelle mit
+// team_id fiel dabei bisher still durch (#953: Vertragszeilen, Monatsstände, Telefonie-Plätze).
+// Ein Model mit team_id muss deshalb im Reset vorkommen ODER hier mit Grund ausgenommen sein.
+$resetKeep = [
+    'AssetBillingProfile'   => 'Einstellung (easybill-Kunde, Zählregel)',
+    'AssetBillingRun'       => 'Revisionsspur: an easybill gesendet',
+    'AssetDatevBatch'       => 'Revisionsspur: an DATEV übergeben',
+    'AssetImportRun'        => 'Revisionsspur: Import-Protokoll',
+    'AssetConnectorConfig'  => 'Anbindung bleibt',
+    'AssetTenant'           => 'Anbindung bleibt',
+    'AssetTenantSelection'  => 'Anbindung bleibt',
+    'AssetTeamSetting'      => 'Einstellungen (Controlling-Schalter)',
+    'AssetTableView'        => 'persönliche Tabellen-Ansicht',
+    'AssetDeviceModelCost'  => 'geht per FK-Cascade mit asset_device_models',
+];
+$resetSource = (string) file_get_contents($root . '/src/Services/AssetResetService.php');
+foreach (collectFiles($root . '/src/Models', '.php') as $modelFile) {
+    $model = basename($modelFile, '.php');
+    if (! str_contains((string) file_get_contents($modelFile), "'team_id'")) {
+        continue;
+    }
+    if (isset($resetKeep[$model]) || preg_match('/\b' . preg_quote($model, '/') . '::/', $resetSource)) {
+        continue;
+    }
+    $failures[] = "Check 7 (team reset): {$model} trägt team_id, wird aber von AssetResetService nicht gelöscht."
+        . ' Im Reset ergänzen oder mit Grund in $resetKeep dieses Guardrails aufnehmen.';
+}
+
 // ---- Report ---------------------------------------------------------------------------
 echo "Asset-Manager static guardrails\n";
 echo "  Tools:    {$toolCount} found, " . ($toolCount - count($unregistered)) . " registered\n";
