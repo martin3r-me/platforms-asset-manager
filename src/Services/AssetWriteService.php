@@ -21,6 +21,9 @@ use Platform\AssetManager\Models\AssetItem;
  */
 class AssetWriteService
 {
+    /** Gültige Status eines manuellen Assets. */
+    public const ITEM_STATUSES = ['in_stock', 'assigned', 'retired', 'lost'];
+
     /**
      * Legt ein manuelles Asset an (+ erste Zuordnung, falls ein Asset-Träger gesetzt ist).
      * Quelle: vormals Livewire\Assets\Create::save(). Gate/Validierung liegen beim Aufrufer.
@@ -80,7 +83,13 @@ class AssetWriteService
      */
     public function updateItemDetails(AssetItem $item, array $data): void
     {
-        $payload = ['status' => $data['status'] ?? $item->status];
+        // Status über dieselbe Regel wie der Sammelweg — vorher setzte die Detailseite nur das Feld,
+        // und ein verlorener Laptop belastete seinen Träger weiter mit AfA (#941).
+        if (isset($data['status']) && $data['status'] !== $item->status) {
+            $this->setItemStatus($item, $data['status']);
+        }
+
+        $payload = [];
 
         if ($item->source !== 'intune') {
             $payload += [
@@ -92,7 +101,45 @@ class AssetWriteService
             ];
         }
 
-        $item->update($payload);
+        if ($payload !== []) {
+            $item->update($payload);
+        }
+    }
+
+    /**
+     * Status eines Assets setzen — die eine Regel für Detailseite und Sammelaktion (#941):
+     *
+     *  - `retired`, `lost`, `in_stock` lösen eine bestehende Zuordnung (offene Zuordnung wird mit
+     *    „jetzt" geschlossen, Träger entfernt). Ein ausgemustertes oder verlorenes Gerät hat keinen
+     *    Träger mehr, und ein Gerät im Lager auch nicht.
+     *  - `assigned` ohne Träger wird abgelehnt — „zugewiesen an niemanden" gibt es nicht; zuordnen
+     *    läuft über {@see assignItem()}.
+     *
+     * @return bool false, wenn der Status nicht gesetzt wurde (unbekannt oder `assigned` ohne Träger)
+     */
+    public function setItemStatus(AssetItem $item, string $status): bool
+    {
+        if (! in_array($status, self::ITEM_STATUSES, true)) {
+            return false;
+        }
+
+        if ($status === 'assigned') {
+            if (! $item->assignee_id) {
+                return false;
+            }
+            $item->update(['status' => 'assigned']);
+
+            return true;
+        }
+
+        if ($item->assignee_id) {
+            $item->assignments()->whereNull('returned_at')->update(['returned_at' => now(), 'updated_at' => now()]);
+            $item->update(['status' => $status, 'assignee_id' => null, 'assigned_at' => null]);
+        } else {
+            $item->update(['status' => $status]);
+        }
+
+        return true;
     }
 
     /** Abschreibung eines manuellen Assets (Kaufdatum/Kaufpreis/AfA-Monate). */

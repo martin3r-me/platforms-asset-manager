@@ -7,6 +7,7 @@ use Livewire\WithPagination;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Platform\AssetManager\Services\AssetWriteService;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Models\AssetAssignment;
 use Platform\AssetManager\Models\AssetCategory;
@@ -129,19 +130,20 @@ class Index extends Component
         Gate::authorize('create', AssetItem::class);
         if (empty($this->selected) || !in_array($this->bulkStatus, ['in_stock', 'assigned', 'retired', 'lost'], true)) return;
 
-        $items = AssetItem::where('team_id', $this->teamId())->whereIn('id', $this->selected)->get();
+        $items   = AssetItem::where('team_id', $this->teamId())->whereIn('id', $this->selected)->get();
+        $writer  = app(AssetWriteService::class);
+        $skipped = 0;
         foreach ($items as $item) {
-            // retired/lost lösen Zuweisung; assigned nur sinnvoll wenn assignee vorhanden
-            if (in_array($this->bulkStatus, ['retired', 'lost'], true) && $item->assignee_id) {
-                $item->assignments()->whereNull('returned_at')->update(['returned_at' => now(), 'updated_at' => now()]);
-                $item->update(['status' => $this->bulkStatus, 'assignee_id' => null, 'assigned_at' => null]);
-            } else {
-                $item->update(['status' => $this->bulkStatus]);
+            // Eine Regel für Sammel- und Detailweg (#941): retired/lost/in_stock lösen die Zuordnung,
+            // assigned ohne Träger wird übersprungen.
+            if (! $writer->setItemStatus($item, $this->bulkStatus)) {
+                $skipped++;
             }
         }
 
         $labels = ['in_stock' => 'Lager', 'assigned' => 'Zugewiesen', 'retired' => 'Ausgemustert', 'lost' => 'Verloren'];
-        $this->bulkResult = count($items) . ' Asset(s) auf Status "' . $labels[$this->bulkStatus] . '" gesetzt.';
+        $this->bulkResult = (count($items) - $skipped) . ' Asset(s) auf Status "' . $labels[$this->bulkStatus] . '" gesetzt.'
+            . ($skipped ? " {$skipped} ohne Träger übersprungen — „Zugewiesen“ braucht einen Träger." : '');
         $this->selected = [];
         $this->selectPage = false;
         $this->bulkStatus = '';
