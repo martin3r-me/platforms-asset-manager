@@ -184,6 +184,7 @@ $profile->fallback_unit_price_cents = 8000;
 $gateway = new class implements BillingGateway {
     public array $sent = [];
     public bool $explode = false;
+    public bool $timeout = false;
 
     public function isAvailable(): bool { return true; }
     public function unavailableReason(): ?string { return null; }
@@ -191,6 +192,9 @@ $gateway = new class implements BillingGateway {
     {
         if ($this->explode) {
             throw new RuntimeException('easybill: Kunde nicht gefunden');
+        }
+        if ($this->timeout) {
+            throw new RuntimeException('easybill: cURL error 28: Operation timed out after 30001 milliseconds');
         }
         $this->sent[] = $document;
         return 999001;
@@ -399,6 +403,52 @@ $failedRun = AssetBillingRun::withoutTenantScope()->where('period', '2026-11')->
 check('Fehlschlag: Lauf trotzdem protokolliert', AssetBillingRun::STATUS_FAILED, $failedRun?->status);
 check('Fehlschlag: keine Beleg-ID', null, $failedRun?->easybill_document_id);
 check('Fehlschlag: blockiert den zweiten Versuch nicht', [], $runs->preview($profile, '2026-11')['problems']);
+
+// --- Unklarer Ausgang blockiert (#940) -----------------------------------
+// Zeitueberschreitung: easybill kann den Beleg trotzdem angelegt haben. Der Lauf bleibt `pending`
+// und blockiert den Monat, bis jemand nachgesehen und freigegeben hat.
+$gateway->explode = false;
+$gateway->timeout = true;
+try {
+    $runs->createDraft($profile, '2027-01');
+} catch (Throwable $e) {
+}
+$gateway->timeout = false;
+
+$pendingRun = AssetBillingRun::withoutTenantScope()->where('period', '2027-01')->first();
+check('Zeitueberschreitung: Lauf bleibt pending', AssetBillingRun::STATUS_PENDING, $pendingRun?->status);
+check('Zeitueberschreitung: blockiert den Monat', 1, count($runs->preview($profile, '2027-01')['problems']));
+
+$sentBefore = count($gateway->sent);
+$blocked = null;
+try {
+    $runs->createDraft($profile, '2027-01');
+} catch (Throwable $e) {
+    $blocked = $e->getMessage();
+}
+check('Zweiter Klick nach Zeitueberschreitung sendet nicht', $sentBefore, count($gateway->sent));
+check('Zweiter Klick nennt den offenen Versuch', true, str_contains((string) $blocked, 'unklar'));
+
+$runs->releasePending($pendingRun, 1);
+check('Freigabe: Lauf ist fehlgeschlagen', AssetBillingRun::STATUS_FAILED, $pendingRun->fresh()->status);
+check('Freigabe: Vermerk steht im Fehlertext', true, str_contains((string) $pendingRun->fresh()->error, 'freigegeben'));
+check('Freigabe: Monat wieder frei', [], $runs->preview($profile, '2027-01')['problems']);
+
+// --- Sperre gegen gleichzeitiges Senden (#940) ----------------------------
+$held = \Illuminate\Support\Facades\Cache::lock("asset-manager:billing:{$profile->id}:2027-02", 120);
+$held->get();
+$locked = null;
+try {
+    $runs->createDraft($profile, '2027-02');
+} catch (Throwable $e) {
+    $locked = $e->getMessage();
+}
+$held->release();
+check('Gehaltene Sperre: kein zweiter Versand', true, str_contains((string) $locked, 'läuft gerade'));
+check('Gehaltene Sperre: kein Lauf angelegt', 0, AssetBillingRun::withoutTenantScope()->where('period', '2027-02')->count());
+
+$okRun = $runs->createDraft($profile, '2027-02');
+check('Nach freigegebener Sperre: Entwurf entsteht', AssetBillingRun::STATUS_DRAFT, $okRun->status);
 
 // --- Waehlbare Monate ----------------------------------------------------
 // Der kommende Monat ist waehlbar, damit eine Pauschale auch vor Monatsbeginn erstellt werden

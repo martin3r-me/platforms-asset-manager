@@ -27,6 +27,13 @@ class AssetBillingRun extends Model
     public const STATUS_FAILED = 'failed';
 
     /**
+     * Beleg wird gerade gesendet — oder das Senden ist **unklar** ausgegangen (Zeitüberschreitung,
+     * Verbindungsabbruch). In beiden Fällen kann in easybill schon ein Beleg liegen, deshalb blockiert
+     * der Lauf die Periode, bis jemand nachgesehen und ihn freigegeben hat (#940).
+     */
+    public const STATUS_PENDING = 'pending';
+
+    /**
      * Der Beleg wurde in easybill gelöscht. Der Lauf bleibt als Vorgang stehen (wer wann welche
      * Menge erzeugt hat, ist auch dann eine Auskunft), gibt die Periode aber wieder frei — sonst
      * ließe sich für diesen Monat nie wieder eine Rechnung erzeugen.
@@ -76,6 +83,11 @@ class AssetBillingRun extends Model
     public function isDraft(): bool
     {
         return $this->status === self::STATUS_DRAFT;
+    }
+
+    public function isPending(): bool
+    {
+        return $this->status === self::STATUS_PENDING;
     }
 
     /** Beträge in Euro — für Anzeige und Summen, nie für den Weg zurück an easybill. */

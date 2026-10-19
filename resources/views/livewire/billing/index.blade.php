@@ -286,6 +286,17 @@
                                                         #{{ $run->easybill_document_id }}
                                                     </span>
                                                     <span class="text-xs text-[var(--am-text-muted)]">in easybill gelöscht</span>
+                                                @elseif($run->isPending())
+                                                    {{-- Unklarer Ausgang (#940): in easybill kann schon ein Beleg liegen. Erst nachsehen, dann freigeben. --}}
+                                                    <span class="text-xs text-amber-700" title="{{ $run->error }}">unklar — in easybill prüfen</span>
+                                                    @if($canManage)
+                                                        <button type="button"
+                                                                wire:click="releasePendingRun({{ $run->id }})"
+                                                                wire:confirm="Liegt in easybill wirklich KEIN Beleg für {{ $run->period }}? Danach kann der Monat neu abgerechnet werden."
+                                                                class="ml-1 text-[10px] text-[var(--am-accent)] hover:underline">
+                                                            freigeben
+                                                        </button>
+                                                    @endif
                                                 @elseif($run->easybill_document_id)
                                                     <a href="https://app.easybill.de/documents/{{ $run->easybill_document_id }}" target="_blank" rel="noopener"
                                                        class="text-xs text-[var(--am-accent)] hover:underline">

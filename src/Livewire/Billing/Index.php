@@ -303,6 +303,24 @@ class Index extends Component
     }
 
     /**
+     * Einen unklar ausgegangenen Versuch freigeben (#940) — erst nachdem in easybill nachgesehen
+     * wurde, dass dort kein Beleg liegt. Danach ist der Monat wieder frei.
+     */
+    public function releasePendingRun(int $runId, BillingRunService $runs): void
+    {
+        abort_unless($this->canManage(), 403);
+
+        $run = AssetBillingRun::query()
+            ->where('team_id', $this->teamId())
+            ->findOrFail($runId);
+
+        $runs->releasePending($run, Auth::id());
+
+        $this->error = null;
+        $this->flash = 'Versuch freigegeben — der Monat kann neu abgerechnet werden.';
+    }
+
+    /**
      * Die im Formular abbildbaren Muster eines Profils — `upn contains`, nichts sonst.
      *
      * @return array<int, array{field: string, match: string, value: string, label: string|null}>

@@ -2,6 +2,8 @@
 
 namespace Platform\AssetManager\Services;
 
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -82,6 +84,15 @@ class BillingRunService
                 . $existing->easybill_document_id . ', angelegt am ' . $existing->created_at->format('d.m.Y') . ').';
         }
 
+        // Ein Versuch, der gerade läuft oder unklar ausgegangen ist, kann schon einen Beleg erzeugt
+        // haben — ein zweiter Klick darf dann keinen weiteren anlegen (#940).
+        if ($pending = $this->pendingRun($profile, $period)) {
+            $problems[] = 'Ein Versuch für ' . $this->periodLabel($period) . ' vom '
+                . $pending->created_at->format('d.m.Y H:i') . ' ist noch offen oder unklar ausgegangen'
+                . ($pending->error ? ' (' . $pending->error . ')' : '')
+                . '. Bitte in easybill nachsehen, ob ein Beleg existiert, und den Versuch in der Historie freigeben.';
+        }
+
         $total = $cents === null ? 0 : $cents * $quantity;
 
         return [
@@ -117,7 +128,27 @@ class BillingRunService
      */
     public function createDraft(AssetBillingProfile $profile, string $period): AssetBillingRun
     {
-        $period  = $this->normalizePeriod($period);
+        $period = $this->normalizePeriod($period);
+
+        // Eine Sperre je Profil und Monat: zwei Klicks (zwei Tabs, zwei Admins) prüfen sonst beide
+        // „noch kein Entwurf" und senden beide (#940). Die Prüfung in preview() läuft INNERHALB der
+        // Sperre, damit der zweite den Lauf des ersten sieht.
+        $lock = Cache::lock("asset-manager:billing:{$profile->id}:{$period}", 120);
+
+        if (! $lock->get()) {
+            throw new RuntimeException('Für ' . $this->periodLabel($period)
+                . ' läuft gerade schon ein Rechnungslauf — bitte kurz warten und die Seite neu laden.');
+        }
+
+        try {
+            return $this->createDraftLocked($profile, $period);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    protected function createDraftLocked(AssetBillingProfile $profile, string $period): AssetBillingRun
+    {
         $preview = $this->preview($profile, $period);
 
         if ($preview['problems'] !== []) {
@@ -155,25 +186,82 @@ class BillingRunService
             ],
         ];
 
+        // Den Lauf VOR dem Senden anlegen: scheitert danach etwas (Zeitüberschreitung, Absturz beim
+        // Speichern), steht er als `pending` da und blockiert die Periode — statt dass ein Beleg in
+        // easybill liegt, von dem wir nichts wissen, und der nächste Klick einen zweiten erzeugt.
+        $run = AssetBillingRun::create($base + ['status' => AssetBillingRun::STATUS_PENDING]);
+
         try {
             $documentId = $this->gateway->createDraftInvoice($preview['document']);
         } catch (Throwable $e) {
-            AssetBillingRun::create($base + [
-                'status' => AssetBillingRun::STATUS_FAILED,
-                'error'  => $e->getMessage(),
+            // Eindeutig abgelehnt (easybill hat geantwortet) → fehlgeschlagen, Periode frei.
+            // Unklar (keine Antwort) → bleibt pending: der Beleg kann trotzdem entstanden sein.
+            $run->update([
+                'status' => $this->isUnclearFailure($e) ? AssetBillingRun::STATUS_PENDING : AssetBillingRun::STATUS_FAILED,
+                'error'  => mb_substr($e->getMessage(), 0, 1000),
             ]);
 
             throw $e;
         }
 
-        $run = AssetBillingRun::create($base + [
+        $run->update([
             'status'               => AssetBillingRun::STATUS_DRAFT,
             'easybill_document_id' => $documentId,
+            'error'                => null,
         ]);
 
         $this->attachStatement($run);
 
         return $run;
+    }
+
+    /**
+     * Einen offenen bzw. unklar ausgegangenen Versuch freigeben, nachdem jemand in easybill
+     * nachgesehen hat, dass dort KEIN Beleg liegt. Danach ist die Periode wieder frei.
+     */
+    public function releasePending(AssetBillingRun $run, ?int $userId): void
+    {
+        if (! $run->isPending()) {
+            return;
+        }
+
+        $run->update([
+            'status' => AssetBillingRun::STATUS_FAILED,
+            'error'  => mb_substr(trim(($run->error ? $run->error . ' — ' : '')
+                . 'freigegeben am ' . Carbon::now()->format('d.m.Y H:i')
+                . ($userId ? ' (User ' . $userId . ')' : '') . ': kein Beleg in easybill'), 0, 1000),
+        ]);
+    }
+
+    /** Der jüngste offene/unklare Versuch dieser Periode, falls es einen gibt. */
+    public function pendingRun(AssetBillingProfile $profile, string $period): ?AssetBillingRun
+    {
+        return AssetBillingRun::query()
+            ->withoutTenantScope()
+            ->where('billing_profile_id', $profile->id)
+            ->where('period', $this->normalizePeriod($period))
+            ->where('status', AssetBillingRun::STATUS_PENDING)
+            ->latest('id')
+            ->first();
+    }
+
+    /**
+     * Ist unklar, ob easybill den Beleg angelegt hat? Ja, wenn keine Antwort kam — Zeitüberschreitung
+     * oder Verbindungsabbruch irgendwo in der Ausnahmekette. Eine Fehlerantwort von easybill
+     * (Validierung, Kunde unbekannt) ist dagegen eindeutig.
+     */
+    protected function isUnclearFailure(Throwable $e): bool
+    {
+        for ($cur = $e; $cur !== null; $cur = $cur->getPrevious()) {
+            if ($cur instanceof ConnectionException) {
+                return true;
+            }
+            if (preg_match('/timed out|timeout|cURL error (6|7|28|35|52|56)|connection (reset|refused|closed)/i', $cur->getMessage())) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
