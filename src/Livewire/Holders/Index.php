@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Livewire\Holders;
 
 use Platform\AssetManager\Concerns\ClampsListState;
+use Platform\AssetManager\Concerns\CustomizesTableView;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Illuminate\Database\Eloquent\Builder;
@@ -29,6 +30,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class Index extends Component
 {
     use ClampsListState;
+    use CustomizesTableView;
     use WithPagination;
     use ResolvesCurrentTeam;
 
@@ -48,6 +50,29 @@ class Index extends Component
 
     /** Auswahlmöglichkeiten des Seitengrößen-Umschalters. */
     public const PER_PAGE_OPTIONS = [25, 50, 100, self::PER_PAGE_ALL];
+
+    /**
+     * Anpassbare Spalten der Trägerliste in Ursprungsreihenfolge (ADR 0020, #889). Reihenfolge und
+     * Sichtbarkeit merkt sich der {@see CustomizesTableView} pro User × Team — ohne `tenant_id`,
+     * die Ansicht gilt nach einem Tenant-Wechsel weiter.
+     *
+     * Nicht dabei: die Auswahl-Checkbox und **Name** — der Name trägt den Link zur Detailseite und
+     * die Kennzeichnungen (Typ, „nicht berechnet"); ohne ihn wäre eine Zeile nicht mehr zuzuordnen.
+     * `offboarding` = nur im Preset „Offboarding", `controlling` = zusätzlich nur mit Controlling
+     * (ADR 0008). Eine Spalte, die gerade nicht gilt, behält ihren Platz in der gespeicherten
+     * Reihenfolge.
+     */
+    public const TABLE_COLUMNS = [
+        'department'       => ['label' => 'Abteilung'],
+        'cost_center'      => ['label' => 'Kostenstelle'],
+        'devices'          => ['label' => 'Geräte', 'align' => 'right'],
+        'assets'           => ['label' => 'Assets', 'align' => 'right'],
+        'licenses'         => ['label' => 'Lizenzen', 'align' => 'right'],
+        'source'           => ['label' => 'Quelle'],
+        'open_assignments' => ['label' => 'Offene Zuordn.', 'title' => 'Zuordnungen ohne Ende', 'align' => 'right', 'offboarding' => true],
+        'open_handovers'   => ['label' => 'Offene Protok.', 'title' => 'Übergabeprotokolle offen oder teilweise zurück', 'align' => 'right', 'offboarding' => true],
+        'cost'             => ['label' => '€ / Monat', 'title' => 'Monatsbetrag (nur mit Controlling)', 'align' => 'right', 'offboarding' => true, 'controlling' => true],
+    ];
 
     public string $preset           = 'active'; // all|active|with_license|with_device|with_asset|unassigned|inactive|offboarding|billing_excluded
     public string $search           = '';
@@ -810,6 +835,72 @@ class Index extends Component
         return $stats;
     }
 
+    // ---- Tabellen-Ansicht (ADR 0020, #889) ---------------------------------------------------
+
+    protected function tableViewKey(): string
+    {
+        return 'holders.index';
+    }
+
+    /** @return array<int,string> */
+    protected function tableViewColumnKeys(): array
+    {
+        return array_keys(self::TABLE_COLUMNS);
+    }
+
+    /** Gilt die Spalte in dieser Sicht überhaupt (Preset, Controlling)? */
+    protected function tableColumnApplies(string $key, bool $offboarding, bool $showCosts): bool
+    {
+        $def = self::TABLE_COLUMNS[$key] ?? null;
+
+        if ($def === null) {
+            return false;
+        }
+        if (($def['offboarding'] ?? false) && ! $offboarding) {
+            return false;
+        }
+
+        return ! (($def['controlling'] ?? false) && ! $showCosts);
+    }
+
+    /**
+     * Die zu rendernden Spalten: Nutzer-Reihenfolge, ohne Ausgeblendetes, ohne was in dieser Sicht
+     * nicht gilt. Reine Anzeige — Filter, Sortierung und Trefferzahl hängen nicht daran.
+     *
+     * @return array<int,string>
+     */
+    protected function tableColumnsFor(bool $offboarding, bool $showCosts): array
+    {
+        return array_values(array_filter(
+            $this->visibleTableColumns(),
+            fn (string $key) => $this->tableColumnApplies($key, $offboarding, $showCosts),
+        ));
+    }
+
+    /**
+     * Einträge des Spalten-Menüs: alle in dieser Sicht geltenden Spalten (auch ausgeblendete, damit
+     * man sie wieder einblenden kann), in Nutzer-Reihenfolge.
+     *
+     * @return list<array{key: string, label: string, hidden: bool}>
+     */
+    protected function tableColumnMenuFor(bool $offboarding, bool $showCosts): array
+    {
+        $state = $this->tableView();
+        $menu  = [];
+
+        foreach ($this->tableColumnOrder() as $key) {
+            if ($this->tableColumnApplies($key, $offboarding, $showCosts)) {
+                $menu[] = [
+                    'key'    => $key,
+                    'label'  => self::TABLE_COLUMNS[$key]['label'],
+                    'hidden' => $state->isColumnHidden($key),
+                ];
+            }
+        }
+
+        return $menu;
+    }
+
     protected function activeTenantId(): int
     {
         return TenantContext::resolveForWrite($this->teamId(), (int) Auth::id());
@@ -914,6 +1005,11 @@ class Index extends Component
             'canManage'      => Gate::allows('asset-manager.manage'),
             'bulkMax'        => self::BULK_MAX,
             'perPageOptions' => self::PER_PAGE_OPTIONS,
+            // Tabellen-Ansicht (ADR 0020, #889): welche Spalten in welcher Reihenfolge.
+            'columns'         => $this->tableColumnsFor($offboarding, $controlling),
+            'columnDefs'      => self::TABLE_COLUMNS,
+            'columnMenu'      => $this->tableColumnMenuFor($offboarding, $controlling),
+            'tableCustomized' => $this->tableView()->isCustomized(),
         ])->layout('platform::layouts.app');
     }
 

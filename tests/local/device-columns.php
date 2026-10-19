@@ -3,7 +3,8 @@
 /**
  * Spaltenreihenfolge der Intune-Geräteliste (`Devices\Index::normalizeColumnOrder`).
  *
- * Die Reihenfolge ist per Drag&Drop verstellbar und liegt in der Session. Wer sie einmal angefasst
+ * Die Reihenfolge ist per Drag&Drop verstellbar und liegt seit #979 pro User × Team im
+ * TableViewService (ADR 0020) statt in der Session. Wer sie einmal angefasst
  * hat, hat dort eine Liste OHNE die später hinzugefügten Spalten — `serial` und `cost` kamen so
  * dazu. Würden fehlende Spalten ans Ende gehängt (das alte Verhalten), landet eine neue Spalte
  * genau bei den Nutzern hinter allem, die die Tabelle aktiv nutzen: der Umbau wäre unsichtbar,
@@ -14,7 +15,20 @@
 
 require __DIR__ . '/bootstrap.php';
 
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 use Platform\AssetManager\Livewire\Devices\Index as DevicesIndex;
+use Platform\AssetManager\Models\AssetTableView;
+
+Schema::create('asset_table_views', function (Blueprint $t) {
+    $t->id();
+    $t->unsignedBigInteger('user_id');
+    $t->unsignedBigInteger('team_id');
+    $t->string('table_key', 64);
+    $t->json('payload');
+    $t->timestamps();
+    $t->unique(['user_id', 'team_id', 'table_key']);
+});
 
 $component = new DevicesIndex();
 $method    = new ReflectionMethod($component, 'normalizeColumnOrder');
@@ -77,11 +91,63 @@ check('Controlling aus → gespeicherte Reihenfolge unangetastet', 'cost', $comp
 // Umsortieren bei aus geschaltetem Controlling: die gerenderte Liste kommt OHNE cost zurück. Die
 // Spalte muss an der Stelle bleiben, an der der Nutzer sie hatte — nicht an die Standardposition rutschen.
 $off = new class extends DevicesIndex {
+    public static int $user = 22;
     protected function controllingEnabled(): bool { return false; }
+    protected function teamId(): int { return 7; }
+    protected function currentUserId(): int { return static::$user; }
 };
 $off->columnOrder = ['status', 'cost', 'device', 'serial', 'user', 'os', 'lastCheckIn'];
 $off->reorderColumns(['device', 'status', 'serial', 'user', 'os', 'lastCheckIn']);
 check('Reorder ohne Controlling: cost behält ihre Position', ['device', 'cost', 'status', 'serial', 'user', 'os', 'lastCheckIn'],
     $off->columnOrder);
+
+// --- Persistenz statt Session (#979) ------------------------------------------------------------
+// Ein neuer Request (neue Instanz + mount) sieht die gespeicherte Reihenfolge — inklusive `cost` an
+// der Stelle des Nutzers, auch wenn Controlling gerade aus ist.
+$reload = function () use ($off): DevicesIndex {
+    $fresh = new (get_class($off))();
+    $fresh->mount();
+
+    return $fresh;
+};
+check('Neu geladen: gespeicherte Reihenfolge kommt zurück', ['device', 'cost', 'status', 'serial', 'user', 'os', 'lastCheckIn'],
+    $reload()->columnOrder);
+check('Genau eine gespeicherte Ansicht', 1, AssetTableView::where('table_key', 'devices.index')->count());
+
+// Anderer Nutzer im selben Team: Werkszustand.
+$off::$user = 23;
+check('Anderer Nutzer: Standardreihenfolge', DevicesIndex::COLUMN_KEYS, $reload()->columnOrder);
+$off::$user = 22;
+
+// Sortablejs-Format mit `order`-Feld: die Position zählt, nicht die Array-Reihenfolge.
+$off->reorderColumns([
+    ['order' => 2, 'value' => 'device'],
+    ['order' => 1, 'value' => 'status'],
+]);
+check('sortablejs: nach order sortiert, Rest behält Position', ['status', 'cost', 'device', 'serial', 'user', 'os', 'lastCheckIn'],
+    $off->columnOrder);
+
+// Zurück auf die Standardreihenfolge räumt die Zeile weg (ADR 0020: „angepasst" = Existenz).
+$off->reorderColumns(DevicesIndex::COLUMN_KEYS);
+check('Standardreihenfolge gespeichert → keine Zeile', 0, AssetTableView::where('table_key', 'devices.index')->count());
+
+$off->reorderColumns(['os', 'device']);
+check('Neu sortiert → Zeile da', 1, AssetTableView::where('table_key', 'devices.index')->count());
+$off->resetColumnOrder();
+check('Spalten zurücksetzen → Standard', DevicesIndex::COLUMN_KEYS, $off->columnOrder);
+check('Spalten zurücksetzen → Zeile weg', 0, AssetTableView::where('table_key', 'devices.index')->count());
+
+// Manipulierte gespeicherte Ansicht: unbekannte Spalten fallen beim Laden weg, nichts fehlt.
+AssetTableView::create(['user_id' => 22, 'team_id' => 7, 'table_key' => 'devices.index',
+    'payload' => ['order' => ['quatsch', 'lastCheckIn', 'lastCheckIn', '<b>']]]);
+$manipulated = $reload()->columnOrder;
+$sortedKeys  = DevicesIndex::COLUMN_KEYS;
+sort($sortedKeys);
+$sortedLoaded = $manipulated;
+sort($sortedLoaded);
+check('Manipulierter Payload: genau die echten Spalten, je einmal', $sortedKeys, $sortedLoaded);
+
+// Default ohne gespeicherte Ansicht: alle Spalten (vorher fehlten serial/cost, bis man einmal sortierte).
+check('Default-Property = alle Spalten', DevicesIndex::COLUMN_KEYS, (new DevicesIndex())->columnOrder);
 
 check_summary();

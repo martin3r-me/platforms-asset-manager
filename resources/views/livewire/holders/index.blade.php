@@ -242,6 +242,10 @@
                 @include('asset-manager::livewire.holders.partials.bulk-bar')
             @endif
 
+            {{-- Tabellen-Ansicht (ADR 0020, #889): Spalten ein-/ausblenden, am Kopf verschieben.
+                 Reine Anzeige pro Nutzer — Filter und Trefferzahl bleiben unberührt. --}}
+            @include('asset-manager::livewire.holders.partials.column-menu')
+
             {{-- Tabelle --}}
             <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm overflow-hidden">
                 @if($holders->isEmpty())
@@ -254,7 +258,9 @@
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm">
                             <thead>
-                                <tr class="bg-[var(--am-bg)] border-b border-[color:var(--am-border)]">
+                                {{-- Drag&Drop wie in der Geräteliste (wotz/livewire-sortablejs). Checkbox und
+                                     Name sind fest: sie tragen Auswahl und Link zur Detailseite. --}}
+                                <tr wire:sortable="reorderTableColumns" wire:sortable.options="{ axis: 'x' }" class="bg-[var(--am-bg)] border-b border-[color:var(--am-border)]">
                                     @if($canManage)
                                         <th class="w-10 px-5 py-3">
                                             <input type="checkbox" wire:model.live="selectPage" class="rounded"
@@ -267,19 +273,22 @@
                                             @if($sortField === 'display_name') @svg($sortDirection === 'asc' ? 'heroicon-o-chevron-up' : 'heroicon-o-chevron-down', 'w-3 h-3') @endif
                                         </button>
                                     </th>
-                                    <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Abteilung</th>
-                                    <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Kostenstelle</th>
-                                    <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Geräte</th>
-                                    <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Assets</th>
-                                    <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Lizenzen</th>
-                                    <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Quelle</th>
-                                    @if($offboarding)
-                                        <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]" title="Zuordnungen ohne Ende">Offene Zuordn.</th>
-                                        <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]" title="Übergabeprotokolle offen oder teilweise zurück">Offene Protok.</th>
-                                        @if($showCosts)
-                                            <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">€ / Monat</th>
-                                        @endif
-                                    @endif
+                                    @foreach($columns as $colKey)
+                                        @php
+                                            $def   = $columnDefs[$colKey];
+                                            $right = ($def['align'] ?? 'left') === 'right';
+                                        @endphp
+                                        <th wire:sortable.item="{{ $colKey }}" wire:key="holder-col-{{ $colKey }}" title="{{ $def['title'] ?? '' }}"
+                                            class="{{ $right ? 'text-right' : 'text-left' }} px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)] whitespace-nowrap">
+                                            <div class="inline-flex items-center gap-1.5 {{ $right ? 'flex-row-reverse' : '' }}">
+                                                <button wire:sortable.handle type="button" title="Spalte verschieben"
+                                                        class="text-[var(--am-text-muted)] hover:text-[var(--am-text-secondary)] cursor-grab active:cursor-grabbing">
+                                                    @svg('heroicon-o-bars-3', 'w-3 h-3')
+                                                </button>
+                                                <span>{{ $def['label'] }}</span>
+                                            </div>
+                                        </th>
+                                    @endforeach
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-[color:var(--am-border)]">
@@ -321,27 +330,48 @@
                                                 </div>
                                             </a>
                                         </td>
-                                        <td class="px-5 py-3 text-xs text-[var(--am-text-secondary)]">{{ $emp->department ?? '—' }}</td>
-                                        <td class="px-5 py-3 text-xs text-[var(--am-text-secondary)]">{{ $emp->cost_center ?: '—' }}</td>
-                                        <td class="px-5 py-3 text-right text-sm tabular-nums text-[var(--am-text)]">{{ $deviceCounts[$emp->user_principal_name] ?? 0 }}</td>
-                                        <td class="px-5 py-3 text-right text-sm tabular-nums text-[var(--am-text)]">{{ $itemCounts[$emp->id] ?? 0 }}</td>
-                                        <td class="px-5 py-3 text-right text-sm tabular-nums text-[var(--am-text)]">{{ $licenseCounts[$emp->user_principal_name] ?? 0 }}</td>
-                                        <td class="px-5 py-3">
-                                            @if($emp->source === 'graph')
-                                                <x-asset-manager-badge color="violet" size="xs">Graph</x-asset-manager-badge>
-                                            @elseif($emp->source === 'manual')
-                                                <x-asset-manager-badge color="amber" size="xs">Manuell</x-asset-manager-badge>
-                                            @else
-                                                <x-asset-manager-badge color="gray" size="xs">Abgeleitet</x-asset-manager-badge>
-                                            @endif
-                                        </td>
-                                        @if($offboarding)
-                                            <td class="px-5 py-3 text-right text-sm tabular-nums text-[var(--am-text)]">{{ $openAssignmentCounts[$emp->id] ?? 0 }}</td>
-                                            <td class="px-5 py-3 text-right text-sm tabular-nums text-[var(--am-text)]">{{ $openHandoverCounts[$emp->id] ?? 0 }}</td>
-                                            @if($showCosts)
-                                                <td class="px-5 py-3 text-right text-sm tabular-nums text-[var(--am-text)] whitespace-nowrap">{{ number_format((float) ($rowCosts[$emp->id]['total'] ?? 0), 2, ',', '.') }} €</td>
-                                            @endif
-                                        @endif
+                                        {{-- Spalten in Nutzer-Reihenfolge, ohne Ausgeblendetes und ohne was in
+                                             dieser Sicht nicht gilt (Offboarding-Spalten, Betrag nur mit
+                                             Controlling) — siehe Holders\Index::tableColumnsFor(). --}}
+                                        @foreach($columns as $colKey)
+                                            @switch($colKey)
+                                                @case('department')
+                                                    <td class="px-5 py-3 text-xs text-[var(--am-text-secondary)]">{{ $emp->department ?? '—' }}</td>
+                                                @break
+                                                @case('cost_center')
+                                                    <td class="px-5 py-3 text-xs text-[var(--am-text-secondary)]">{{ $emp->cost_center ?: '—' }}</td>
+                                                @break
+                                                @case('devices')
+                                                    <td class="px-5 py-3 text-right text-sm tabular-nums text-[var(--am-text)]">{{ $deviceCounts[$emp->user_principal_name] ?? 0 }}</td>
+                                                @break
+                                                @case('assets')
+                                                    <td class="px-5 py-3 text-right text-sm tabular-nums text-[var(--am-text)]">{{ $itemCounts[$emp->id] ?? 0 }}</td>
+                                                @break
+                                                @case('licenses')
+                                                    <td class="px-5 py-3 text-right text-sm tabular-nums text-[var(--am-text)]">{{ $licenseCounts[$emp->user_principal_name] ?? 0 }}</td>
+                                                @break
+                                                @case('source')
+                                                    <td class="px-5 py-3">
+                                                        @if($emp->source === 'graph')
+                                                            <x-asset-manager-badge color="violet" size="xs">Graph</x-asset-manager-badge>
+                                                        @elseif($emp->source === 'manual')
+                                                            <x-asset-manager-badge color="amber" size="xs">Manuell</x-asset-manager-badge>
+                                                        @else
+                                                            <x-asset-manager-badge color="gray" size="xs">Abgeleitet</x-asset-manager-badge>
+                                                        @endif
+                                                    </td>
+                                                @break
+                                                @case('open_assignments')
+                                                    <td class="px-5 py-3 text-right text-sm tabular-nums text-[var(--am-text)]">{{ $openAssignmentCounts[$emp->id] ?? 0 }}</td>
+                                                @break
+                                                @case('open_handovers')
+                                                    <td class="px-5 py-3 text-right text-sm tabular-nums text-[var(--am-text)]">{{ $openHandoverCounts[$emp->id] ?? 0 }}</td>
+                                                @break
+                                                @case('cost')
+                                                    <td class="px-5 py-3 text-right text-sm tabular-nums text-[var(--am-text)] whitespace-nowrap">{{ number_format((float) ($rowCosts[$emp->id]['total'] ?? 0), 2, ',', '.') }} €</td>
+                                                @break
+                                            @endswitch
+                                        @endforeach
                                     </tr>
                                 @endforeach
                             </tbody>

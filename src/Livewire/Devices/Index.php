@@ -3,6 +3,10 @@
 namespace Platform\AssetManager\Livewire\Devices;
 
 use Platform\AssetManager\Concerns\ClampsListState;
+use Platform\AssetManager\Concerns\CustomizesTableView;
+use Platform\AssetManager\Concerns\RemembersListState;
+use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Illuminate\Support\Facades\Auth;
@@ -23,6 +27,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class Index extends Component
 {
     use ClampsListState;
+    use CustomizesTableView;
+    use RemembersListState;
+    use ResolvesCurrentTeam;
     use WithPagination;
     use AuthorizesTeamRole;
 
@@ -45,7 +52,13 @@ class Index extends Component
     public string  $bulkLifecycle  = '';
     public ?string $bulkResult     = null;
 
-    public array $columnOrder = ['device', 'user', 'os', 'status', 'lastCheckIn'];
+    /**
+     * Gerenderte Spaltenreihenfolge (inkl. `cost`, auch wenn Controlling aus ist — siehe
+     * {@see visibleColumns()}). Gespeichert pro User × Team über den TableViewService (ADR 0020,
+     * #979) statt in der Session; `#[Locked]`, weil nur der Server sie setzt.
+     */
+    #[Locked]
+    public array $columnOrder = self::COLUMN_KEYS;
 
     public const COLUMN_KEYS = ['device', 'serial', 'user', 'os', 'status', 'lastCheckIn', 'cost'];
 
@@ -65,44 +78,42 @@ class Index extends Component
         'sortDirection'    => ['except' => 'asc'],
     ];
 
+    /**
+     * Gespeicherte Ansicht laden: Spaltenreihenfolge, Sortierung, Seitengröße (#979). Was im
+     * Query-String steht, gewinnt ({@see RemembersListState::restoreListState()}).
+     */
     public function mount(): void
     {
-        $stored = session('asset-manager.devices.columnOrder');
-        if (is_array($stored)) {
-            $this->columnOrder = $this->normalizeColumnOrder($stored);
-        }
+        $this->columnOrder = $this->normalizeColumnOrder($this->tableView()->order);
+        $this->restoreListState();
     }
 
+    protected function tableViewKey(): string
+    {
+        return 'devices.index';
+    }
+
+    /** @return array<int,string> */
+    protected function tableViewColumnKeys(): array
+    {
+        return self::COLUMN_KEYS;
+    }
+
+    /**
+     * Drag&Drop am Tabellenkopf. Bei aus geschaltetem Controlling ist die Kosten-Spalte nicht
+     * gerendert und kommt nicht mit zurück — sie behält dann ihre bisherige Position, statt an die
+     * Standardstelle zu rutschen (#874, ADR 0008). Das leistet die gemeinsame Regel
+     * {@see CustomizesTableView::mergeColumnOrder()} für jede nicht gerenderte Spalte.
+     */
     public function reorderColumns(array $order): void
     {
-        $normalized = $this->normalizeColumnOrder($order);
+        $this->columnOrder = self::mergeColumnOrder(
+            self::flattenSortablePayload($order),
+            $this->columnOrder,
+            self::COLUMN_KEYS,
+        );
 
-        // Bei aus geschaltetem Controlling ist die Kosten-Spalte nicht gerendert, kommt also im
-        // Drag&Drop nicht mit zurück. normalizeColumnOrder() würde sie an ihre Standardposition
-        // setzen — die eigene Position des Nutzers bleibt aber erhalten, sonst verschiebt ein
-        // Umsortieren ohne Controlling die Spalte für später (#874, ADR 0008).
-        if (! $this->controllingEnabled() && ! $this->orderContains($order, 'cost')) {
-            $previous = array_search('cost', $this->columnOrder, true);
-            if ($previous !== false) {
-                $normalized = array_values(array_diff($normalized, ['cost']));
-                array_splice($normalized, min($previous, count($normalized)), 0, ['cost']);
-            }
-        }
-
-        $this->columnOrder = $normalized;
-        session(['asset-manager.devices.columnOrder' => $this->columnOrder]);
-    }
-
-    /** Enthält die (ggf. sortablejs-verpackte) Reihenfolge den Spalten-Key? */
-    protected function orderContains(array $order, string $key): bool
-    {
-        foreach ($order as $i) {
-            if ((is_array($i) ? ($i['value'] ?? null) : $i) === $key) {
-                return true;
-            }
-        }
-
-        return false;
+        $this->saveTableColumnOrder($this->columnOrder);
     }
 
     /** Controlling-Schalter des aktiven Teams × Tenants (ADR 0008) — gated Kosten-Spalte + Kostenstellen-Sammelaktion (#874). */
@@ -113,7 +124,7 @@ class Index extends Component
 
     /**
      * Die tatsächlich gerenderten Spalten: die gespeicherte Reihenfolge, ohne Kosten-Spalte bei
-     * aus geschaltetem Controlling. Die Session behält `cost` — wieder einschalten stellt die
+     * aus geschaltetem Controlling. Die gespeicherte Ansicht behält `cost` — wieder einschalten stellt die
      * Spalte an ihrer alten Stelle her (Präsentations-Gate, #874, ADR 0008).
      */
     protected function visibleColumns(bool $controllingEnabled): array
@@ -125,33 +136,21 @@ class Index extends Component
 
     public function resetColumnOrder(): void
     {
+        $this->resetTableView();
         $this->columnOrder = self::COLUMN_KEYS;
-        session()->forget('asset-manager.devices.columnOrder');
     }
 
+    /**
+     * Gespeicherte (oder geschickte) Reihenfolge auf echte Spalten bringen: Unbekanntes und Dubletten
+     * fallen weg, fehlende Spalten kommen an ihre in COLUMN_KEYS definierte Position — nicht ans
+     * Ende. Sonst landet eine neu eingeführte Spalte genau bei den Nutzern hinter allem, die die
+     * Reihenfolge schon einmal angefasst haben.
+     *
+     * @return array<int,string>
+     */
     protected function normalizeColumnOrder(array $order): array
     {
-        // wotz/livewire-sortablejs liefert ggf. [['order' => 0, 'value' => 'device'], ...]
-        $flat = array_map(
-            fn($i) => is_array($i) ? ($i['value'] ?? null) : $i,
-            $order
-        );
-        // array_unique NACH dem Filtern: array_intersect behält Dubletten, und eine doppelt
-        // gelistete Spalte würde zweimal gerendert — inklusive doppeltem wire:key, was Livewire
-        // beim Diffing durcheinanderbringt. Zudem verdrängt jede Dublette eine echte Spalte.
-        $valid = array_values(array_unique(array_intersect($flat, self::COLUMN_KEYS)));
-
-        // Fehlende Spalten einsortieren, damit nichts verschwindet — und zwar an ihrer in
-        // COLUMN_KEYS definierten Position, nicht am Ende. Sonst landet eine neu hinzugefügte
-        // Spalte bei jedem, der die Reihenfolge schon einmal angefasst hat (Session), hinter
-        // allen anderen: der Umbau wäre für genau die Nutzer unsichtbar, die die Tabelle nutzen.
-        foreach (self::COLUMN_KEYS as $index => $key) {
-            if (!in_array($key, $valid, true)) {
-                array_splice($valid, min($index, count($valid)), 0, [$key]);
-            }
-        }
-
-        return $valid;
+        return self::mergeColumnOrder(self::flattenSortablePayload($order), [], self::COLUMN_KEYS);
     }
 
     public function updatingSearch(): void           { $this->resetPage(); $this->clearBulkSelection(); }
@@ -175,7 +174,9 @@ class Index extends Component
             $this->sortField     = $field;
             $this->sortDirection = 'asc';
         }
+        $this->clampListState();
         $this->resetPage();
+        $this->rememberListState();
     }
 
     public function syncNow(): void
