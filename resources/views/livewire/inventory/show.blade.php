@@ -158,12 +158,11 @@
         {{-- Tab-Leiste (Alpine @entangle — NICHT x-ui-tab, dessen Active-State ist fehlerhaft) --}}
         <div x-data="{ tab: $wire.entangle('tab') }" class="space-y-5">
             @php
+                // Dokumente/Tickets/Rechnungen waren leere Platzhalter — ausgeblendet, bis einer der
+                // Bereiche konkret geplant ist (#890, Entscheidung 2026-10-19).
                 $tabs = [
                     'overview'  => 'Übersicht',
-                    'documents' => 'Dokumente',
                     'notes'     => 'Notizen',
-                    'tickets'   => 'Tickets',
-                    'invoices'  => 'Rechnungen',
                 ];
                 // „Kosten" nur mit Controlling (#874, ADR 0008).
                 if ($controllingEnabled) { $tabs['costs'] = 'Kosten'; }
@@ -491,9 +490,6 @@
             @endif
 
             {{-- ===================== PLATZHALTER ===================== --}}
-            <div x-show="tab === 'documents'" x-cloak>@include('asset-manager::livewire.inventory.partials.tab-placeholder', ['title' => 'Dokumente', 'icon' => 'heroicon-o-document-text'])</div>
-            <div x-show="tab === 'tickets'" x-cloak>@include('asset-manager::livewire.inventory.partials.tab-placeholder', ['title' => 'Tickets', 'icon' => 'heroicon-o-ticket'])</div>
-            <div x-show="tab === 'invoices'" x-cloak>@include('asset-manager::livewire.inventory.partials.tab-placeholder', ['title' => 'Rechnungen', 'icon' => 'heroicon-o-banknotes'])</div>
         </div>
         </div>
     </div>

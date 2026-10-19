@@ -465,6 +465,10 @@ class Show extends Component
 
         // ?tab=costs (Deep-Link/URL) bei aus geschaltetem Controlling → Übersicht statt leerem Tab.
         // Hier statt in mount(), weil der #[Url]-Wert auch bei späteren Requests kommen kann (#874, ADR 0008).
+        // Alte Deep-Links auf die entfernten Platzhalter-Tabs (#890) landen auf der Übersicht.
+        if (in_array($this->tab, ['documents', 'tickets', 'invoices'], true)) {
+            $this->tab = 'overview';
+        }
         if ($this->tab === 'costs' && ! $controllingEnabled) {
             $this->tab = 'overview';
         }
