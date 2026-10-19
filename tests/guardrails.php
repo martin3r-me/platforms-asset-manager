@@ -281,6 +281,26 @@ foreach ($undefinedTokens as $token => $files) {
         . implode(', ', array_unique($files)) . ').';
 }
 
+// ---- Check 9: jedes Tool löst den Tenant auf, jedes Schreib-Tool prüft die Rolle --------------
+// Zwei Fehlerklassen, die nur im echten Aufruf auffallen (#976): ein Tool ohne resolveTenant()
+// filtert doppelt oder gar nicht (device-status.GET, #962), ein Schreib-Tool ohne Rollenprüfung
+// ließe Member schreiben (ADR 0004). Legacy-Aliase delegieren an geprüfte Tools.
+foreach (collectFiles($root . '/src/Tools', '.php') as $toolFile) {
+    $rel  = relpath($root, $toolFile);
+    $code = (string) file_get_contents($toolFile);
+    if (str_contains($rel, '/Concerns/') || str_contains($rel, '/Legacy/') || ! str_contains($code, 'implements ToolContract')) {
+        continue;
+    }
+    if (! str_contains($code, 'resolveTenant(') && ! str_contains($code, 'runDeletion(')) {
+        $failures[] = "Check 9 (tools): {$rel} löst den Tenant nicht über resolveTenant() auf.";
+    }
+    if (preg_match("/'read_only'\s*=>\s*false/", $code)
+        && ! str_contains($code, "allows('asset-manager.manage', [\$teamId])")
+        && ! str_contains($code, 'runDeletion(')) {
+        $failures[] = "Check 9 (tools): {$rel} schreibt, prüft aber nicht Gate asset-manager.manage gegen das Kontext-Team.";
+    }
+}
+
 // ---- Report ---------------------------------------------------------------------------
 echo "Asset-Manager static guardrails\n";
 echo "  Tools:    {$toolCount} found, " . ($toolCount - count($unregistered)) . " registered\n";
