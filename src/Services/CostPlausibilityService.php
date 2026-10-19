@@ -52,6 +52,7 @@ class CostPlausibilityService
         $findings = array_values(array_filter([
             $this->perPersonWithoutHolder($lines),
             $this->costCenterLevelWithHolder($lines),
+            $this->linesOnForeignSource($lines),
             $this->costOnInactiveHolders($teamId, $lines),
             $this->suspiciousCostCenters($teamId, $lines),
             $this->undividedBlocks($lines),
@@ -118,6 +119,33 @@ class CostPlausibilityService
             explanation: 'Diese Kostenart wird nur einer Kostenstelle zugeschlüsselt und gehört keiner Person. '
                 . 'Die Zuordnung an einen Asset-Träger lässt die Kosten in der Auswertung je Person auftauchen, '
                 . 'wo sie nicht hingehören — entweder ist die Zuordnung zu löschen oder die Bezugsebene falsch gesetzt.',
+        );
+    }
+
+    /**
+     * Kostenposition auf einer Kostenart, deren Kosten aus einer ANDEREN Quelle kommen (#899).
+     *
+     * Kostenarten mit Quelle `asset_device` (Gerätekosten) oder `ms_license` (Lizenzpreise) rechnet die
+     * Aufteilung aus Geräten bzw. Vertragszeilen — eine manuelle Position darauf fällt still aus dem
+     * Pivot. Das Badge „nicht im Pivot" in der Liste sieht nur, wer die Zeile öffnet; hier wird es zur
+     * Summe. Bewusst eng: nur aktive, heute gültige Positionen (Entscheidung 2026-10-19).
+     */
+    protected function linesOnForeignSource($lines): ?array
+    {
+        $today = now()->startOfDay();
+        $hits  = $lines->filter(fn ($l) => $l->costType !== null
+            && in_array($l->costType->aggregation_source, [AssetCostType::SOURCE_ASSET_DEVICE, AssetCostType::SOURCE_MS_LICENSE], true)
+            && ($l->valid_from === null || $l->valid_from->lte($today))
+            && ($l->valid_to === null || $l->valid_to->gte($today)));
+
+        return $this->finding(
+            $hits,
+            key: 'line_on_foreign_source',
+            severity: 'high',
+            title: 'Kostenposition zählt nicht — Kostenart rechnet aus Geräten bzw. Lizenzen',
+            explanation: 'Die Kostenart bezieht ihre Beträge aus Geräten (asset_device) oder Lizenz-Vertragszeilen '
+                . '(ms_license). Eine manuelle Position darauf fällt aus der Kostenaufteilung — entweder auf eine '
+                . 'Kostenart mit Quelle „Kostenposition" umbuchen oder die Kosten am Gerät bzw. an der Lizenz pflegen.',
         );
     }
 
