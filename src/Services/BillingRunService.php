@@ -61,6 +61,10 @@ class BillingRunService
 
         if ($cents === null) {
             $problems[] = $price['note'] ?? 'Kein Stückpreis ermittelbar.';
+        } elseif ($cents <= 0) {
+            // Ein 0-€-Entwurf ist nie gewollt: er entsteht aus einem vergessenen Artikelpreis oder
+            // einem Rückfallpreis 0 und fällt beim Kunden erst als leere Rechnung auf (#958).
+            $problems[] = 'Der Stückpreis ist 0 € — Artikelpreis oder Rückfallpreis prüfen.';
         }
 
         if ($quantity === 0) {

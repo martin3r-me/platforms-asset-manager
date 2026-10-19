@@ -13,6 +13,7 @@ use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetUserLicense;
 use Platform\AssetManager\Models\AssetLicenseSyncLog;
 use Platform\AssetManager\Models\AssetConnectorConfig;
+use Platform\AssetManager\Support\DecimalInput;
 use Platform\AssetManager\Support\LicensePriceBook;
 
 class Index extends Component
@@ -105,9 +106,21 @@ class Index extends Component
             return;
         }
 
+        $isEmpty = $price === null || trim($price) === '';
+        $parsed  = $isEmpty ? null : DecimalInput::parse($price);
+
+        // Keine Zahl oder negativ → nicht speichern und sagen, warum. Vorher wurde „abc" still zu
+        // 0,00 € und „1.234,56" zu 1,23 € — beides wirkt direkt auf Kosten und Weiterberechnung (#958).
+        if (! $isEmpty && ($parsed === null || $parsed < 0)) {
+            $this->priceNotice = "„{$price}“ ist kein gültiger Preis — bitte einen Betrag ab 0 eingeben, z. B. 12,50.";
+            return;
+        }
+
+        $this->priceNotice = null;
+
         $sku->update([
-            'unit_price'       => $price !== null && $price !== '' ? (float) str_replace(',', '.', $price) : null,
-            'price_source'     => $price !== null && $price !== '' ? AssetLicenseSku::PRICE_SOURCE_MANUAL : null,
+            'unit_price'       => $parsed,
+            'price_source'     => $isEmpty ? null : AssetLicenseSku::PRICE_SOURCE_MANUAL,
             'price_updated_at' => now(),
         ]);
 
@@ -196,6 +209,8 @@ class Index extends Component
     {
         $team  = Auth::user()->currentTeam;
         $query = AssetLicenseSku::where('team_id', $team->id);
+        // Vor dem Preisfilter laden: dessen Closure fragt die Vertragszeilen ab (#937).
+        $book  = LicensePriceBook::for($team->id);
 
         if ($this->search) {
             $query->where(function ($q) {
@@ -243,8 +258,6 @@ class Index extends Component
         }
 
         $skus = $query->paginate($this->perPage);
-
-        $book = LicensePriceBook::for($team->id);
 
         $allSkus          = AssetLicenseSku::where('team_id', $team->id)->get();
         // Monatskosten je Lizenz: rechnungsgedeckt aus den Vertragszeilen (Seats + Sammelstellen),
