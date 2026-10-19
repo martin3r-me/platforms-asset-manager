@@ -35,7 +35,7 @@
         </x-asset-manager-page-actionbar>
     </x-slot>
 
-    {{-- LINKS: Filter (Token-Sektionen wie assets/index — nicht die fetten x-ui-Tische). --}}
+    {{-- LINKS: Filter (Token-Sektionen — nicht die fetten x-ui-Tische). --}}
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Filter" icon="heroicon-o-funnel" width="w-72" :defaultOpen="true">
             <div class="p-4 space-y-4 bg-[var(--am-bg)]">

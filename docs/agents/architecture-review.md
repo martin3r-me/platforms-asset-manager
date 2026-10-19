@@ -252,7 +252,7 @@ Detect: monolith files · circular `use`/dependency · hidden cross-layer calls 
 pivot/import/sync rule living in Livewire/Tools instead of its Service — **not** ordinary CRUD Model
 access) · unclear domain ownership · dead modules (verify any candidate is unrouted and
 unreferenced before recommending removal — the stranded `Livewire/Assets/Create`/`Show` pages were
-removed 2026-10-19, #880; `Livewire/Assets/Index` is still routed at `/assets`) · stale
+removed 2026-10-19, #880; `Livewire/Assets/Index` followed with #974 — `/assets` is now a redirect into the inventory) · stale
 compatibility shims (intentional back-compat, confirm before touching: the legacy master-data single
 routes `routes/web.php:112-115` → combined page, `/employees*` → `/holders*`, `/devices/{device}`
 and `/assets/{item}` → `inventory.show`, `/assets/create` → inventory create modal, `/compliance` →

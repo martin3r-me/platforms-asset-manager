@@ -105,7 +105,7 @@ class Index extends Component
 
     /**
      * Bulk-Auswahl. IDs als Strings, damit wire:model auf Checkbox-Werten sauber vergleicht
-     * (Muster: Livewire\Assets\Index). Bewusst NICHT im $queryString - ein Array von 500 IDs
+     * (Muster: Livewire\Inventory\Index). Bewusst NICHT im $queryString - ein Array von 500 IDs
      * macht die URL unbenutzbar.
      *
      * @var list<string>

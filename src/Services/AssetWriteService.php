@@ -79,7 +79,7 @@ class AssetWriteService
     /**
      * Sammelanlage: $quantity gleiche manuelle Assets in einem Rutsch — jedes über {@see createItem()},
      * damit Status-/Zuordnungsregel und Tenant für die Einzel- und die Sammelanlage dieselben sind
-     * (vorher schrieb `Assets/Index::createBulk` Item und Zuordnung direkt an diesem Service vorbei).
+     * (vorher schrieb die alte `/assets`-Seite Item und Zuordnung direkt an diesem Service vorbei).
      * Eine Seriennummer identifiziert genau ein Gerät — bei mehr als einem Stück bleibt sie leer.
      * Alles oder nichts: bricht ein Stück ab, entsteht keins.
      *
