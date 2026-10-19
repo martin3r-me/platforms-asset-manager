@@ -50,7 +50,10 @@
                 <h2 class="text-lg font-semibold text-[var(--am-text)] m-0">Internet</h2>
                 <span class="text-xs text-[var(--am-text-secondary)] bg-[var(--am-bg)] rounded-full px-2 py-0.5">{{ $items->count() }}</span>
                 <span class="flex-1"></span>
-                <span class="text-sm text-[var(--am-text-secondary)]">Gesamt: <strong class="text-[var(--am-accent)] tabular-nums">{{ number_format($totalMonthly, 2, ',', '.') }} € / Monat</strong></span>
+                {{-- Kosten nur bei aktivem Controlling (#874, ADR 0008). --}}
+                @if($controllingEnabled)
+                    <span class="text-sm text-[var(--am-text-secondary)]">Gesamt: <strong class="text-[var(--am-accent)] tabular-nums">{{ number_format($totalMonthly, 2, ',', '.') }} € / Monat</strong></span>
+                @endif
             </div>
 
             <div class="rounded-xl bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm overflow-hidden">
@@ -64,8 +67,10 @@
                                     <th class="text-left px-4 py-3">Anschluss</th>
                                     <th class="text-left px-4 py-3">Standort</th>
                                     <th class="text-left px-4 py-3">Anbieter</th>
-                                    <th class="text-left px-4 py-3">KSt</th>
-                                    <th class="text-right px-4 py-3">€/Monat</th>
+                                    @if($controllingEnabled)
+                                        <th class="text-left px-4 py-3">KSt</th>
+                                        <th class="text-right px-4 py-3">€/Monat</th>
+                                    @endif
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-[color:var(--am-border)]">
@@ -82,8 +87,10 @@
                                         </td>
                                         <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">{{ $item->raw_data['standort'] ?? ($item->raw_data['anschrift'] ?? '—') }}</td>
                                         <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">{{ $item->raw_data['anbieter'] ?? '—' }}</td>
-                                        <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">{{ $kstByItem[$item->id] ?? '—' }}</td>
-                                        <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-[var(--am-accent)]">{{ number_format($costByItem[$item->id] ?? 0, 2, ',', '.') }} €</td>
+                                        @if($controllingEnabled)
+                                            <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">{{ $kstByItem[$item->id] ?? '—' }}</td>
+                                            <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-[var(--am-accent)]">{{ number_format($costByItem[$item->id] ?? 0, 2, ',', '.') }} €</td>
+                                        @endif
                                     </tr>
                                 @endforeach
                             </tbody>

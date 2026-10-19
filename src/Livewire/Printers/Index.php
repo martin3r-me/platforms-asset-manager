@@ -8,6 +8,7 @@ use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
 use Platform\AssetManager\Models\AssetCategory;
 use Platform\AssetManager\Models\AssetCostLine;
 use Platform\AssetManager\Models\AssetItem;
+use Platform\AssetManager\Services\ControllingContext;
 
 class Index extends Component
 {
@@ -32,11 +33,17 @@ class Index extends Component
 
         // Cost-Lines je Drucker (mit Kostenstelle) → Aufschlüsselung, Summe, KSt-Code.
         // Die KSt liegt an der Cost-Line, NICHT am Asset (raw_data hat keine kostenstelle).
-        $linesByItem = AssetCostLine::active()->validOn(now())->where('team_id', $teamId)
-            ->whereIn('asset_item_id', $all->pluck('id'))
-            ->with('costCenter')
-            ->get()
-            ->groupBy('asset_item_id');
+        // Kosten + KSt stammen aus den Kostenpositionen → nur bei aktivem Controlling laden und zeigen
+        // (#874, ADR 0008: Präsentations-Gate, die Daten bleiben unangetastet).
+        $controllingEnabled = app(ControllingContext::class)->enabledFor($teamId);
+
+        $linesByItem = $controllingEnabled
+            ? AssetCostLine::active()->validOn(now())->where('team_id', $teamId)
+                ->whereIn('asset_item_id', $all->pluck('id'))
+                ->with('costCenter')
+                ->get()
+                ->groupBy('asset_item_id')
+            : collect();
 
         $costByItem = $linesByItem->map(fn ($g) => (float) $g->sum('monthly_amount'));
         $kstByItem  = $linesByItem->map(fn ($g) => $g->map(fn ($l) => $l->costCenter?->code)->filter()->unique()->implode(', '));
@@ -62,6 +69,7 @@ class Index extends Component
             'items'           => $items,
             'costByItem'      => $costByItem,
             'kstByItem'       => $kstByItem,
+            'controllingEnabled' => $controllingEnabled,
             'totalMonthly'    => round($items->sum(fn ($i) => $costByItem[$i->id] ?? 0), 2),
             'niederlassungen' => $niederlassungen,
         ])->layout('platform::layouts.app');

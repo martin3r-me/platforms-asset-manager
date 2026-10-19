@@ -194,7 +194,8 @@
                     <span class="text-sm font-medium">{{ count($selected) }} ausgewählt</span>
                     <div class="h-4 w-px bg-[var(--am-on-primary)]/30"></div>
 
-                    {{-- Kostenstelle --}}
+                    {{-- Kostenstelle — Controlling-Stammdatum, nur mit Schalter (#874, ADR 0008) --}}
+                    @if($controllingEnabled)
                     <div class="flex items-center gap-1.5">
                         <select wire:model="bulkCostCenter" class="px-2 py-1 text-xs rounded-md bg-[var(--am-on-primary)]/15 border border-[var(--am-on-primary)]/20 text-[var(--am-on-primary)] [&>option]:text-[var(--am-text)]">
                             <option value="">Kostenstelle…</option>
@@ -204,6 +205,7 @@
                         </select>
                         <button wire:click="bulkSetCostCenter" class="px-2.5 py-1 text-xs font-medium rounded-md bg-[var(--am-on-primary)]/20 hover:bg-[var(--am-on-primary)]/30 transition-colors">Setzen</button>
                     </div>
+                    @endif
 
                     {{-- Lifecycle --}}
                     <div class="flex items-center gap-1.5">

@@ -63,4 +63,25 @@ check('sortablejs-Format wird ausgepackt', ['device', 'serial', 'user', 'os', 's
 check('doppelte Eingabe ergibt saubere Reihenfolge', ['device', 'serial', 'user', 'os', 'status', 'lastCheckIn', 'cost'],
     $normalize(['device', 'device', 'user']));
 
+// --- Controlling aus: Kosten-Spalte verschwinden lassen, ohne die Reihenfolge zu zerstören (#874) ---
+// Die Session behält `cost`; nur die gerenderte Liste lässt sie weg (Präsentations-Gate, ADR 0008).
+$visible = new ReflectionMethod($component, 'visibleColumns');
+$visible->setAccessible(true);
+
+$component->columnOrder = ['status', 'cost', 'device', 'serial', 'user', 'os', 'lastCheckIn'];
+check('Controlling an → cost wird gerendert', $component->columnOrder, $visible->invoke($component, true));
+check('Controlling aus → cost fehlt, Rest in Nutzer-Reihenfolge', ['status', 'device', 'serial', 'user', 'os', 'lastCheckIn'],
+    $visible->invoke($component, false));
+check('Controlling aus → gespeicherte Reihenfolge unangetastet', 'cost', $component->columnOrder[1]);
+
+// Umsortieren bei aus geschaltetem Controlling: die gerenderte Liste kommt OHNE cost zurück. Die
+// Spalte muss an der Stelle bleiben, an der der Nutzer sie hatte — nicht an die Standardposition rutschen.
+$off = new class extends DevicesIndex {
+    protected function controllingEnabled(): bool { return false; }
+};
+$off->columnOrder = ['status', 'cost', 'device', 'serial', 'user', 'os', 'lastCheckIn'];
+$off->reorderColumns(['device', 'status', 'serial', 'user', 'os', 'lastCheckIn']);
+check('Reorder ohne Controlling: cost behält ihre Position', ['device', 'cost', 'status', 'serial', 'user', 'os', 'lastCheckIn'],
+    $off->columnOrder);
+
 check_summary();

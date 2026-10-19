@@ -15,6 +15,7 @@ use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Services\AssetWriteService;
+use Platform\AssetManager\Services\ControllingContext;
 use Platform\AssetManager\Services\InventoryService;
 
 /**
@@ -55,6 +56,9 @@ class Index extends Component
     public string  $cNotes              = '';
     public ?string $flash               = null;
 
+    /** Request-lokaler Memo des Controlling-Schalters (protected → nicht im Livewire-State). */
+    protected ?bool $controllingMemo = null;
+
     protected $queryString = [
         'search'           => ['except' => ''],
         'filterType'       => ['except' => ''],
@@ -73,6 +77,15 @@ class Index extends Component
         if (request()->boolean('create') && Gate::allows('create', AssetItem::class)) {
             $this->showCreate = true;
         }
+    }
+
+    /**
+     * Controlling-Schalter des aktiven Teams × Tenants (ADR 0008). Gated Monatskosten-Spalte/-Sortierung,
+     * Kostenstellen-Filter und die Abschreibungsfelder im Anlage-Modal (#874) — die Werte bleiben in der DB.
+     */
+    protected function controllingEnabled(): bool
+    {
+        return $this->controllingMemo ??= app(ControllingContext::class)->enabledFor($this->teamId());
     }
 
     public function updatingSearch(): void           { $this->resetPage(); }
@@ -154,6 +167,13 @@ class Index extends Component
             'cNotes'              => 'nullable|string',
         ]);
 
+        // Ohne Controlling sind die Abschreibungsfelder nicht sichtbar — auch serverseitig nichts davon
+        // schreiben (z. B. den AfA-Default aus der Kategorie, #874, ADR 0008).
+        if (! $this->controllingEnabled()) {
+            $this->cPurchaseDate = $this->cPurchasePrice = null;
+            $this->cDepreciationMonths = null;
+        }
+
         $item = $writer->createItem([
             'categoryId'         => $this->cCategoryId,
             'name'               => $this->cName,
@@ -189,6 +209,13 @@ class Index extends Component
 
         $teamId = $this->teamId();
 
+        // Kostenstellen-Filter ist Controlling (#874, ADR 0008): ein ?filterCostCenter= aus URL/Bookmark
+        // darf ohne Schalter nicht unsichtbar weiterfiltern.
+        $controllingEnabled = $this->controllingEnabled();
+        if (! $controllingEnabled) {
+            $this->filterCostCenter = null;
+        }
+
         $rows     = $inventory->rows($teamId, TenantContext::scopeTenantId());
         $filtered = $inventory->filter(
             $rows,
@@ -208,7 +235,10 @@ class Index extends Component
             'totalFiltered' => $sorted->count(),
             'categories'    => AssetCategory::orderBy('sort_order')->get(),
             'holders'     => AssetHolder::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get(),
-            'costCenters'   => AssetCostCenter::where('team_id', $teamId)->where('is_active', true)->orderBy('name')->get(),
+            'costCenters'   => $controllingEnabled
+                ? AssetCostCenter::where('team_id', $teamId)->where('is_active', true)->orderBy('name')->get()
+                : collect(),
+            'controllingEnabled' => $controllingEnabled,
         ])->layout('platform::layouts.app');
     }
 
@@ -218,9 +248,15 @@ class Index extends Component
         return [25, 50, 100];
     }
 
-    /** Erlaubte Sortierspalten (#957); die erste ist der Rückfall. */
+    /** Erlaubte Sortierspalten (#957); die erste ist der Rückfall. Monatskosten nur mit Controlling (#874). */
     protected function listSortable(): array
     {
-        return ['name', 'type', 'assignedTo', 'status', 'monthlyCost'];
+        $fields = ['name', 'type', 'assignedTo', 'status'];
+
+        if ($this->controllingEnabled()) {
+            $fields[] = 'monthlyCost';
+        }
+
+        return $fields;
     }
 }

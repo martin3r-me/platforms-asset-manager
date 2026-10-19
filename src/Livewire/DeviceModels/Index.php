@@ -12,6 +12,7 @@ use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceModel;
 use Platform\AssetManager\Models\AssetDeviceModelCost;
 use Platform\AssetManager\Models\AssetVendor;
+use Platform\AssetManager\Services\ControllingContext;
 use Platform\AssetManager\Services\TenantContext;
 
 /**
@@ -21,6 +22,9 @@ use Platform\AssetManager\Services\TenantContext;
  * Gerät. Die Kosten (Leasingrate, Kaufpreis, Kostenart, Kreditor) sind pro Kunde verhandelt und liegen
  * in `asset_device_model_costs` je Tenant (docs/adr/0016). Diese Seite zeigt und pflegt die Kosten des
  * **aktiven** Tenants; `depreciation_months` bleibt am Modell (Nutzungsdauer = Hardware-Eigenschaft).
+ *
+ * Der Katalog ist IT-Kern und immer sichtbar; Kosten-Spalten und Kosten-Editor nur bei aktivem
+ * Controlling (#874, ADR 0008) — Präsentations-Gate, die Werte bleiben in der DB.
  */
 class Index extends Component
 {
@@ -45,8 +49,17 @@ class Index extends Component
         return $this->isTeamOwnerOrAdmin(Auth::user());
     }
 
+    /** Controlling-Schalter des aktiven Teams × Tenants (ADR 0008). */
+    protected function controllingEnabled(): bool
+    {
+        return app(ControllingContext::class)->enabledFor($this->teamId());
+    }
+
     public function edit(int $id): void
     {
+        // Der Editor pflegt ausschließlich Kosten (+ AfA-Dauer) → ohne Controlling gesperrt (#874, ADR 0008).
+        abort_unless($this->controllingEnabled(), 403);
+
         $m = AssetDeviceModel::where('team_id', $this->teamId())->findOrFail($id);
         $cost = $m->costFor($this->activeTenantId());
 
@@ -67,6 +80,7 @@ class Index extends Component
     public function saveEdit(): void
     {
         abort_unless($this->canManage(), 403);
+        abort_unless($this->controllingEnabled(), 403); // (#874, ADR 0008)
 
         foreach (['eMonthly', 'ePurchase', 'eDep'] as $f) {
             if ($this->$f === '') $this->$f = null;
@@ -150,8 +164,11 @@ class Index extends Component
         // versuchen, sie zu schreiben.
         // costType/vendor mit vorladen: die Liste zeigt beide Namen je Zeile (index.blade.php) und
         // ist bewusst unpaginiert — ohne das wären es zwei Queries je Modell (80 Modelle ≈ 160).
+        // Ohne Controlling werden keine Kosten-Spalten gerendert → auch nicht laden (#874, ADR 0008).
+        $controllingEnabled = $this->controllingEnabled();
+
         $models = AssetDeviceModel::where('team_id', $teamId)
-            ->with(['cost.costType', 'cost.vendor'])
+            ->when($controllingEnabled, fn ($q) => $q->with(['cost.costType', 'cost.vendor']))
             ->orderBy('manufacturer')->orderBy('model')->get();
 
         $models->each(function ($m) use ($counts) {
@@ -161,9 +178,10 @@ class Index extends Component
 
         return view('asset-manager::livewire.device-models.index', [
             'models'    => $models,
-            'costTypes' => AssetCostType::where('team_id', $teamId)->orderBy('sort_order')->orderBy('name')->get(),
-            'vendors'   => AssetVendor::where('team_id', $teamId)->orderBy('name')->get(),
+            'costTypes' => $controllingEnabled ? AssetCostType::where('team_id', $teamId)->orderBy('sort_order')->orderBy('name')->get() : collect(),
+            'vendors'   => $controllingEnabled ? AssetVendor::where('team_id', $teamId)->orderBy('name')->get() : collect(),
             'canManage' => $this->canManage(),
+            'controllingEnabled' => $controllingEnabled,
         ])->layout('platform::layouts.app');
     }
 }

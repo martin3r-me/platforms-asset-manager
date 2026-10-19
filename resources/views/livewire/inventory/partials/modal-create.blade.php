@@ -63,25 +63,28 @@
             @error('cAssigneeId') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
         </div>
 
-        <div class="rounded-lg border border-[color:var(--am-border)] p-3 space-y-3">
-            <div class="text-[10px] font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Abschreibung (optional)</div>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                    <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Kaufdatum</label>
-                    <x-asset-manager-input size="sm" type="date" wire:model="cPurchaseDate" />
-                </div>
-                <div>
-                    <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Kaufpreis (€)</label>
-                    <x-asset-manager-input size="sm" type="number" step="0.01" min="0" wire:model="cPurchasePrice" />
-                    @error('cPurchasePrice') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
-                </div>
-                <div>
-                    <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">AfA (Monate)</label>
-                    <x-asset-manager-input size="sm" type="number" min="1" max="240" wire:model="cDepreciationMonths" />
-                    @error('cDepreciationMonths') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
+        {{-- Abschreibung nur mit Controlling (#874, ADR 0008) — createItem() verwirft die Felder sonst auch serverseitig. --}}
+        @if($controllingEnabled)
+            <div class="rounded-lg border border-[color:var(--am-border)] p-3 space-y-3">
+                <div class="text-[10px] font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Abschreibung (optional)</div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Kaufdatum</label>
+                        <x-asset-manager-input size="sm" type="date" wire:model="cPurchaseDate" />
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Kaufpreis (€)</label>
+                        <x-asset-manager-input size="sm" type="number" step="0.01" min="0" wire:model="cPurchasePrice" />
+                        @error('cPurchasePrice') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">AfA (Monate)</label>
+                        <x-asset-manager-input size="sm" type="number" min="1" max="240" wire:model="cDepreciationMonths" />
+                        @error('cDepreciationMonths') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
+                    </div>
                 </div>
             </div>
-        </div>
+        @endif
 
         <div>
             <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Notizen</label>

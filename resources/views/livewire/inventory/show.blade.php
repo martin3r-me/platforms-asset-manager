@@ -83,7 +83,8 @@
                 </section>
 
                 <section class="rounded-lg bg-[var(--am-surface)] border border-[color:var(--am-border)] shadow-sm overflow-hidden">
-                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--am-text-muted)] px-3 pt-3 pb-1.5">Zuordnung &amp; Kosten</h3>
+                    {{-- Kostenstelle + Monatskosten nur mit Controlling (#874, ADR 0008). --}}
+                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--am-text-muted)] px-3 pt-3 pb-1.5">{{ $controllingEnabled ? 'Zuordnung & Kosten' : 'Zuordnung' }}</h3>
                     <div class="px-3 pb-3 space-y-2">
                         <div class="flex items-center justify-between gap-2">
                             <span class="text-[10px] text-[var(--am-text-secondary)]">Zugeordnet</span>
@@ -95,18 +96,20 @@
                                 <span class="text-[11px] text-[var(--am-text)] text-right">{{ $device->location }}</span>
                             </div>
                         @endif
-                        @if($device && $device->costCenter)
+                        @if($controllingEnabled && $device && $device->costCenter)
                             <div class="flex items-center justify-between gap-2">
                                 <span class="text-[10px] text-[var(--am-text-secondary)]">Kostenstelle</span>
                                 <span class="text-[11px] text-[var(--am-text)] text-right">{{ $device->costCenter->name }}</span>
                             </div>
                         @endif
-                        <div class="flex items-center justify-between gap-2">
-                            <span class="text-[10px] text-[var(--am-text-secondary)]">Monatskosten</span>
-                            <span class="text-[11px] tabular-nums text-[var(--am-text)]">
-                                {{ $subject->monthlyCost > 0 ? number_format($subject->monthlyCost, 2, ',', '.') . ' €' : '—' }}
-                            </span>
-                        </div>
+                        @if($controllingEnabled)
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-[10px] text-[var(--am-text-secondary)]">Monatskosten</span>
+                                <span class="text-[11px] tabular-nums text-[var(--am-text)]">
+                                    {{ $subject->monthlyCost > 0 ? number_format($subject->monthlyCost, 2, ',', '.') . ' €' : '—' }}
+                                </span>
+                            </div>
+                        @endif
                     </div>
                 </section>
             </div>
@@ -161,8 +164,9 @@
                     'notes'     => 'Notizen',
                     'tickets'   => 'Tickets',
                     'invoices'  => 'Rechnungen',
-                    'costs'     => 'Kosten',
                 ];
+                // „Kosten" nur mit Controlling (#874, ADR 0008).
+                if ($controllingEnabled) { $tabs['costs'] = 'Kosten'; }
                 // „Verlauf" (Events + Sync-Logs) nur bei Geräten (Phase 6).
                 if ($device) { $tabs['verlauf'] = 'Verlauf'; }
             @endphp
@@ -170,7 +174,7 @@
 
             {{-- ===================== ÜBERSICHT ===================== --}}
             <div x-show="tab === 'overview'" class="space-y-5">
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <div class="grid grid-cols-1 {{ $controllingEnabled ? 'lg:grid-cols-2' : '' }} gap-5">
 
                     {{-- Details --}}
                     <x-asset-manager-panel title="Details">
@@ -206,34 +210,36 @@
                         </x-asset-manager-detail-list>
                     </x-asset-manager-panel>
 
-                    {{-- Abschreibung --}}
-                    <x-asset-manager-panel title="Abschreibung">
-                        @if($canManage && $item)
-                            <x-slot name="actions">
-                                <button type="button" wire:click="openDepreciation" class="text-[11px] text-[var(--am-accent)] hover:underline inline-flex items-center gap-1">@svg('heroicon-o-pencil-square', 'w-3 h-3') Bearbeiten</button>
-                            </x-slot>
-                        @elseif($canManage && $device)
-                            <x-slot name="actions">
-                                <button type="button" wire:click="openDeviceCost" class="text-[11px] text-[var(--am-accent)] hover:underline inline-flex items-center gap-1">@svg('heroicon-o-pencil-square', 'w-3 h-3') Bearbeiten</button>
-                            </x-slot>
-                        @endif
-                        <x-asset-manager-detail-list>
-                            @if($item)
-                                <x-asset-manager-detail-row label="Kaufdatum">{{ $item->purchase_date?->format('d.m.Y') ?? '—' }}</x-asset-manager-detail-row>
-                                <x-asset-manager-detail-row label="Kaufpreis">{{ $item->purchase_price ? number_format((float) $item->purchase_price, 2, ',', '.') . ' €' : '—' }}</x-asset-manager-detail-row>
-                                <x-asset-manager-detail-row label="AfA (Monate)">{{ $item->depreciation_months ?: '—' }}</x-asset-manager-detail-row>
-                            @else
-                                <x-asset-manager-detail-row label="Kaufdatum">{{ $device->purchase_date?->format('d.m.Y') ?? '—' }}</x-asset-manager-detail-row>
-                                <x-asset-manager-detail-row label="Kaufpreis">{{ $device->purchase_price ? number_format((float) $device->purchase_price, 2, ',', '.') . ' €' : '—' }}</x-asset-manager-detail-row>
-                                <x-asset-manager-detail-row label="Leasing / Monat">{{ $device->monthly_cost && (float) $device->monthly_cost > 0 ? number_format((float) $device->monthly_cost, 2, ',', '.') . ' €' : '—' }}</x-asset-manager-detail-row>
-                                <x-asset-manager-detail-row label="AfA (Monate)">{{ $device->depreciation_months ?: '—' }}</x-asset-manager-detail-row>
+                    {{-- Abschreibung — Anzeige + Editor nur mit Controlling (#874, ADR 0008) --}}
+                    @if($controllingEnabled)
+                        <x-asset-manager-panel title="Abschreibung">
+                            @if($canManage && $item)
+                                <x-slot name="actions">
+                                    <button type="button" wire:click="openDepreciation" class="text-[11px] text-[var(--am-accent)] hover:underline inline-flex items-center gap-1">@svg('heroicon-o-pencil-square', 'w-3 h-3') Bearbeiten</button>
+                                </x-slot>
+                            @elseif($canManage && $device)
+                                <x-slot name="actions">
+                                    <button type="button" wire:click="openDeviceCost" class="text-[11px] text-[var(--am-accent)] hover:underline inline-flex items-center gap-1">@svg('heroicon-o-pencil-square', 'w-3 h-3') Bearbeiten</button>
+                                </x-slot>
                             @endif
-                            <div class="flex items-center justify-between gap-3 py-2">
-                                <dt class="font-medium text-[var(--am-text-secondary)]">Monatlich</dt>
-                                <dd class="font-semibold text-[var(--am-text)]">{{ $subject->monthlyCost > 0 ? number_format($subject->monthlyCost, 2, ',', '.') . ' €' : '—' }}</dd>
-                            </div>
-                        </x-asset-manager-detail-list>
-                    </x-asset-manager-panel>
+                            <x-asset-manager-detail-list>
+                                @if($item)
+                                    <x-asset-manager-detail-row label="Kaufdatum">{{ $item->purchase_date?->format('d.m.Y') ?? '—' }}</x-asset-manager-detail-row>
+                                    <x-asset-manager-detail-row label="Kaufpreis">{{ $item->purchase_price ? number_format((float) $item->purchase_price, 2, ',', '.') . ' €' : '—' }}</x-asset-manager-detail-row>
+                                    <x-asset-manager-detail-row label="AfA (Monate)">{{ $item->depreciation_months ?: '—' }}</x-asset-manager-detail-row>
+                                @else
+                                    <x-asset-manager-detail-row label="Kaufdatum">{{ $device->purchase_date?->format('d.m.Y') ?? '—' }}</x-asset-manager-detail-row>
+                                    <x-asset-manager-detail-row label="Kaufpreis">{{ $device->purchase_price ? number_format((float) $device->purchase_price, 2, ',', '.') . ' €' : '—' }}</x-asset-manager-detail-row>
+                                    <x-asset-manager-detail-row label="Leasing / Monat">{{ $device->monthly_cost && (float) $device->monthly_cost > 0 ? number_format((float) $device->monthly_cost, 2, ',', '.') . ' €' : '—' }}</x-asset-manager-detail-row>
+                                    <x-asset-manager-detail-row label="AfA (Monate)">{{ $device->depreciation_months ?: '—' }}</x-asset-manager-detail-row>
+                                @endif
+                                <div class="flex items-center justify-between gap-3 py-2">
+                                    <dt class="font-medium text-[var(--am-text-secondary)]">Monatlich</dt>
+                                    <dd class="font-semibold text-[var(--am-text)]">{{ $subject->monthlyCost > 0 ? number_format($subject->monthlyCost, 2, ',', '.') . ' €' : '—' }}</dd>
+                                </div>
+                            </x-asset-manager-detail-list>
+                        </x-asset-manager-panel>
+                    @endif
                 </div>
 
                 {{-- Lifecycle & Beschaffung (nur Gerät) — manuell gepflegt, Intune liefert das nicht (ADR 0007). --}}
@@ -400,26 +406,28 @@
                 </x-asset-manager-panel>
             </div>
 
-            {{-- ===================== KOSTEN ===================== --}}
-            <div x-show="tab === 'costs'" x-cloak>
-                <x-asset-manager-panel title="Kosten (je Objekt)">
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div class="rounded-lg bg-[var(--am-bg)] border border-[color:var(--am-border)] p-4">
-                            <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Monatlich (AfA/Leasing)</div>
-                            <div class="text-lg font-semibold text-[var(--am-text)]">{{ $subject->monthlyCost > 0 ? number_format($subject->monthlyCost, 2, ',', '.') . ' €' : '—' }}</div>
+            {{-- ===================== KOSTEN (nur mit Controlling, #874) ===================== --}}
+            @if($controllingEnabled)
+                <div x-show="tab === 'costs'" x-cloak>
+                    <x-asset-manager-panel title="Kosten (je Objekt)">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div class="rounded-lg bg-[var(--am-bg)] border border-[color:var(--am-border)] p-4">
+                                <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Monatlich (AfA/Leasing)</div>
+                                <div class="text-lg font-semibold text-[var(--am-text)]">{{ $subject->monthlyCost > 0 ? number_format($subject->monthlyCost, 2, ',', '.') . ' €' : '—' }}</div>
+                            </div>
+                            <div class="rounded-lg bg-[var(--am-bg)] border border-[color:var(--am-border)] p-4">
+                                <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Kaufpreis</div>
+                                <div class="text-lg font-semibold text-[var(--am-text)]">{{ ($item ? $item->purchase_price : $device->purchase_price) ? number_format((float) ($item ? $item->purchase_price : $device->purchase_price), 2, ',', '.') . ' €' : '—' }}</div>
+                            </div>
+                            <div class="rounded-lg bg-[var(--am-bg)] border border-[color:var(--am-border)] p-4">
+                                <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">AfA-Dauer</div>
+                                <div class="text-lg font-semibold text-[var(--am-text)]">{{ ($item ? $item->depreciation_months : $device->depreciation_months) ?: '—' }} {{ ($item ? $item->depreciation_months : $device->depreciation_months) ? 'Monate' : '' }}</div>
+                            </div>
                         </div>
-                        <div class="rounded-lg bg-[var(--am-bg)] border border-[color:var(--am-border)] p-4">
-                            <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Kaufpreis</div>
-                            <div class="text-lg font-semibold text-[var(--am-text)]">{{ ($item ? $item->purchase_price : $device->purchase_price) ? number_format((float) ($item ? $item->purchase_price : $device->purchase_price), 2, ',', '.') . ' €' : '—' }}</div>
-                        </div>
-                        <div class="rounded-lg bg-[var(--am-bg)] border border-[color:var(--am-border)] p-4">
-                            <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">AfA-Dauer</div>
-                            <div class="text-lg font-semibold text-[var(--am-text)]">{{ ($item ? $item->depreciation_months : $device->depreciation_months) ?: '—' }} {{ ($item ? $item->depreciation_months : $device->depreciation_months) ? 'Monate' : '' }}</div>
-                        </div>
-                    </div>
-                    <p class="text-[11px] text-[var(--am-text-muted)] mt-3">Rohe AfA/Leasing-Kosten je Objekt — nicht die kostenstellen-zugeteilte Summe der Kostenaufteilung.</p>
-                </x-asset-manager-panel>
-            </div>
+                        <p class="text-[11px] text-[var(--am-text-muted)] mt-3">Rohe AfA/Leasing-Kosten je Objekt — nicht die kostenstellen-zugeteilte Summe der Kostenaufteilung.</p>
+                    </x-asset-manager-panel>
+                </div>
+            @endif
 
             {{-- ===================== VERLAUF (nur Gerät, Phase 6) ===================== --}}
             @if($device)
@@ -494,7 +502,9 @@
     @if($canManage && $item)
         @include('asset-manager::livewire.inventory.partials.modal-edit')
         @include('asset-manager::livewire.inventory.partials.modal-assign')
-        @include('asset-manager::livewire.inventory.partials.modal-depreciation')
+        @if($controllingEnabled)
+            @include('asset-manager::livewire.inventory.partials.modal-depreciation')
+        @endif
         @include('asset-manager::livewire.inventory.partials.modal-notes')
         @include('asset-manager::livewire.inventory.partials.modal-delete')
     @endif
@@ -502,7 +512,9 @@
     {{-- Phase 4: Geräte-Modals (nur intune). --}}
     @if($canManage && $device)
         @include('asset-manager::livewire.inventory.partials.modal-device-edit')
-        @include('asset-manager::livewire.inventory.partials.modal-device-cost')
+        @if($controllingEnabled)
+            @include('asset-manager::livewire.inventory.partials.modal-device-cost')
+        @endif
         @include('asset-manager::livewire.inventory.partials.modal-device-notes')
     @endif
 </x-ui-page>

@@ -17,12 +17,20 @@
                 <div class="px-4 py-2 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg">{{ $flash }}</div>
             @endif
 
-            <p class="text-xs text-[var(--am-text-secondary)]">
-                Preise je Geräte-Modell. Der Intune-Sync legt die real existierenden Modelle automatisch an —
-                hier nur <strong>Leasing-Rate</strong> (mtl.) <em>oder</em> <strong>Kaufpreis + AfA-Monate</strong> sowie die
-                <strong>Kostenart</strong> hinterlegen. Geräte erben den Wert; ein einzelnes Gerät kann ihn in der
-                Geräte-Detailansicht überschreiben. Ohne zugeordnete Kostenart fließt der Betrag <em>nicht</em> in den Pivot.
-            </p>
+            {{-- Katalog ist IT-Kern; Preise/Kostenart/Kreditor nur mit Controlling (#874, ADR 0008). --}}
+            @if($controllingEnabled)
+                <p class="text-xs text-[var(--am-text-secondary)]">
+                    Preise je Geräte-Modell. Der Intune-Sync legt die real existierenden Modelle automatisch an —
+                    hier nur <strong>Leasing-Rate</strong> (mtl.) <em>oder</em> <strong>Kaufpreis + AfA-Monate</strong> sowie die
+                    <strong>Kostenart</strong> hinterlegen. Geräte erben den Wert; ein einzelnes Gerät kann ihn in der
+                    Geräte-Detailansicht überschreiben. Ohne zugeordnete Kostenart fließt der Betrag <em>nicht</em> in den Pivot.
+                </p>
+            @else
+                <p class="text-xs text-[var(--am-text-secondary)]">
+                    Hardware-Katalog. Der Intune-Sync legt die real existierenden Modelle automatisch an —
+                    hier lassen sich zusätzlich Modelle anlegen, die der Sync noch nicht gebracht hat.
+                </p>
+            @endif
 
             {{-- Anlage (für Modelle ohne Sync) — nur owner/admin --}}
             @if($canManage)
@@ -50,10 +58,12 @@
                             <th class="text-left px-4 py-3">Hersteller</th>
                             <th class="text-left px-4 py-3">Modell</th>
                             <th class="text-right px-4 py-3">Geräte</th>
-                            <th class="text-right px-4 py-3">Leasing/Monat</th>
-                            <th class="text-right px-4 py-3">Kauf (AfA)</th>
-                            <th class="text-left px-4 py-3">Kostenart</th>
-                            <th class="text-left px-4 py-3">Kreditor</th>
+                            @if($controllingEnabled)
+                                <th class="text-right px-4 py-3">Leasing/Monat</th>
+                                <th class="text-right px-4 py-3">Kauf (AfA)</th>
+                                <th class="text-left px-4 py-3">Kostenart</th>
+                                <th class="text-left px-4 py-3">Kreditor</th>
+                            @endif
                             <th class="px-4 py-3"></th>
                         </tr>
                     </thead>
@@ -62,11 +72,12 @@
                             @php
                                 // Kosten liegen tenant-scoped in der cost-Relation (ADR 0016);
                                 // die Nutzungsdauer bleibt am Modell.
-                                $cost     = $m->cost;
+                                // Ohne Controlling nicht anfassen: die Relation ist dann nicht vorgeladen (#874).
+                                $cost     = $controllingEnabled ? $m->cost : null;
                                 $hasPrice = $cost?->monthly_cost || ($cost?->purchase_price && $m->depreciation_months);
                             @endphp
                             <tr class="hover:bg-[var(--am-bg)]" wire:key="dm-{{ $m->id }}">
-                                @if($editId === $m->id)
+                                @if($controllingEnabled && $editId === $m->id)
                                     <td class="px-4 py-2 text-[var(--am-text-secondary)]">{{ $m->manufacturer ?: '—' }}</td>
                                     <td class="px-4 py-2 font-medium text-[var(--am-text)]">{{ $m->model ?: '—' }}</td>
                                     <td class="px-4 py-2 text-right text-xs text-[var(--am-text-secondary)]">{{ $m->device_count }}</td>
@@ -102,22 +113,26 @@
                                         @endif
                                     </td>
                                     <td class="px-4 py-2.5 text-right text-xs text-[var(--am-text-secondary)]">{{ $m->device_count }}</td>
-                                    <td class="px-4 py-2.5 text-right tabular-nums text-[var(--am-text-secondary)]">{{ $cost?->monthly_cost ? number_format((float) $cost->monthly_cost, 2, ',', '.') . ' €' : '—' }}</td>
-                                    <td class="px-4 py-2.5 text-right tabular-nums text-[var(--am-text-secondary)]">{{ ($cost?->purchase_price && $m->depreciation_months) ? number_format((float) $cost->purchase_price, 2, ',', '.') . ' € / ' . $m->depreciation_months . ' M' : '—' }}</td>
-                                    <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">{{ $cost?->costType?->name ?? '—' }}</td>
-                                    <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">{{ $cost?->vendor?->name ?? '—' }}</td>
+                                    @if($controllingEnabled)
+                                        <td class="px-4 py-2.5 text-right tabular-nums text-[var(--am-text-secondary)]">{{ $cost?->monthly_cost ? number_format((float) $cost->monthly_cost, 2, ',', '.') . ' €' : '—' }}</td>
+                                        <td class="px-4 py-2.5 text-right tabular-nums text-[var(--am-text-secondary)]">{{ ($cost?->purchase_price && $m->depreciation_months) ? number_format((float) $cost->purchase_price, 2, ',', '.') . ' € / ' . $m->depreciation_months . ' M' : '—' }}</td>
+                                        <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">{{ $cost?->costType?->name ?? '—' }}</td>
+                                        <td class="px-4 py-2.5 text-xs text-[var(--am-text-secondary)]">{{ $cost?->vendor?->name ?? '—' }}</td>
+                                    @endif
                                     <td class="px-4 py-2.5 text-right whitespace-nowrap">
                                         @if($canManage)
-                                            <button wire:click="edit({{ $m->id }})" class="text-xs text-[var(--am-text-secondary)] hover:text-[var(--am-accent)]">@svg('heroicon-o-pencil-square', 'w-4 h-4 inline')</button>
+                                            @if($controllingEnabled)
+                                                <button wire:click="edit({{ $m->id }})" class="text-xs text-[var(--am-text-secondary)] hover:text-[var(--am-accent)]">@svg('heroicon-o-pencil-square', 'w-4 h-4 inline')</button>
+                                            @endif
                                             <button wire:click="delete({{ $m->id }})"
-                                                    wire:confirm="Modell {{ $m->manufacturer }} {{ $m->model }} wirklich löschen?{{ $m->device_count ? ' '.$m->device_count.' Geräte verlieren ihren Modell-Preis.' : '' }}"
+                                                    wire:confirm="Modell {{ $m->manufacturer }} {{ $m->model }} wirklich löschen?{{ ($controllingEnabled && $m->device_count) ? ' '.$m->device_count.' Geräte verlieren ihren Modell-Preis.' : '' }}"
                                                     class="text-xs text-[var(--am-text-secondary)] hover:text-red-600 ml-2">@svg('heroicon-o-trash', 'w-4 h-4 inline')</button>
                                         @endif
                                     </td>
                                 @endif
                             </tr>
                         @empty
-                            <tr><td colspan="8" class="px-4 py-6 text-center text-xs text-[var(--am-text-muted)]">Noch keine Geräte-Modelle. Sie erscheinen nach dem nächsten Intune-Sync automatisch.</td></tr>
+                            <tr><td colspan="{{ $controllingEnabled ? 8 : 4 }}" class="px-4 py-6 text-center text-xs text-[var(--am-text-muted)]">Noch keine Geräte-Modelle. Sie erscheinen nach dem nächsten Intune-Sync automatisch.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

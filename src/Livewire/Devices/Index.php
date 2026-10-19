@@ -16,6 +16,7 @@ use Platform\AssetManager\Models\AssetDeviceSyncLog;
 use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetHandoverLine;
 use Platform\AssetManager\Jobs\SyncIntuneDevicesJob;
+use Platform\AssetManager\Services\ControllingContext;
 use Platform\AssetManager\Support\DeviceCostResolver;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -74,8 +75,52 @@ class Index extends Component
 
     public function reorderColumns(array $order): void
     {
-        $this->columnOrder = $this->normalizeColumnOrder($order);
+        $normalized = $this->normalizeColumnOrder($order);
+
+        // Bei aus geschaltetem Controlling ist die Kosten-Spalte nicht gerendert, kommt also im
+        // Drag&Drop nicht mit zurück. normalizeColumnOrder() würde sie an ihre Standardposition
+        // setzen — die eigene Position des Nutzers bleibt aber erhalten, sonst verschiebt ein
+        // Umsortieren ohne Controlling die Spalte für später (#874, ADR 0008).
+        if (! $this->controllingEnabled() && ! $this->orderContains($order, 'cost')) {
+            $previous = array_search('cost', $this->columnOrder, true);
+            if ($previous !== false) {
+                $normalized = array_values(array_diff($normalized, ['cost']));
+                array_splice($normalized, min($previous, count($normalized)), 0, ['cost']);
+            }
+        }
+
+        $this->columnOrder = $normalized;
         session(['asset-manager.devices.columnOrder' => $this->columnOrder]);
+    }
+
+    /** Enthält die (ggf. sortablejs-verpackte) Reihenfolge den Spalten-Key? */
+    protected function orderContains(array $order, string $key): bool
+    {
+        foreach ($order as $i) {
+            if ((is_array($i) ? ($i['value'] ?? null) : $i) === $key) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Controlling-Schalter des aktiven Teams × Tenants (ADR 0008) — gated Kosten-Spalte + Kostenstellen-Sammelaktion (#874). */
+    protected function controllingEnabled(): bool
+    {
+        return app(ControllingContext::class)->enabledFor(Auth::user()->currentTeam->id);
+    }
+
+    /**
+     * Die tatsächlich gerenderten Spalten: die gespeicherte Reihenfolge, ohne Kosten-Spalte bei
+     * aus geschaltetem Controlling. Die Session behält `cost` — wieder einschalten stellt die
+     * Spalte an ihrer alten Stelle her (Präsentations-Gate, #874, ADR 0008).
+     */
+    protected function visibleColumns(bool $controllingEnabled): array
+    {
+        return $controllingEnabled
+            ? $this->columnOrder
+            : array_values(array_diff($this->columnOrder, ['cost']));
     }
 
     public function resetColumnOrder(): void
@@ -195,10 +240,12 @@ class Index extends Component
             : array_values(array_diff($this->selected, $pageIds));
     }
 
-    /** Bulk: Kostenstelle für die ausgewählten Geräte setzen (owner/admin). */
+    /** Bulk: Kostenstelle für die ausgewählten Geräte setzen (owner/admin, nur mit Controlling). */
     public function bulkSetCostCenter(): void
     {
         abort_unless($this->canManage(), 403);
+        // Kostenstelle ist Controlling-Stammdatum — ohne Schalter auch serverseitig gesperrt (#874, ADR 0008).
+        abort_unless($this->controllingEnabled(), 403);
         if (empty($this->selected) || ! $this->bulkCostCenter) return;
 
         $teamId = Auth::user()->currentTeam->id;
@@ -437,10 +484,15 @@ class Index extends Component
         // resolvedMonthlyCost() je Zeile, das baut den Katalog pro Gerät neu auf (Muster:
         // InventoryService). Bewusst NICHT sortierbar: die Liste sortiert DB-seitig, `monthly_cost`
         // ist aber nur der Override — Geräte, die ihre Rate vom Modell erben, würden mit 0 einsortiert.
-        $resolver    = DeviceCostResolver::for($team->id);
-        $deviceCosts = collect($devices->items())
-            ->mapWithKeys(fn (AssetDevice $d) => [$d->id => $resolver->monthlyCost($d)])
-            ->all();
+        // Ohne Controlling wird die Spalte nicht gezeigt → Resolver gar nicht erst bauen (#874, ADR 0008).
+        $controllingEnabled = $this->controllingEnabled();
+        $deviceCosts = [];
+        if ($controllingEnabled) {
+            $resolver    = DeviceCostResolver::for($team->id);
+            $deviceCosts = collect($devices->items())
+                ->mapWithKeys(fn (AssetDevice $d) => [$d->id => $resolver->monthlyCost($d)])
+                ->all();
+        }
 
         return view('asset-manager::livewire.devices.index', [
             'devices'             => $devices,
@@ -456,8 +508,11 @@ class Index extends Component
             'canSync'             => $canSync,
             'canManage'           => $this->canManage(),
             'openHandoverDeviceIds' => $openHandoverDeviceIds,
-            'costCenters'         => AssetCostCenter::where('team_id', $team->id)->orderBy('code')->get(),
-            'columns'             => $this->columnOrder,
+            'controllingEnabled'  => $controllingEnabled,
+            'costCenters'         => $controllingEnabled
+                ? AssetCostCenter::where('team_id', $team->id)->orderBy('code')->get()
+                : collect(),
+            'columns'             => $this->visibleColumns($controllingEnabled),
         ])->layout('platform::layouts.app');
     }
 

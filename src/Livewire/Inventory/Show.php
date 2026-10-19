@@ -21,6 +21,7 @@ use Platform\AssetManager\Models\AssetHandoverLine;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetVendor;
 use Platform\AssetManager\Services\AssetWriteService;
+use Platform\AssetManager\Services\ControllingContext;
 use Platform\AssetManager\Support\AssetSubject;
 
 /**
@@ -129,6 +130,21 @@ class Show extends Component
         }
     }
 
+    /**
+     * Controlling-Schalter des aktiven Teams × Tenants (ADR 0008). Gated Kosten-/Abschreibungs-Anzeige
+     * und deren Editoren (#874) — Präsentations-Gate, die Werte bleiben in der DB.
+     */
+    protected function controllingEnabled(): bool
+    {
+        return app(ControllingContext::class)->enabledFor($this->teamId());
+    }
+
+    /** Kosten-Schreibpfade nur mit Controlling — nicht nur in der View versteckt (#874, ADR 0008). */
+    protected function guardControlling(): void
+    {
+        abort_unless($this->controllingEnabled(), 403);
+    }
+
     /** owner/admin im aktiven Team? (steuert Schreib-Controls; Backend gated zusätzlich). */
     protected function canManage(): bool
     {
@@ -222,6 +238,7 @@ class Show extends Component
     public function openDepreciation(): void
     {
         $item = $this->guardManualWrite();
+        $this->guardControlling();
         $this->dPurchaseDate       = $item->purchase_date?->format('Y-m-d');
         $this->dPurchasePrice      = $item->purchase_price !== null ? (string) $item->purchase_price : null;
         $this->dDepreciationMonths = $item->depreciation_months;
@@ -231,6 +248,7 @@ class Show extends Component
     public function saveDepreciation(AssetWriteService $writer): void
     {
         $item = $this->guardManualWrite();
+        $this->guardControlling();
 
         $this->validate([
             'dPurchaseDate'       => 'nullable|date',
@@ -345,6 +363,7 @@ class Show extends Component
     public function openDeviceCost(): void
     {
         $d = $this->guardDeviceWrite();
+        $this->guardControlling();
         $this->gcMonthly      = $d->monthly_cost;
         $this->gcPurchase     = $d->purchase_price;
         $this->gcDep          = $d->depreciation_months;
@@ -357,6 +376,7 @@ class Show extends Component
     public function saveDeviceCost(AssetWriteService $writer): void
     {
         $d = $this->guardDeviceWrite();
+        $this->guardControlling();
 
         if (! $this->gcCostType)   $this->gcCostType   = null;
         if (! $this->gcCostCenter) $this->gcCostCenter = null;
@@ -440,7 +460,17 @@ class Show extends Component
                 ->orderByDesc('started_at')->limit(10)->get();
         }
 
+        // Kosten-Selects (Kostenart/-stelle) nur laden, wenn der Kosten-Editor überhaupt erreichbar ist (#874).
+        $controllingEnabled = $this->controllingEnabled();
+
+        // ?tab=costs (Deep-Link/URL) bei aus geschaltetem Controlling → Übersicht statt leerem Tab.
+        // Hier statt in mount(), weil der #[Url]-Wert auch bei späteren Requests kommen kann (#874, ADR 0008).
+        if ($this->tab === 'costs' && ! $controllingEnabled) {
+            $this->tab = 'overview';
+        }
+
         return view('asset-manager::livewire.inventory.show', [
+            'controllingEnabled' => $controllingEnabled,
             'subject'         => $subject,
             'item'            => $this->item,
             'device'          => $this->device,
@@ -453,8 +483,8 @@ class Show extends Component
             // Manuell: Kategorie/Asset-Träger-Selects. Gerät: Kostenart/-stelle/Kreditor-Selects.
             'categories'    => $this->item ? AssetCategory::orderBy('sort_order')->get() : collect(),
             'holders'     => $this->item ? AssetHolder::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get() : collect(),
-            'costTypes'     => $this->device ? AssetCostType::where('team_id', $teamId)->orderBy('sort_order')->orderBy('name')->get() : collect(),
-            'costCenters'   => $this->device ? AssetCostCenter::where('team_id', $teamId)->orderBy('code')->get() : collect(),
+            'costTypes'     => $this->device && $controllingEnabled ? AssetCostType::where('team_id', $teamId)->orderBy('sort_order')->orderBy('name')->get() : collect(),
+            'costCenters'   => $this->device && $controllingEnabled ? AssetCostCenter::where('team_id', $teamId)->orderBy('code')->get() : collect(),
             'vendors'       => $this->device ? AssetVendor::where('team_id', $teamId)->orderBy('name')->get() : collect(),
         ])->layout('platform::layouts.app');
     }

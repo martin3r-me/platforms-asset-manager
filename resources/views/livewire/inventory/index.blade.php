@@ -85,14 +85,17 @@
                     </x-asset-manager-select>
                 </x-asset-manager-filter-section>
 
-                <x-asset-manager-filter-section title="Kostenstelle" note="· nur Geräte">
-                    <x-asset-manager-select size="sm" wire:model.live="filterCostCenter">
-                        <option value="">Alle</option>
-                        @foreach($costCenters as $cc)
-                            <option value="{{ $cc->id }}">{{ trim(($cc->code ? $cc->code . ' · ' : '') . $cc->name) }}</option>
-                        @endforeach
-                    </x-asset-manager-select>
-                </x-asset-manager-filter-section>
+                {{-- Kostenstelle ist Controlling-Stammdatum (#874, ADR 0008). --}}
+                @if($controllingEnabled)
+                    <x-asset-manager-filter-section title="Kostenstelle" note="· nur Geräte">
+                        <x-asset-manager-select size="sm" wire:model.live="filterCostCenter">
+                            <option value="">Alle</option>
+                            @foreach($costCenters as $cc)
+                                <option value="{{ $cc->id }}">{{ trim(($cc->code ? $cc->code . ' · ' : '') . $cc->name) }}</option>
+                            @endforeach
+                        </x-asset-manager-select>
+                    </x-asset-manager-filter-section>
+                @endif
 
                 @if($this->hasFilters)
                     <x-asset-manager-button variant="ghost" size="sm" class="w-full" wire:click="resetFilters">
@@ -182,13 +185,15 @@
                                     @if($sortField === 'status') @svg($sortDirection === 'asc' ? 'heroicon-o-chevron-up' : 'heroicon-o-chevron-down', 'w-3 h-3') @endif
                                 </button>
                             </th>
-                            <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">
-                                <button wire:click="sortBy('monthlyCost')" class="flex items-center gap-1 hover:text-[var(--am-text)] ml-auto"
-                                        title="AfA/Leasing je Objekt — keine Kostenstellen-Zuteilung">
-                                    Monatskosten
-                                    @if($sortField === 'monthlyCost') @svg($sortDirection === 'asc' ? 'heroicon-o-chevron-up' : 'heroicon-o-chevron-down', 'w-3 h-3') @endif
-                                </button>
-                            </th>
+                            @if($controllingEnabled)
+                                <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">
+                                    <button wire:click="sortBy('monthlyCost')" class="flex items-center gap-1 hover:text-[var(--am-text)] ml-auto"
+                                            title="AfA/Leasing je Objekt — keine Kostenstellen-Zuteilung">
+                                        Monatskosten
+                                        @if($sortField === 'monthlyCost') @svg($sortDirection === 'asc' ? 'heroicon-o-chevron-up' : 'heroicon-o-chevron-down', 'w-3 h-3') @endif
+                                    </button>
+                                </th>
+                            @endif
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-[color:var(--am-border)]">
@@ -223,13 +228,15 @@
                                         <x-asset-manager-badge :color="$row->statusColor" dot size="sm">{{ $row->statusLabel }}</x-asset-manager-badge>
                                     @endif
                                 </td>
-                                <td class="px-4 py-3 text-right">
-                                    @if($row->monthlyCost > 0)
-                                        <span class="tabular-nums text-[var(--am-text)]">{{ number_format($row->monthlyCost, 2, ',', '.') }} €</span>
-                                    @else
-                                        <span class="text-[var(--am-text-disabled)]">—</span>
-                                    @endif
-                                </td>
+                                @if($controllingEnabled)
+                                    <td class="px-4 py-3 text-right">
+                                        @if($row->monthlyCost > 0)
+                                            <span class="tabular-nums text-[var(--am-text)]">{{ number_format($row->monthlyCost, 2, ',', '.') }} €</span>
+                                        @else
+                                            <span class="text-[var(--am-text-disabled)]">—</span>
+                                        @endif
+                                    </td>
+                                @endif
                             </tr>
                         @endforeach
                     </tbody>
@@ -244,9 +251,11 @@
             @endif
         </div>
 
-        <p class="text-[11px] text-[var(--am-text-muted)] px-1">
-            Monatskosten = AfA/Leasing je Objekt (rohe Gerätekosten) — nicht die kostenstellen-zugeteilte Summe aus der Kostenaufteilung.
-        </p>
+        @if($controllingEnabled)
+            <p class="text-[11px] text-[var(--am-text-muted)] px-1">
+                Monatskosten = AfA/Leasing je Objekt (rohe Gerätekosten) — nicht die kostenstellen-zugeteilte Summe aus der Kostenaufteilung.
+            </p>
+        @endif
         </div>
     </div>
 

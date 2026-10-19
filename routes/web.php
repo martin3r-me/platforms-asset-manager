@@ -118,7 +118,8 @@ Route::middleware(EnsureControllingEnabled::class)->group(function () {
 });
 
 // Geräte-Modelle bleibt IT-Kern (Hardware-Katalog) — nur die Kosten-Spalten werden in der View
-// bei deaktiviertem Controlling ausgeblendet (ADR 0008). Daher NICHT in der Controlling-Gruppe.
+// bei deaktiviertem Controlling ausgeblendet und der Kosten-Editor serverseitig gesperrt (ADR 0008,
+// #874). Daher NICHT in der Controlling-Gruppe.
 Route::get('/device-models', DeviceModelsIndex::class)->name('asset-manager.device-models.index');
 
 // Konnektoren-Verwaltung (Multi-Tenant): Tenant-Liste + Microsoft-Anbindung je Tenant.
