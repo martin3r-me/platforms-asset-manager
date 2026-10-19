@@ -10,11 +10,9 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Platform\AssetManager\Services\AssetWriteService;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
-use Platform\AssetManager\Models\AssetAssignment;
 use Platform\AssetManager\Models\AssetCategory;
 use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetItem;
-use Platform\AssetManager\Services\TenantContext;
 
 class Index extends Component
 {
@@ -104,8 +102,9 @@ class Index extends Component
         if (!$holder) return;
 
         $items = AssetItem::where('team_id', $this->teamId())->whereIn('id', $this->selected)->get();
+        $writer = app(AssetWriteService::class);
         foreach ($items as $item) {
-            $item->assignTo($holder);
+            $writer->assignItem($item, $holder);
         }
 
         $this->bulkResult = count($items) . ' Asset(s) an ' . $holder->name . ' zugewiesen.';
@@ -120,8 +119,10 @@ class Index extends Component
         if (empty($this->selected)) return;
 
         $items = AssetItem::where('team_id', $this->teamId())->whereIn('id', $this->selected)->get();
+        $writer = app(AssetWriteService::class);
         foreach ($items as $item) {
-            $item->assignTo(null);
+            // Ins Lager = Status-Regel der Detailseite (#941): offene Zuordnung endet jetzt.
+            $writer->setItemStatus($item, 'in_stock');
         }
 
         $this->bulkResult = count($items) . ' Asset(s) ins Lager zurückgelegt.';
@@ -202,38 +203,18 @@ class Index extends Component
             'bcDepreciationMonths' => 'nullable|integer|min:1|max:240',
         ]);
 
-        $teamId     = $this->teamId();
-        $tenantId   = TenantContext::resolveForWrite($teamId, (int) Auth::id());
-        $status     = $this->bcAssigneeId ? 'assigned' : 'in_stock';
-        $assignedAt = $this->bcAssigneeId ? now() : null;
-
-        for ($i = 0; $i < $this->bcQuantity; $i++) {
-            $item = AssetItem::create([
-                'team_id'             => $teamId,
-                'tenant_id'           => $tenantId,
-                'category_id'         => $this->bcCategoryId,
-                'source'              => 'manual',
-                'name'                => $this->bcName,
-                'manufacturer'        => $this->bcManufacturer ?: null,
-                'model'               => $this->bcModel ?: null,
-                'assignee_id'         => $this->bcAssigneeId,
-                'assigned_at'         => $assignedAt,
-                'status'              => $status,
-                'purchase_price'      => $this->bcPurchasePrice ?: null,
-                'depreciation_months' => $this->bcDepreciationMonths,
-            ]);
-
-            if ($this->bcAssigneeId) {
-                AssetAssignment::create([
-                    'asset_item_id'   => $item->id,
-                    'assignable_type' => AssetAssignment::SUBJECT_ITEM,
-                    'assignable_id'   => $item->id,
-                    'holder_id'     => $this->bcAssigneeId,
-                    'assigned_at'     => now(),
-                    'source'          => AssetAssignment::SOURCE_MANUAL,
-                ]);
-            }
-        }
+        // Über den AssetWriteService wie die Einzelanlage (#974): Status-/Zuordnungsregel und Tenant
+        // kommen von dort, statt Item und Zuordnung hier noch einmal von Hand zu schreiben.
+        app(AssetWriteService::class)->createItems([
+            'categoryId'         => $this->bcCategoryId,
+            'name'               => $this->bcName,
+            'manufacturer'       => $this->bcManufacturer,
+            'model'              => $this->bcModel,
+            'assigneeId'         => $this->bcAssigneeId,
+            'status'             => 'in_stock',
+            'purchasePrice'      => $this->bcPurchasePrice,
+            'depreciationMonths' => $this->bcDepreciationMonths,
+        ], $this->bcQuantity, $this->teamId(), (int) Auth::id());
 
         $this->bulkResult = $this->bcQuantity . '× "' . $this->bcName . '" angelegt.';
         $this->reset(['bcName', 'bcManufacturer', 'bcModel', 'bcQuantity', 'bcAssigneeId', 'bcPurchasePrice', 'bcDepreciationMonths', 'bcCategoryId', 'showBulkCreate']);

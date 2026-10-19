@@ -3,6 +3,7 @@
 namespace Platform\AssetManager\Livewire\Billing;
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Component;
 use Platform\AssetManager\Concerns\AuthorizesTeamRole;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
@@ -11,6 +12,7 @@ use Platform\AssetManager\Models\AssetBillingRun;
 use Platform\AssetManager\Services\BillableHolderResolver;
 use Platform\AssetManager\Services\BillingGateway;
 use Platform\AssetManager\Services\BillingRunService;
+use Platform\AssetManager\Services\BillingUnitPriceResolver;
 use Platform\AssetManager\Services\TenantContext;
 use Throwable;
 
@@ -27,6 +29,13 @@ class Index extends Component
 {
     use ResolvesCurrentTeam;
     use AuthorizesTeamRole;
+
+    /**
+     * Wie lange ein in easybill bestätigter Beleg für die **Vorschau** als vorhanden gilt (#977).
+     * Die Vorschau läuft bei jedem Roundtrip (Profil wählen, Liste aufklappen, Monat wechseln) und
+     * fragte dabei jedes Mal per HTTP nach — für eine Anzeige, die sich selten ändert.
+     */
+    protected const DOCUMENT_EXISTS_TTL = 300;
 
     /** Profil, dessen Lauf gerade betrachtet wird. */
     public ?int $selectedProfileId = null;
@@ -378,6 +387,67 @@ class Index extends Component
         $this->resetValidation();
     }
 
+    /**
+     * Der Lauf-Service für die **Anzeige**: identisch mit dem aus dem Container, nur dass die
+     * Existenzprüfung des easybill-Belegs kurz gecacht wird (#977).
+     *
+     * Die Sicherheitslogik aus #940 bleibt davon unberührt, weil sie hier nicht läuft:
+     * {@see createDraft()} bekommt den Service ungecacht aus dem Container und prüft innerhalb der
+     * Sperre live. Gecacht wird außerdem nur ein „vorhanden" — die vorsichtige Richtung: ein in easybill
+     * gelöschter Beleg blockiert die Vorschau höchstens ein paar Minuten länger, nie umgekehrt. „Weg"
+     * (der Lauf wird verworfen) und „unklar" gehen jedes Mal live durch.
+     */
+    protected function previewRuns(BillingGateway $gateway): BillingRunService
+    {
+        return new BillingRunService(
+            app(BillableHolderResolver::class),
+            app(BillingUnitPriceResolver::class),
+            static::cachingExistenceGateway($gateway, $this->teamId(), self::DOCUMENT_EXISTS_TTL),
+        );
+    }
+
+    /** Hülle um das Gateway, die ein bestätigtes `documentExists() === true` für $ttl Sekunden merkt. */
+    protected static function cachingExistenceGateway(BillingGateway $inner, int $teamId, int $ttl): BillingGateway
+    {
+        return new class($inner, $teamId, $ttl) implements BillingGateway {
+            public function __construct(
+                private BillingGateway $inner,
+                private int $teamId,
+                private int $ttl,
+            ) {}
+
+            public function documentExists(int $documentId): ?bool
+            {
+                // Je Team: verschiedene Teams können verschiedene easybill-Konten haben.
+                $key = "asset-manager:billing:document-exists:{$this->teamId}:{$documentId}";
+
+                if (Cache::get($key) === true) {
+                    return true;
+                }
+
+                $exists = $this->inner->documentExists($documentId);
+
+                if ($exists === true) {
+                    Cache::put($key, true, $this->ttl);
+                } else {
+                    Cache::forget($key);
+                }
+
+                return $exists;
+            }
+
+            public function isAvailable(): bool { return $this->inner->isAvailable(); }
+            public function unavailableReason(): ?string { return $this->inner->unavailableReason(); }
+            public function createDraftInvoice(array $document): int { return $this->inner->createDraftInvoice($document); }
+            public function documentUrl(int $documentId): ?string { return $this->inner->documentUrl($documentId); }
+            public function attachToDocument(int $documentId, string $filename, string $content): ?int
+            {
+                return $this->inner->attachToDocument($documentId, $filename, $content);
+            }
+            public function findCustomer(string $idOrNumber): ?array { return $this->inner->findCustomer($idOrNumber); }
+        };
+    }
+
     public function render(BillingRunService $runs, BillingGateway $gateway)
     {
         $teamId = $this->teamId();
@@ -392,7 +462,7 @@ class Index extends Component
             ? $profiles->firstWhere('id', $this->selectedProfileId)
             : null;
 
-        $preview = $selected ? $runs->preview($selected, $this->period) : null;
+        $preview = $selected ? $this->previewRuns($gateway)->preview($selected, $this->period) : null;
 
         // Die Einzelausnahmen (ADR 0024) werden am Profil aggregiert, obwohl sie am Träger leben:
         // die Zählregel soll an EINER Stelle vollständig lesbar bleiben. Dazu gehört die Frage, wie

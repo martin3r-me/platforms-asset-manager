@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Concerns\GuardsTenantBoundary;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostLine;
+use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetHandover;
@@ -19,6 +20,7 @@ use Platform\AssetManager\Services\ControllingContext;
 use Platform\AssetManager\Services\CostAggregationService;
 use Platform\AssetManager\Services\HolderService;
 use Platform\AssetManager\Services\HolderTypeService;
+use Platform\AssetManager\Support\DeviceCostResolver;
 
 class Show extends Component
 {
@@ -316,6 +318,56 @@ class Show extends Component
         $this->saved                = true;
     }
 
+    /**
+     * Geräte-Kostenzeilen nur für die übergebenen Geräte — dieselbe Regel wie
+     * {@see CostAggregationService::deviceCostRows()} (Kostenart mit `aggregation_source=asset_device`,
+     * Betrag > 0, ein vorgeladener Resolver), aber ohne den ganzen Gerätebestand des Teams zu laden:
+     * die Detailseite rendert bei jeder Modal-Interaktion neu, und der Aggregator-Cache lebt nur einen
+     * Request (#977). `tests/local/holder-device-costs.php` hält beide Wege gleich.
+     *
+     * @param  \Illuminate\Support\Collection<int, AssetDevice>  $devices
+     * @return \Illuminate\Support\Collection<int, array{device_id: int, cost_type_id: int, amount: float, upn: ?string}>  keyed by device_id
+     */
+    protected function deviceCostRows(int $teamId, \Illuminate\Support\Collection $devices): \Illuminate\Support\Collection
+    {
+        if ($devices->isEmpty()) {
+            return collect();
+        }
+
+        $deviceTypeIds = AssetCostType::where('team_id', $teamId)
+            ->where('aggregation_source', AssetCostType::SOURCE_ASSET_DEVICE)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id);
+
+        if ($deviceTypeIds->isEmpty()) {
+            return collect();
+        }
+
+        $resolver = DeviceCostResolver::for($teamId);
+
+        return $devices
+            ->map(function (AssetDevice $d) use ($deviceTypeIds, $resolver) {
+                $typeId = $resolver->costTypeId($d);
+                if (! $typeId || ! $deviceTypeIds->contains((int) $typeId)) {
+                    return null;
+                }
+
+                $amount = $resolver->monthlyCost($d);
+                if (! $amount || $amount <= 0) {
+                    return null;
+                }
+
+                return [
+                    'device_id'    => (int) $d->id,
+                    'cost_type_id' => (int) $typeId,
+                    'amount'       => (float) $amount,
+                    'upn'          => $d->user_principal_name,
+                ];
+            })
+            ->filter()
+            ->keyBy('device_id');
+    }
+
     public function render()
     {
         $teamId = $this->holder->team_id;
@@ -357,10 +409,9 @@ class Show extends Component
             ->get()
             ->keyBy('sku_id');
 
-        // Geräte-Kosten: gated (nur Kostenart aggregation_source='asset_device') + N+1-frei über den
-        // zentralen Aggregator — damit der Asset-Träger-Total mit Dashboard/Pivot übereinstimmt und
-        // nicht doppelt zählt. Keyed nach device_id für den Per-Gerät-Betrag in der Liste.
-        $deviceRows = app(CostAggregationService::class)->deviceCostRows($teamId)->keyBy('device_id');
+        // Geräte-Kosten: gated (nur Kostenart aggregation_source='asset_device'), nur für die Geräte
+        // DIESES Trägers (#977). Keyed nach device_id für den Per-Gerät-Betrag in der Liste.
+        $deviceRows = $this->deviceCostRows((int) $teamId, $devices);
 
         // Monatliche Kosten: gemeinsame Quelle der Wahrheit (identisch mit dem Panel der Liste).
         // $deviceRows wird durchgereicht, damit deviceCostRows() nicht ein zweites Mal läuft.

@@ -9,8 +9,8 @@
             ['label' => 'Inventar', 'icon' => 'rectangle-group'],
         ]">
             <x-slot name="actions">
-                <x-asset-manager-button variant="ghost" size="sm"
-                             href="{{ route('asset-manager.assets.index') }}" wire:navigate>
+                {{-- Die Legacy-Liste /assets ist abgelöst (#974): „nur manuelle" ist jetzt der Typ-Filter hier. --}}
+                <x-asset-manager-button variant="ghost" size="sm" wire:click="$set('filterType', 'manual')">
                     @svg('heroicon-o-cube-transparent', 'w-3.5 h-3.5')
                     Nur manuelle Assets
                 </x-asset-manager-button>
@@ -19,13 +19,18 @@
                     @svg('heroicon-o-computer-desktop', 'w-3.5 h-3.5')
                     Nur Intune-Geräte
                 </x-asset-manager-button>
+                {{-- Lesepfad: Export auch für Member (wie Geräte- und Trägerliste). Folgt Filtern + Sortierung. --}}
+                <x-asset-manager-button variant="ghost" size="sm" wire:click="exportCsv" wire:loading.attr="disabled" wire:target="exportCsv">
+                    @svg('heroicon-o-arrow-down-tray', 'w-3.5 h-3.5')
+                    Export CSV
+                </x-asset-manager-button>
                 {{-- Anlegen nur Owner/Admin (Backend: createItem → Gate create). Nur manuelle Assets (E7). --}}
-                @can('asset-manager.manage')
+                @if($canManage)
                     <x-asset-manager-button variant="primary" size="sm" wire:click="openCreate">
                         @svg('heroicon-o-plus', 'w-3.5 h-3.5')
                         Asset anlegen
                     </x-asset-manager-button>
-                @endcan
+                @endif
             </x-slot>
         </x-asset-manager-page-actionbar>
     </x-slot>
@@ -117,7 +122,7 @@
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <x-asset-manager-stat-card label="Hardware gesamt" :value="$counts['total']" icon="heroicon-o-rectangle-group" accent="navy" />
             <x-asset-manager-stat-card label="Zugeordnet" :value="$counts['assigned']" icon="heroicon-o-user" accent="emerald" value-class="text-emerald-600" />
-            <x-asset-manager-stat-card label="Manuelle Assets" :value="$counts['manual']" icon="heroicon-o-cube-transparent" :href="route('asset-manager.assets.index')" />
+            <x-asset-manager-stat-card label="Manuelle Assets" :value="$counts['manual']" icon="heroicon-o-cube-transparent" :href="route('asset-manager.inventory.index', ['filterType' => 'manual'])" />
             <x-asset-manager-stat-card label="Intune-Geräte" :value="$counts['intune']" icon="heroicon-o-computer-desktop" accent="violet" value-class="text-violet-600" :href="route('asset-manager.devices.index')" />
         </div>
 
@@ -126,6 +131,43 @@
                 @svg('heroicon-o-check-circle', 'w-4 h-4 text-emerald-500 flex-shrink-0')
                 <p class="text-sm text-emerald-700">{{ $flash }}</p>
                 <button wire:click="$set('flash', null)" class="ml-auto text-emerald-600 hover:text-emerald-800">×</button>
+            </div>
+        @endif
+
+        {{-- Sammelaktionen — nur Owner/Admin, nur manuelle Assets (#974). Alles läuft über den
+             AssetWriteService: Status-Regel wie auf der Detailseite (#941). --}}
+        @if($canManage && count($selected) > 0)
+            <div class="sticky top-0 z-10 flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl bg-[var(--am-primary)] text-[var(--am-on-primary)] shadow-sm">
+                <span class="text-sm font-medium">{{ count($selected) }} ausgewählt</span>
+                <div class="h-4 w-px bg-[var(--am-on-primary)]/30"></div>
+
+                <div class="flex items-center gap-1.5">
+                    <select wire:model="bulkAssignee" class="px-2 py-1 text-xs rounded-md bg-[var(--am-on-primary)]/15 border border-[var(--am-on-primary)]/20 text-[var(--am-on-primary)] [&>option]:text-[var(--am-text)]">
+                        <option value="">Zuordnen an…</option>
+                        @foreach($holders as $emp)
+                            <option value="{{ $emp->id }}">{{ $emp->name }}</option>
+                        @endforeach
+                    </select>
+                    <button wire:click="bulkAssign" class="px-2.5 py-1 text-xs font-medium rounded-md bg-[var(--am-on-primary)]/20 hover:bg-[var(--am-on-primary)]/30 transition-colors">Zuordnen</button>
+                </div>
+
+                <button wire:click="bulkUnassign" class="px-2.5 py-1 text-xs font-medium rounded-md bg-[var(--am-on-primary)]/20 hover:bg-[var(--am-on-primary)]/30 transition-colors">Ins Lager</button>
+
+                <div class="flex items-center gap-1.5">
+                    <select wire:model="bulkStatus" class="px-2 py-1 text-xs rounded-md bg-[var(--am-on-primary)]/15 border border-[var(--am-on-primary)]/20 text-[var(--am-on-primary)] [&>option]:text-[var(--am-text)]">
+                        <option value="">Status setzen…</option>
+                        <option value="in_stock">Lager</option>
+                        <option value="retired">Ausgemustert</option>
+                        <option value="lost">Verloren</option>
+                    </select>
+                    <button wire:click="bulkSetStatus" class="px-2.5 py-1 text-xs font-medium rounded-md bg-[var(--am-on-primary)]/20 hover:bg-[var(--am-on-primary)]/30 transition-colors">Setzen</button>
+                </div>
+
+                <button wire:click="bulkDelete" wire:confirm="Ausgewählte manuelle Assets wirklich löschen?" class="px-2.5 py-1 text-xs font-medium rounded-md bg-red-500/80 hover:bg-red-500 transition-colors">
+                    @svg('heroicon-o-trash', 'w-3.5 h-3.5 inline -mt-0.5') Löschen
+                </button>
+
+                <button wire:click="clearSelection" class="ml-auto text-xs text-[var(--am-on-primary)]/80 hover:text-[var(--am-on-primary)]">Auswahl aufheben</button>
             </div>
         @endif
 
@@ -156,10 +198,21 @@
                     </p>
                 </div>
             @else
+                @if($canManage && $selectPage && count($selected) < $manualFiltered)
+                    <div class="px-5 py-2 bg-[var(--am-accent-surface)] border-b border-[color:var(--am-border)] text-center text-xs text-[var(--am-accent)]">
+                        Alle {{ count($selected) }} manuellen Assets auf dieser Seite ausgewählt.
+                        <button wire:click="selectAllFiltered" class="font-medium underline hover:opacity-80">Alle {{ $manualFiltered }} gefilterten manuellen Assets auswählen</button>
+                    </div>
+                @endif
                 <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="border-b border-[color:var(--am-border)] bg-[var(--am-bg)]">
+                            @if($canManage)
+                                <th class="w-10 px-4 py-3" title="Auswahl gilt nur für manuelle Assets — Geräte haben ihre Sammelaktionen auf der Geräteliste">
+                                    <input type="checkbox" wire:model.live="selectPage" class="rounded border-[color:var(--am-border)] text-[var(--am-accent)] focus:ring-[var(--am-accent)]/30" />
+                                </th>
+                            @endif
                             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">
                                 <button wire:click="sortBy('name')" class="flex items-center gap-1 hover:text-[var(--am-text)]">
                                     Name
@@ -175,7 +228,7 @@
                             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Seriennr.</th>
                             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">
                                 <button wire:click="sortBy('assignedTo')" class="flex items-center gap-1 hover:text-[var(--am-text)]">
-                                    Zugewiesen an
+                                    Zugeordnet an
                                     @if($sortField === 'assignedTo') @svg($sortDirection === 'asc' ? 'heroicon-o-chevron-up' : 'heroicon-o-chevron-down', 'w-3 h-3') @endif
                                 </button>
                             </th>
@@ -198,7 +251,15 @@
                     </thead>
                     <tbody class="divide-y divide-[color:var(--am-border)]">
                         @foreach($items as $row)
-                            <tr wire:key="inv-{{ $row->type }}-{{ $row->id }}" class="transition-colors hover:bg-[var(--am-bg)]">
+                            @php $isChecked = $canManage && $row->type === 'manual' && in_array((string) $row->id, $selected, true); @endphp
+                            <tr wire:key="inv-{{ $row->type }}-{{ $row->id }}" class="transition-colors {{ $isChecked ? 'bg-[var(--am-accent-surface)] shadow-[inset_3px_0_0_var(--am-accent)]' : 'hover:bg-[var(--am-bg)]' }}">
+                                @if($canManage)
+                                    <td class="px-4 py-3">
+                                        @if($row->type === 'manual')
+                                            <input type="checkbox" value="{{ $row->id }}" wire:model.live="selected" class="rounded border-[color:var(--am-border)] text-[var(--am-accent)] focus:ring-[var(--am-accent)]/30" />
+                                        @endif
+                                    </td>
+                                @endif
                                 <td class="px-4 py-3">
                                     <a href="{{ $row->detailRoute }}" wire:navigate
                                        class="font-medium text-[var(--am-text)] hover:text-[var(--am-accent)]">
@@ -260,7 +321,7 @@
     </div>
 
     {{-- Modals innerhalb <x-ui-page> (Referenz-Doku: „Modals immer innerhalb von x-ui-page"). --}}
-    @can('asset-manager.manage')
+    @if($canManage)
         @include('asset-manager::livewire.inventory.partials.modal-create')
-    @endcan
+    @endif
 </x-ui-page>

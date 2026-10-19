@@ -457,21 +457,32 @@ class Index extends Component
             ->orderByDesc('id')
             ->paginate(25);
 
-        // Geräte des aktiven Tenants + Set der aktuell ausgegebenen (offene Zeile).
-        $devices = AssetDevice::where('team_id', $teamId)
-            ->orderBy('device_name')
-            ->get(['id', 'device_name', 'serial_number', 'model', 'user_principal_name', 'tenant_id']);
+        // Picker-Daten des Editors nur, wenn er offen ist (#977) — vorher lud jeder Seitenaufruf, jede
+        // Suche und jedes Blättern alle Geräte und alle Träger des Tenants, auch für Member, die den
+        // Editor gar nicht sehen. Die Abdeckung unten bleibt: sie ist Inhalt der Seite, kein Picker.
+        $editorOpen = $this->showEditor && Gate::allows('asset-manager.manage');
 
-        $openDeviceIds = AssetHandoverLine::whereHas('handover', fn ($q) => $q->where('team_id', $teamId))
-            ->whereNull('returned_at')
-            ->pluck('asset_device_id')
-            ->unique()
-            ->values()
-            ->all();
+        $devices       = collect();
+        $openDeviceIds = [];
+        $holders       = collect();
 
-        $holders = AssetHolder::where('team_id', $teamId)
-            ->orderByRaw('COALESCE(display_name, user_principal_name)')
-            ->get(['id', 'display_name', 'user_principal_name']);
+        if ($editorOpen) {
+            // Geräte des aktiven Tenants + Set der aktuell ausgegebenen (offene Zeile).
+            $devices = AssetDevice::where('team_id', $teamId)
+                ->orderBy('device_name')
+                ->get(['id', 'device_name', 'serial_number', 'model', 'user_principal_name', 'tenant_id']);
+
+            $openDeviceIds = AssetHandoverLine::whereHas('handover', fn ($q) => $q->where('team_id', $teamId))
+                ->whereNull('returned_at')
+                ->pluck('asset_device_id')
+                ->unique()
+                ->values()
+                ->all();
+
+            $holders = AssetHolder::where('team_id', $teamId)
+                ->orderByRaw('COALESCE(display_name, user_principal_name)')
+                ->get(['id', 'display_name', 'user_principal_name']);
+        }
 
         return view('asset-manager::livewire.handovers.index', [
             'handovers'     => $handovers,

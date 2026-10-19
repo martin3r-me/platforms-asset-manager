@@ -2,6 +2,8 @@
 
 namespace Platform\AssetManager\Services;
 
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Platform\AssetManager\Models\AssetAssignment;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceEvent;
@@ -72,6 +74,34 @@ class AssetWriteService
         }
 
         return $item;
+    }
+
+    /**
+     * Sammelanlage: $quantity gleiche manuelle Assets in einem Rutsch — jedes über {@see createItem()},
+     * damit Status-/Zuordnungsregel und Tenant für die Einzel- und die Sammelanlage dieselben sind
+     * (vorher schrieb `Assets/Index::createBulk` Item und Zuordnung direkt an diesem Service vorbei).
+     * Eine Seriennummer identifiziert genau ein Gerät — bei mehr als einem Stück bleibt sie leer.
+     * Alles oder nichts: bricht ein Stück ab, entsteht keins.
+     *
+     * @param  array<string, mixed>  $data  wie {@see createItem()}
+     * @return Collection<int, AssetItem>
+     */
+    public function createItems(array $data, int $quantity, int $teamId, int $userId): Collection
+    {
+        $quantity = max(1, $quantity);
+
+        if ($quantity > 1) {
+            $data['serialNumber'] = null;
+        }
+
+        return DB::transaction(function () use ($data, $quantity, $teamId, $userId) {
+            $items = collect();
+            for ($i = 0; $i < $quantity; $i++) {
+                $items->push($this->createItem($data, $teamId, $userId));
+            }
+
+            return $items;
+        });
     }
 
     /**

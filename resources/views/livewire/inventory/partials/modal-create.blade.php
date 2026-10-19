@@ -31,10 +31,18 @@
             </div>
         </div>
 
-        <div>
-            <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Name *</label>
-            <x-asset-manager-input size="sm" type="text" wire:model="cName" placeholder="z. B. Logitech MX Keys" />
-            @error('cName') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <div class="sm:col-span-3">
+                <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Name *</label>
+                <x-asset-manager-input size="sm" type="text" wire:model="cName" placeholder="z. B. Logitech MX Keys" />
+                @error('cName') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
+            </div>
+            {{-- Mehrere gleiche Stücke auf einmal (vormals „Mehrere anlegen" auf /assets, #974). --}}
+            <div>
+                <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Anzahl *</label>
+                <x-asset-manager-input size="sm" type="number" min="1" max="500" wire:model.live.debounce.300ms="cQuantity" />
+                @error('cQuantity') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
+            </div>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -48,7 +56,11 @@
             </div>
             <div>
                 <label class="block text-[10px] uppercase tracking-wider text-[var(--am-text-muted)] mb-1">Seriennummer</label>
-                <x-asset-manager-input size="sm" type="text" wire:model="cSerialNumber" />
+                <x-asset-manager-input size="sm" type="text" wire:model="cSerialNumber" :disabled="(int) $cQuantity > 1" />
+                @error('cSerialNumber') <p class="text-[10px] text-[var(--am-error)] mt-0.5">{{ $message }}</p> @enderror
+                @if((int) $cQuantity > 1)
+                    <p class="text-[10px] text-[var(--am-text-secondary)] mt-0.5">Bei mehreren Stücken je Stück auf der Detailseite ergänzen.</p>
+                @endif
             </div>
         </div>
 
@@ -96,7 +108,7 @@
         <x-asset-manager-button variant="secondary" size="sm" x-on:click="modalShow = false">Abbrechen</x-asset-manager-button>
         <x-asset-manager-button variant="primary" size="sm" wire:click="createItem" wire:loading.attr="disabled">
             @svg('heroicon-o-check', 'w-3.5 h-3.5')
-            Asset anlegen
+            {{ (int) $cQuantity > 1 ? (int) $cQuantity . ' Assets anlegen' : 'Asset anlegen' }}
         </x-asset-manager-button>
     </x-slot>
 </x-ui-modal>

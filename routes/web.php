@@ -7,7 +7,6 @@ use Platform\AssetManager\Livewire\Devices\Status as DevicesStatus;
 use Platform\AssetManager\Livewire\Licenses\Index as LicensesIndex;
 use Platform\AssetManager\Livewire\Licenses\Contracts as LicensesContracts;
 use Platform\AssetManager\Livewire\Licenses\Show as LicensesShow;
-use Platform\AssetManager\Livewire\Assets\Index as AssetsIndex;
 use Platform\AssetManager\Livewire\Inventory\Index as InventoryIndex;
 use Platform\AssetManager\Livewire\Inventory\Show as InventoryShow;
 use Platform\AssetManager\Livewire\Holders\Index as HoldersIndex;
@@ -51,7 +50,15 @@ Route::get('/inventory/{type}/{id}', InventoryShow::class)
     ->whereNumber('id')
     ->name('asset-manager.inventory.show');
 
-Route::get('/assets', AssetsIndex::class)->name('asset-manager.assets.index');
+// Die Legacy-Liste der manuellen Assets ist im Inventar aufgegangen (#974, ADR 0012): Sammelaktionen,
+// „Mehrere anlegen" und Export laufen dort. Redirect auf den Typ-Filter „Manuell"; Suche, Kategorie und
+// Status aus alten Links (Dashboard: ?filterStatus=in_stock) werden mitgenommen. Name bleibt erhalten.
+Route::get('/assets', fn () => redirect()->route('asset-manager.inventory.index', array_filter([
+    'filterType'     => 'manual',
+    'search'         => request()->string('search')->toString(),
+    'filterCategory' => request()->integer('filterCategory') ?: null,
+    'filterStatus'   => request()->string('filterStatus')->toString(),
+], fn ($v) => $v !== null && $v !== '')))->name('asset-manager.assets.index');
 // Anlegen läuft jetzt als Modal auf der vereinten Inventar-Liste (Phase 1). Die alte Create-Seite
 // leitet weiter und öffnet das Modal (?create=1) — Name bleibt erhalten, route()-Aufrufe/Bookmarks
 // brechen nicht (Muster wie die MasterData-Redirects unten).

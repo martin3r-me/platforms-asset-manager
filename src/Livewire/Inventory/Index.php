@@ -3,7 +3,10 @@
 namespace Platform\AssetManager\Livewire\Inventory;
 
 use Platform\AssetManager\Concerns\ClampsListState;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -17,13 +20,23 @@ use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Services\AssetWriteService;
 use Platform\AssetManager\Services\ControllingContext;
 use Platform\AssetManager\Services\InventoryService;
+use Platform\AssetManager\Support\InventoryRow;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Vereinte „Inventar"-Hauptliste über manuelle Assets (asset_items) UND Intune-Geräte
- * (asset_devices) — das kanonische Dach über beide Hardware-Welten (E1). Die Liste selbst ist
- * read-only (Zeilen-Klick führt über InventoryRow::detailRoute auf die typ-richtige Detailseite);
- * der EINZIGE Schreibpfad hier ist das Anlage-Modal für **manuelle** Assets — Geräte kommen
- * ausschließlich aus dem Intune-Sync und werden nie manuell angelegt (E7).
+ * (asset_devices) — das kanonische Dach über beide Hardware-Welten (E1, ADR 0012). Zeilen-Klick führt
+ * über InventoryRow::detailRoute auf die typ-richtige Detailseite.
+ *
+ * Schreibpfade hier betreffen nur **manuelle** Assets — Geräte kommen ausschließlich aus dem
+ * Intune-Sync (E7), ihre Sammelaktionen liegen auf der Geräteliste:
+ *  - Anlage-Modal, auch für mehrere gleiche Stücke auf einmal (vormals „Mehrere anlegen" auf /assets),
+ *  - Sammelaktionen über eine Mehrfachauswahl (Zuordnen, Ins Lager, Status, Löschen, #974) — alle über
+ *    {@see AssetWriteService}, damit Detailseite und Sammelweg dieselbe Status-Regel haben (#941).
+ * Die Legacy-Liste /assets leitet seitdem hierher um.
+ *
+ * Gefiltert wird in SQL, geladen werden nur die Zeilen der Seite (#977); Träger für Anlage-Modal und
+ * Sammel-Zuordnung nur, wenn eins von beiden offen ist.
  */
 class Index extends Component
 {
@@ -54,7 +67,16 @@ class Index extends Component
     public ?string $cPurchasePrice      = null;
     public ?int    $cDepreciationMonths = null;
     public string  $cNotes              = '';
+    /** Anzahl gleicher Stücke (vormals „Mehrere anlegen" auf /assets). */
+    public ?int    $cQuantity           = 1;
     public ?string $flash               = null;
+
+    // --- Mehrfachauswahl (nur manuelle Assets, #974) ---
+    /** Ausgewählte AssetItem-IDs (als Strings, wie wire:model sie liefert). */
+    public array   $selected     = [];
+    public bool    $selectPage   = false;
+    public ?int    $bulkAssignee = null;
+    public string  $bulkStatus   = '';
 
     /** Request-lokaler Memo des Controlling-Schalters (protected → nicht im Livewire-State). */
     protected ?bool $controllingMemo = null;
@@ -88,13 +110,16 @@ class Index extends Component
         return $this->controllingMemo ??= app(ControllingContext::class)->enabledFor($this->teamId());
     }
 
-    public function updatingSearch(): void           { $this->resetPage(); }
-    public function updatingFilterType(): void       { $this->resetPage(); }
-    public function updatingFilterAssignment(): void { $this->resetPage(); }
-    public function updatingFilterStatus(): void     { $this->resetPage(); }
-    public function updatingFilterCategory(): void   { $this->resetPage(); }
-    public function updatingFilterCostCenter(): void { $this->resetPage(); }
+    // Ein Filterwechsel verwirft die Auswahl: sonst wirkte die Sammelaktion auf Zeilen, die gerade
+    // niemand sieht.
+    public function updatingSearch(): void           { $this->resetPage(); $this->clearSelection(); }
+    public function updatingFilterType(): void       { $this->resetPage(); $this->clearSelection(); }
+    public function updatingFilterAssignment(): void { $this->resetPage(); $this->clearSelection(); }
+    public function updatingFilterStatus(): void     { $this->resetPage(); $this->clearSelection(); }
+    public function updatingFilterCategory(): void   { $this->resetPage(); $this->clearSelection(); }
+    public function updatingFilterCostCenter(): void { $this->resetPage(); $this->clearSelection(); }
     public function updatingPerPage(): void          { $this->resetPage(); }
+    public function updatingPage(): void             { $this->selectPage = false; }
 
     public function sortBy(string $field): void
     {
@@ -111,6 +136,21 @@ class Index extends Component
     {
         $this->reset(['search', 'filterType', 'filterAssignment', 'filterStatus', 'filterCategory', 'filterCostCenter']);
         $this->resetPage();
+        $this->clearSelection();
+    }
+
+    /** Aktive Filter in der Form, die {@see InventoryService} erwartet. */
+    protected function currentFilters(): array
+    {
+        return [
+            'search'     => $this->search,
+            'type'       => $this->filterType,
+            'assignment' => $this->filterAssignment,
+            'status'     => $this->filterStatus,
+            'category'   => $this->filterCategory,
+            // Kostenstelle ist Controlling (#874): ohne Schalter filtert sie nicht, auch nicht aus der URL.
+            'costCenter' => $this->controllingEnabled() ? $this->filterCostCenter : null,
+        ];
     }
 
     /** Sind irgendwelche Filter aktiv? (steuert „Zurücksetzen" + Empty-State-Text in der View) */
@@ -165,7 +205,15 @@ class Index extends Component
             'cPurchasePrice'      => 'nullable|numeric|min:0',
             'cDepreciationMonths' => 'nullable|integer|min:1|max:240',
             'cNotes'              => 'nullable|string',
+            'cQuantity'           => 'required|integer|min:1|max:500',
         ]);
+
+        // Eine Seriennummer gehört zu genau einem Stück — bei mehreren lieber nachfragen als still verwerfen.
+        if ((int) $this->cQuantity > 1 && trim($this->cSerialNumber) !== '') {
+            $this->addError('cSerialNumber', 'Bei mehreren Stücken bleibt die Seriennummer leer — sie wird je Stück auf der Detailseite ergänzt.');
+
+            return;
+        }
 
         // Ohne Controlling sind die Abschreibungsfelder nicht sichtbar — auch serverseitig nichts davon
         // schreiben (z. B. den AfA-Default aus der Kategorie, #874, ADR 0008).
@@ -174,7 +222,7 @@ class Index extends Component
             $this->cDepreciationMonths = null;
         }
 
-        $item = $writer->createItem([
+        $items = $writer->createItems([
             'categoryId'         => $this->cCategoryId,
             'name'               => $this->cName,
             'manufacturer'       => $this->cManufacturer,
@@ -186,20 +234,253 @@ class Index extends Component
             'purchasePrice'      => $this->cPurchasePrice,
             'depreciationMonths' => $this->cDepreciationMonths,
             'notes'              => $this->cNotes,
-        ], $teamId, (int) Auth::id());
+        ], (int) $this->cQuantity, $teamId, (int) Auth::id());
 
+        $name = $items->first()->name;
         $this->showCreate = false;
         $this->resetCreateForm();
         $this->resetPage();
-        $this->flash = "Asset „{$item->name}“ angelegt.";
+        $this->flash = $items->count() > 1
+            ? "{$items->count()}× „{$name}“ angelegt."
+            : "Asset „{$name}“ angelegt.";
     }
 
     protected function resetCreateForm(): void
     {
         $this->reset([
             'cCategoryId', 'cName', 'cManufacturer', 'cModel', 'cSerialNumber',
-            'cAssigneeId', 'cStatus', 'cPurchaseDate', 'cPurchasePrice', 'cDepreciationMonths', 'cNotes',
+            'cAssigneeId', 'cStatus', 'cPurchaseDate', 'cPurchasePrice', 'cDepreciationMonths', 'cNotes', 'cQuantity',
         ]);
+    }
+
+    // ---------------------------------------------------------------------
+    // Mehrfachauswahl + Sammelaktionen (nur manuelle Assets, #974)
+    // ---------------------------------------------------------------------
+
+    public function clearSelection(): void
+    {
+        $this->selected   = [];
+        $this->selectPage = false;
+    }
+
+    /** Wählt alle gefilterten manuellen Assets aus (Geräte sind nicht auswählbar). */
+    public function selectAllFiltered(InventoryService $inventory): void
+    {
+        $this->selected = array_map('strval', $inventory->filteredItemIds(
+            $this->teamId(), TenantContext::scopeTenantId(), $this->currentFilters(),
+        ));
+    }
+
+    /** Kopf-Checkbox: die manuellen Assets der aktuellen Seite hinzu- bzw. abwählen. */
+    public function updatedSelectPage($value): void
+    {
+        $pageIds = $this->pageItemIds(app(InventoryService::class));
+
+        $this->selected = $value
+            ? array_values(array_unique(array_merge($this->selected, $pageIds)))
+            : array_values(array_diff($this->selected, $pageIds));
+    }
+
+    public function bulkAssign(AssetWriteService $writer): void
+    {
+        Gate::authorize('create', AssetItem::class);
+
+        if ($this->selected === [] || ! $this->bulkAssignee) {
+            return;
+        }
+
+        $holder = AssetHolder::where('team_id', $this->teamId())->find($this->bulkAssignee);
+        if (! $holder) {
+            return;
+        }
+
+        $items = $this->selectedItems();
+        DB::transaction(fn () => $items->each(fn (AssetItem $item) => $writer->assignItem($item, $holder)));
+
+        $this->finishBulk($items->count() . ' Asset(s) an ' . $holder->name . ' zugeordnet.');
+    }
+
+    /** Ins Lager = Status „Lager" über dieselbe Regel wie die Detailseite (#941): Zuordnung endet jetzt. */
+    public function bulkUnassign(AssetWriteService $writer): void
+    {
+        Gate::authorize('create', AssetItem::class);
+
+        if ($this->selected === []) {
+            return;
+        }
+
+        $items = $this->selectedItems();
+        DB::transaction(fn () => $items->each(fn (AssetItem $item) => $writer->setItemStatus($item, 'in_stock')));
+
+        $this->finishBulk($items->count() . ' Asset(s) ins Lager zurückgelegt.');
+    }
+
+    public function bulkSetStatus(AssetWriteService $writer): void
+    {
+        Gate::authorize('create', AssetItem::class);
+
+        if ($this->selected === [] || ! in_array($this->bulkStatus, AssetWriteService::ITEM_STATUSES, true)) {
+            return;
+        }
+
+        $items   = $this->selectedItems();
+        $status  = $this->bulkStatus;
+        $skipped = 0;
+
+        DB::transaction(function () use ($items, $writer, $status, &$skipped) {
+            foreach ($items as $item) {
+                // Eine Regel für Sammel- und Detailweg (#941): retired/lost/in_stock lösen die Zuordnung,
+                // assigned ohne Träger wird übersprungen.
+                if (! $writer->setItemStatus($item, $status)) {
+                    $skipped++;
+                }
+            }
+        });
+
+        $labels = ['in_stock' => 'Lager', 'assigned' => 'Zugeordnet', 'retired' => 'Ausgemustert', 'lost' => 'Verloren'];
+        $this->finishBulk(
+            ($items->count() - $skipped) . ' Asset(s) auf Status „' . $labels[$status] . '“ gesetzt.'
+            . ($skipped ? " {$skipped} ohne Träger übersprungen — „Zugeordnet“ braucht einen Träger." : ''),
+        );
+    }
+
+    /**
+     * Löschen (soft) — nur manuelle Assets. Das Recht ist dasselbe wie AssetItemPolicy::delete
+     * (Owner/Admin, eigenes Team, nicht `source=intune`), hier aber EINMAL geprüft statt je Zeile: die
+     * Policy fragt je Aufruf `currentTeam` ab, das wären zwei Queries pro Asset.
+     */
+    public function bulkDelete(): void
+    {
+        Gate::authorize('create', AssetItem::class);
+
+        if ($this->selected === []) {
+            return;
+        }
+
+        $requested = count($this->selected);
+        $items     = $this->selectedItems()->where('source', '!=', 'intune')->values();
+        DB::transaction(fn () => $items->each(fn (AssetItem $item) => $item->delete()));
+
+        $this->finishBulk($items->count() . ' Asset(s) gelöscht.'
+            . ($requested > $items->count() ? ' (Synchronisierte Einträge werden nicht gelöscht.)' : ''));
+    }
+
+    /** Ausgewählte Assets — team- und (Global Scope) tenant-begrenzt, nie fremde IDs aus dem Client. */
+    protected function selectedItems(): Collection
+    {
+        $ids = array_values(array_filter(array_map('intval', $this->selected)));
+
+        return $ids === []
+            ? collect()
+            : AssetItem::where('team_id', $this->teamId())->whereIn('id', $ids)->orderBy('id')->get();
+    }
+
+    protected function finishBulk(string $message): void
+    {
+        $this->flash        = $message;
+        $this->bulkAssignee = null;
+        $this->bulkStatus   = '';
+        $this->clearSelection();
+    }
+
+    /** IDs der manuellen Assets auf der aktuellen Seite (als Strings, wie $selected). */
+    protected function pageItemIds(InventoryService $inventory): array
+    {
+        return $this->pageRows($inventory)->getCollection()
+            ->where('type', 'manual')
+            ->map(fn (InventoryRow $row) => (string) $row->id)
+            ->values()
+            ->all();
+    }
+
+    protected function pageRows(InventoryService $inventory): LengthAwarePaginator
+    {
+        return $inventory->page(
+            $this->teamId(),
+            TenantContext::scopeTenantId(),
+            $this->currentFilters(),
+            $this->sortField,
+            $this->sortDirection,
+            $this->perPage,
+            $this->getPage(),
+        );
+    }
+
+    // ---------------------------------------------------------------------
+    // CSV-Export (#974)
+    // ---------------------------------------------------------------------
+
+    /**
+     * Gefilterte Inventar-Liste als CSV. Muster: Devices\Index::exportCsv().
+     *
+     * Lesepfad, daher **ohne** `asset-manager.manage` (ADR 0004) — wie der Export der Trägerliste.
+     */
+    public function exportCsv(InventoryService $inventory): StreamedResponse
+    {
+        $this->clampListState();
+
+        $rows     = $this->csvRows($inventory);
+        $filename = 'inventar-' . now()->format('Y-m-d') . '.csv';
+
+        return new StreamedResponse(function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM für Excel
+
+            foreach ($rows as $row) {
+                fputcsv($out, $row, ';');
+            }
+
+            fclose($out);
+        }, 200, [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
+    /**
+     * Kopfzeile + Datenzeilen des Exports — getrennt vom Streamen, damit der Inhalt prüfbar ist.
+     *
+     * Folgt **genau** den Filtern und der Sortierung der Liste, über alle Seiten: die Zeilenzahl ist die
+     * Trefferzahl. Kostenstelle und Monatskosten nur bei aktivem Controlling (ADR 0008, #874).
+     *
+     * @return \Generator<int, list<string|int|null>>
+     */
+    protected function csvRows(InventoryService $inventory): \Generator
+    {
+        $controlling = $this->controllingEnabled();
+
+        yield array_merge(
+            ['Typ', 'ID', 'Name', 'Hersteller', 'Modell', 'Seriennr.', 'Zugeordnet an', 'Status', 'Kategorie', 'Standort'],
+            $controlling ? ['Kostenstelle', 'Monatskosten EUR'] : [],
+        );
+
+        $rows = $inventory->sort(
+            $inventory->filteredRows($this->teamId(), TenantContext::scopeTenantId(), $this->currentFilters()),
+            $this->sortField,
+            $this->sortDirection,
+        );
+
+        foreach ($rows as $row) {
+            /** @var InventoryRow $row */
+            yield array_merge(
+                [
+                    $row->type === 'intune' ? 'Intune-Gerät' : 'Manuell',
+                    $row->id,
+                    $row->name,
+                    $row->manufacturer,
+                    $row->model,
+                    $row->serialNumber,
+                    $row->assignedTo,
+                    $row->statusLabel === '—' ? '' : $row->statusLabel,
+                    $row->categoryName,
+                    $row->location,
+                ],
+                $controlling ? [
+                    $row->costCenterName,
+                    number_format($row->monthlyCost, 2, ',', ''),
+                ] : [],
+            );
+        }
     }
 
     public function render(InventoryService $inventory)
@@ -207,7 +488,8 @@ class Index extends Component
         // Vor jeder Abfrage: der rendering-Hook käme erst nach render() (#957).
         $this->clampListState();
 
-        $teamId = $this->teamId();
+        $teamId   = $this->teamId();
+        $tenantId = TenantContext::scopeTenantId();
 
         // Kostenstellen-Filter ist Controlling (#874, ADR 0008): ein ?filterCostCenter= aus URL/Bookmark
         // darf ohne Schalter nicht unsichtbar weiterfiltern.
@@ -216,29 +498,38 @@ class Index extends Component
             $this->filterCostCenter = null;
         }
 
-        $rows     = $inventory->rows($teamId, TenantContext::scopeTenantId());
-        $filtered = $inventory->filter(
-            $rows,
-            $this->search,
-            $this->filterType,
-            $this->filterAssignment,
-            $this->filterStatus,
-            $this->filterCategory,
-            $this->filterCostCenter,
-        );
-        $sorted   = $inventory->sort($filtered, $this->sortField, $this->sortDirection);
-        $items    = $inventory->paginate($sorted, $this->perPage, $this->getPage());
+        $items = $this->pageRows($inventory);
+
+        // Kopf-Checkbox synchron halten: angehakt, wenn alle manuellen Assets der Seite gewählt sind.
+        $pageIds = $items->getCollection()->where('type', 'manual')->map(fn (InventoryRow $r) => (string) $r->id)->values()->all();
+        $this->selectPage = $pageIds !== [] && array_diff($pageIds, $this->selected) === [];
+
+        // Einmal je Render statt @can je Zeile (reference_can_per_row_queries).
+        $canManage = Gate::allows('asset-manager.manage');
+
+        // Träger nur, wenn sie gebraucht werden: im offenen Anlage-Modal oder für die Sammel-Zuordnung
+        // (#977). Vorher lud jede Eingabe in die Suche alle aktiven Träger fürs geschlossene Modal.
+        $needsHolders = $canManage && ($this->showCreate || $this->selected !== []);
+
+        // Für das Banner „alle gefilterten auswählen" — nur gezählt, wenn es überhaupt erscheinen kann.
+        $manualFiltered = $canManage && $this->selectPage
+            ? ($inventory->itemQuery($teamId, $tenantId, $this->currentFilters())?->count() ?? 0)
+            : 0;
 
         return view('asset-manager::livewire.inventory.index', [
             'items'         => $items,
-            'counts'        => $inventory->counts($teamId, TenantContext::scopeTenantId()),
-            'totalFiltered' => $sorted->count(),
+            'counts'        => $inventory->counts($teamId, $tenantId),
+            'totalFiltered' => $items->total(),
             'categories'    => AssetCategory::orderBy('sort_order')->get(),
-            'holders'     => AssetHolder::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get(),
+            'holders'       => $needsHolders
+                ? AssetHolder::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get()
+                : collect(),
             'costCenters'   => $controllingEnabled
                 ? AssetCostCenter::where('team_id', $teamId)->where('is_active', true)->orderBy('name')->get()
                 : collect(),
             'controllingEnabled' => $controllingEnabled,
+            'canManage'          => $canManage,
+            'manualFiltered'     => $manualFiltered,
         ])->layout('platform::layouts.app');
     }
 
