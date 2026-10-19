@@ -49,7 +49,10 @@
              „Alle Assets" (manuelle Teilmenge) entfällt hier — Inventar deckt sie ab (Filter „Nur manuelle
              Assets"); die Bulk-Anlage bleibt unter /assets per URL erreichbar. --}}
         <x-asset-manager-nav-item :href="route('asset-manager.inventory.index')" :active="request()->routeIs('asset-manager.inventory.*') || request()->routeIs('asset-manager.assets.*')" icon="heroicon-o-rectangle-group" label="Inventar" />
-        <x-asset-manager-nav-item :href="route('asset-manager.devices.index')" :active="request()->routeIs('asset-manager.devices.*')" icon="heroicon-o-computer-desktop" label="Intune-Geräte" />
+        <x-asset-manager-nav-item :href="route('asset-manager.devices.index')" :active="request()->routeIs('asset-manager.devices.index')" icon="heroicon-o-computer-desktop" label="Intune-Geräte" />
+        {{-- Beide Seiten waren gebaut, aber nur per URL erreichbar (#875). --}}
+        <x-asset-manager-nav-item :href="route('asset-manager.devices.status')" :active="request()->routeIs('asset-manager.devices.status')" icon="heroicon-o-clipboard-document-check" label="Geräte-Status" />
+        <x-asset-manager-nav-item :href="route('asset-manager.handovers.index')" :active="request()->routeIs('asset-manager.handovers.*')" icon="heroicon-o-clipboard-document-list" label="Geräteausgaben" />
         <x-asset-manager-nav-item :href="route('asset-manager.licenses.index')" :active="request()->routeIs('asset-manager.licenses.index') || request()->routeIs('asset-manager.licenses.show')" icon="heroicon-o-key" label="Lizenzen" />
         <x-asset-manager-nav-item :href="route('asset-manager.licenses.contracts')" :active="request()->routeIs('asset-manager.licenses.contracts')" icon="heroicon-o-document-currency-euro" label="Vertragszeilen" />
         <x-asset-manager-nav-item :href="route('asset-manager.printers.index')" :active="request()->routeIs('asset-manager.printers.*')" icon="heroicon-o-printer" label="Drucker" />
@@ -96,11 +99,20 @@
             <a href="{{ route('asset-manager.inventory.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.inventory.*') || request()->routeIs('asset-manager.assets.*') ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)]' : 'text-[var(--am-text-secondary)] hover:bg-[var(--am-bg)]' }}">
                 @svg('heroicon-o-rectangle-group', 'w-5 h-5')
             </a>
-            <a href="{{ route('asset-manager.devices.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.devices.*') ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)]' : 'text-[var(--am-text-secondary)] hover:bg-[var(--am-bg)]' }}">
+            <a href="{{ route('asset-manager.devices.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.devices.index') ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)]' : 'text-[var(--am-text-secondary)] hover:bg-[var(--am-bg)]' }}">
                 @svg('heroicon-o-computer-desktop', 'w-5 h-5')
             </a>
-            <a href="{{ route('asset-manager.licenses.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.licenses.*') ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)]' : 'text-[var(--am-text-secondary)] hover:bg-[var(--am-bg)]' }}">
+            <a href="{{ route('asset-manager.devices.status') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.devices.status') ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)]' : 'text-[var(--am-text-secondary)] hover:bg-[var(--am-bg)]' }}">
+                @svg('heroicon-o-clipboard-document-check', 'w-5 h-5')
+            </a>
+            <a href="{{ route('asset-manager.handovers.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.handovers.*') ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)]' : 'text-[var(--am-text-secondary)] hover:bg-[var(--am-bg)]' }}">
+                @svg('heroicon-o-clipboard-document-list', 'w-5 h-5')
+            </a>
+            <a href="{{ route('asset-manager.licenses.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ (request()->routeIs('asset-manager.licenses.index') || request()->routeIs('asset-manager.licenses.show')) ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)]' : 'text-[var(--am-text-secondary)] hover:bg-[var(--am-bg)]' }}">
                 @svg('heroicon-o-key', 'w-5 h-5')
+            </a>
+            <a href="{{ route('asset-manager.licenses.contracts') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.licenses.contracts') ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)]' : 'text-[var(--am-text-secondary)] hover:bg-[var(--am-bg)]' }}">
+                @svg('heroicon-o-document-currency-euro', 'w-5 h-5')
             </a>
             <a href="{{ route('asset-manager.printers.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.printers.*') ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)]' : 'text-[var(--am-text-secondary)] hover:bg-[var(--am-bg)]' }}">
                 @svg('heroicon-o-printer', 'w-5 h-5')
@@ -124,6 +136,12 @@
             <a href="{{ route('asset-manager.reports.device-models') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.reports.*') ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)]' : 'text-[var(--am-text-secondary)] hover:bg-[var(--am-bg)]' }}">
                 @svg('heroicon-o-chart-bar', 'w-5 h-5')
             </a>
+            <a href="{{ route('asset-manager.billing.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.billing.*') ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)]' : 'text-[var(--am-text-secondary)] hover:bg-[var(--am-bg)]' }}">
+                @svg('heroicon-o-receipt-percent', 'w-5 h-5')
+            </a>
+            <a href="{{ route('asset-manager.costs.datev') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.costs.datev') ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)]' : 'text-[var(--am-text-secondary)] hover:bg-[var(--am-bg)]' }}">
+                @svg('heroicon-o-arrows-right-left', 'w-5 h-5')
+            </a>
             <a href="{{ route('asset-manager.master-data.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.master-data.index') ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)]' : 'text-[var(--am-text-secondary)] hover:bg-[var(--am-bg)]' }}">
                 @svg('heroicon-o-rectangle-stack', 'w-5 h-5')
             </a>
@@ -134,8 +152,6 @@
             @if($controllingEnabled)
             <a href="{{ route('asset-manager.costs.import') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.costs.import') ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)]' : 'text-[var(--am-text-secondary)] hover:bg-[var(--am-bg)]' }}">
                 @svg('heroicon-o-arrow-up-tray', 'w-5 h-5')
-            </a>
-                @svg('heroicon-o-document-magnifying-glass', 'w-5 h-5')
             </a>
             @endif
             <a href="{{ route('asset-manager.setup') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md {{ request()->routeIs('asset-manager.setup') ? 'bg-[var(--am-primary)] text-[var(--am-on-primary)]' : 'text-[var(--am-text-secondary)] hover:bg-[var(--am-bg)]' }}">
