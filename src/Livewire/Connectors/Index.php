@@ -2,6 +2,7 @@
 
 namespace Platform\AssetManager\Livewire\Connectors;
 
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -35,6 +36,8 @@ class Index extends Component
     public bool   $renameMode    = false;
     public string $tenantName    = '';
     public bool   $confirmingTenantDelete = false;
+    /** Eingetippter Tenant-Name zur Bestätigung des Löschens (#947). */
+    public string $tenantDeletePhrase = '';
 
     // Connector-Formular
     public string $directory    = '';   // Kunden-Verzeichnis: Domain oder Tenant-GUID → azure_tenant_id
@@ -67,6 +70,7 @@ class Index extends Component
         $this->resetFeedback();
         $this->editingTenant = false;
         $this->confirmingTenantDelete = false;
+        $this->tenantDeletePhrase     = '';
         $this->loadConnectorForm();
     }
 
@@ -157,6 +161,25 @@ class Index extends Component
         $tenant = $this->selectedTenant();
         if (! $tenant) return;
 
+        // Harte serverseitige Absicherung wie beim Team-Reset (#947): das Löschen entfernt per Cascade
+        // das GANZE Inventar eines Kunden, hart. Bestätigungsschritt UND exakt eingetippter Name sind
+        // Pflicht — unabhängig davon, ob die Oberfläche den Knopf gesperrt hat.
+        abort_unless($this->confirmingTenantDelete && trim($this->tenantDeletePhrase) === trim((string) $tenant->name), 403);
+
+        $counts = [
+            'devices'  => \Platform\AssetManager\Models\AssetDevice::withoutTenantScope()->withTrashed()->where('tenant_id', $tenant->id)->count(),
+            'holders'  => \Platform\AssetManager\Models\AssetHolder::withoutTenantScope()->where('tenant_id', $tenant->id)->count(),
+            'licenses' => \Platform\AssetManager\Models\AssetUserLicense::withoutTenantScope()->where('tenant_id', $tenant->id)->count(),
+            'items'    => \Platform\AssetManager\Models\AssetItem::withoutTenantScope()->withTrashed()->where('tenant_id', $tenant->id)->count(),
+        ];
+        Log::warning('[asset-manager] Tenant gelöscht', [
+            'team_id'   => $this->teamId(),
+            'tenant_id' => $tenant->id,
+            'name'      => $tenant->name,
+            'user_id'   => Auth::id(),
+            'counts'    => $counts,
+        ]);
+
         $wasDefault = $tenant->is_default;
         $tenant->delete(); // Cascade: Inventar + Connector dieses Tenants (FK cascadeOnDelete)
 
@@ -171,6 +194,7 @@ class Index extends Component
 
         $this->selectedTenantId = $this->tenants()->first()?->id;
         $this->confirmingTenantDelete = false;
+        $this->tenantDeletePhrase     = '';
         $this->flash = 'Tenant und sein Inventar wurden gelöscht.';
         $this->loadConnectorForm();
     }

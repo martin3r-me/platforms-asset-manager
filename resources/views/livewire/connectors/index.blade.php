@@ -145,8 +145,29 @@
                                             <strong>Alle</strong> Geräte, Lizenzen, Asset-Träger, Assets und der Connector dieses Tenants
                                             werden unwiderruflich entfernt (Cascade). Kostenstellen/Kostenarten bleiben (team-weit).
                                         </p>
+                                        <div class="mt-3 max-w-sm">
+                                            <label for="tenant-delete-phrase" class="block text-xs text-red-700 mb-1.5">
+                                                Zum Bestätigen den Tenant-Namen eintippen:
+                                                <span class="font-semibold select-all">{{ $selectedTenant->name }}</span>
+                                            </label>
+                                            <x-asset-manager-input
+                                                id="tenant-delete-phrase"
+                                                type="text"
+                                                wire:model.live.debounce.250ms="tenantDeletePhrase"
+                                                autocomplete="off"
+                                                autocapitalize="off"
+                                                spellcheck="false"
+                                                placeholder="{{ $selectedTenant->name }}"
+                                            />
+                                        </div>
                                         <div class="flex items-center gap-2 mt-3">
-                                            <x-asset-manager-button variant="danger" size="sm" wire:click="deleteTenant">
+                                            <x-asset-manager-button
+                                                variant="danger"
+                                                size="sm"
+                                                wire:click="deleteTenant"
+                                                wire:loading.attr="disabled"
+                                                :disabled="trim($tenantDeletePhrase) !== trim((string) $selectedTenant->name)"
+                                            >
                                                 @svg('heroicon-o-trash', 'w-3.5 h-3.5')
                                                 Endgültig löschen
                                             </x-asset-manager-button>
