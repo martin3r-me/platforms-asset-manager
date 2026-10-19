@@ -2,6 +2,7 @@
 
 namespace Platform\AssetManager\Livewire\Holders;
 
+use Platform\AssetManager\Concerns\ClampsListState;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Illuminate\Database\Eloquent\Builder;
@@ -21,6 +22,7 @@ use Platform\AssetManager\Services\TenantContext;
 
 class Index extends Component
 {
+    use ClampsListState;
     use WithPagination;
     use ResolvesCurrentTeam;
 
@@ -110,6 +112,8 @@ class Index extends Component
         'filterHasDevice'  => ['except' => false],
         'filterHasAsset'   => ['except' => false],
         'perPage'          => ['except' => 25],
+        'sortField'        => ['except' => 'display_name'],
+        'sortDirection'    => ['except' => 'asc'],
     ];
 
     /**
@@ -515,6 +519,9 @@ class Index extends Component
 
     public function render()
     {
+        // Vor jeder Abfrage: der rendering-Hook käme erst nach render() (#957).
+        $this->clampListState();
+
         $teamId = $this->teamId();
 
         // --- Counts für Chips (immer "echt", nicht durch Sidebar gefiltert) ---
@@ -613,5 +620,17 @@ class Index extends Component
             'bulkMax'        => self::BULK_MAX,
             'perPageOptions' => self::PER_PAGE_OPTIONS,
         ])->layout('platform::layouts.app');
+    }
+
+    /** Erlaubte Seitengrößen — alles andere aus URL/Client wird geklemmt (#957). */
+    protected function listPerPageOptions(): array
+    {
+        return self::PER_PAGE_OPTIONS;
+    }
+
+    /** Erlaubte Sortierspalten (#957); die erste ist der Rückfall. */
+    protected function listSortable(): array
+    {
+        return ['display_name', 'user_principal_name', 'department', 'cost_center', 'holder_type', 'synced_at', 'created_at'];
     }
 }

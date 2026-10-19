@@ -2,6 +2,7 @@
 
 namespace Platform\AssetManager\Livewire\Devices;
 
+use Platform\AssetManager\Concerns\ClampsListState;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Illuminate\Support\Facades\Auth;
@@ -20,6 +21,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class Index extends Component
 {
+    use ClampsListState;
     use WithPagination;
     use AuthorizesTeamRole;
 
@@ -58,6 +60,8 @@ class Index extends Component
         'filterOs'         => ['except' => ''],
         'filterLifecycle'  => ['except' => ''],
         'perPage'          => ['except' => 25],
+        'sortField'        => ['except' => 'device_name'],
+        'sortDirection'    => ['except' => 'asc'],
     ];
 
     public function mount(): void
@@ -126,6 +130,7 @@ class Index extends Component
             $this->sortField     = $field;
             $this->sortDirection = 'asc';
         }
+        $this->resetPage();
     }
 
     public function syncNow(): void
@@ -362,6 +367,9 @@ class Index extends Component
 
     public function render()
     {
+        // Vor jeder Abfrage: der rendering-Hook käme erst nach render() (#957).
+        $this->clampListState();
+
         $team    = Auth::user()->currentTeam;
         $devices = $this->filteredQuery()
             ->orderBy($this->sortField, $this->sortDirection)
@@ -451,5 +459,17 @@ class Index extends Component
             'costCenters'         => AssetCostCenter::where('team_id', $team->id)->orderBy('code')->get(),
             'columns'             => $this->columnOrder,
         ])->layout('platform::layouts.app');
+    }
+
+    /** Erlaubte Seitengrößen — alles andere aus URL/Client wird geklemmt (#957). */
+    protected function listPerPageOptions(): array
+    {
+        return [15, 25, 50, 100];
+    }
+
+    /** Erlaubte Sortierspalten (#957); die erste ist der Rückfall. */
+    protected function listSortable(): array
+    {
+        return ['device_name', 'serial_number', 'compliance_state', 'last_check_in_at'];
     }
 }

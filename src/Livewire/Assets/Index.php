@@ -2,6 +2,7 @@
 
 namespace Platform\AssetManager\Livewire\Assets;
 
+use Platform\AssetManager\Concerns\ClampsListState;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Illuminate\Support\Facades\Auth;
@@ -17,6 +18,7 @@ use Platform\AssetManager\Services\TenantContext;
 
 class Index extends Component
 {
+    use ClampsListState;
     use ResolvesCurrentTeam;
     use WithPagination;
 
@@ -56,6 +58,8 @@ class Index extends Component
         'filterSource'   => ['except' => ''],
         'filterAssignee' => ['except' => null],
         'perPage'        => ['except' => 25],
+        'sortField'      => ['except' => 'name'],
+        'sortDirection'  => ['except' => 'asc'],
     ];
 
     public function updatingSearch(): void         { $this->resetPage(); $this->clearSelection(); }
@@ -259,6 +263,9 @@ class Index extends Component
 
     public function render()
     {
+        // Vor jeder Abfrage: der rendering-Hook käme erst nach render() (#957).
+        $this->clampListState();
+
         $teamId = $this->teamId();
 
         $items = $this->filteredQuery()
@@ -304,5 +311,17 @@ class Index extends Component
         } else {
             $this->selected = array_values(array_diff($this->selected, $pageIds));
         }
+    }
+
+    /** Erlaubte Seitengrößen — alles andere aus URL/Client wird geklemmt (#957). */
+    protected function listPerPageOptions(): array
+    {
+        return [25, 50, 100];
+    }
+
+    /** Erlaubte Sortierspalten (#957); die erste ist der Rückfall. */
+    protected function listSortable(): array
+    {
+        return ['name', 'status', 'serial_number', 'purchase_date', 'purchase_price', 'created_at'];
     }
 }

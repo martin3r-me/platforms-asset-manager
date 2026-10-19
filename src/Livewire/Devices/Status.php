@@ -2,6 +2,7 @@
 
 namespace Platform\AssetManager\Livewire\Devices;
 
+use Platform\AssetManager\Concerns\ClampsListState;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -15,6 +16,7 @@ use Platform\AssetManager\Models\AssetDevice;
  */
 class Status extends Component
 {
+    use ClampsListState;
     use WithPagination;
 
     /** Aktiver Status-Filter: '' = alle · 'none' = ohne Lifecycle · sonst ein LIFECYCLE_STATUSES-Wert. */
@@ -39,6 +41,9 @@ class Status extends Component
 
     public function render()
     {
+        // Vor jeder Abfrage: der rendering-Hook käme erst nach render() (#957).
+        $this->clampListState();
+
         $teamId = (int) Auth::user()->currentTeam->id;
 
         // Eine frische, tenant-gefilterte Basis-Query je Aufruf (Counts laufen unabhängig vom Listen-Filter).
@@ -67,5 +72,17 @@ class Status extends Component
             'counts'  => $counts,
             'devices' => $devices,
         ])->layout('platform::layouts.app');
+    }
+
+    /** Erlaubte Seitengrößen — alles andere aus URL/Client wird geklemmt (#957). */
+    protected function listPerPageOptions(): array
+    {
+        return [25, 50, 100];
+    }
+
+    /** Erlaubte Sortierspalten (#957); die erste ist der Rückfall. */
+    protected function listSortable(): array
+    {
+        return [];
     }
 }

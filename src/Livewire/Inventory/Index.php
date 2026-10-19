@@ -2,6 +2,7 @@
 
 namespace Platform\AssetManager\Livewire\Inventory;
 
+use Platform\AssetManager\Concerns\ClampsListState;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -25,6 +26,7 @@ use Platform\AssetManager\Services\InventoryService;
  */
 class Index extends Component
 {
+    use ClampsListState;
     use ResolvesCurrentTeam;
     use WithPagination;
 
@@ -182,6 +184,9 @@ class Index extends Component
 
     public function render(InventoryService $inventory)
     {
+        // Vor jeder Abfrage: der rendering-Hook käme erst nach render() (#957).
+        $this->clampListState();
+
         $teamId = $this->teamId();
 
         $rows     = $inventory->rows($teamId, TenantContext::scopeTenantId());
@@ -205,5 +210,17 @@ class Index extends Component
             'holders'     => AssetHolder::where('team_id', $teamId)->where('is_active', true)->orderBy('display_name')->get(),
             'costCenters'   => AssetCostCenter::where('team_id', $teamId)->where('is_active', true)->orderBy('name')->get(),
         ])->layout('platform::layouts.app');
+    }
+
+    /** Erlaubte Seitengrößen — alles andere aus URL/Client wird geklemmt (#957). */
+    protected function listPerPageOptions(): array
+    {
+        return [25, 50, 100];
+    }
+
+    /** Erlaubte Sortierspalten (#957); die erste ist der Rückfall. */
+    protected function listSortable(): array
+    {
+        return ['name', 'type', 'assignedTo', 'status', 'monthlyCost'];
     }
 }

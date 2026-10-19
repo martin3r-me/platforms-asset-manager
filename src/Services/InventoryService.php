@@ -118,7 +118,8 @@ class InventoryService
     /** Manuelle Pagination auf der bereits gefilterten + sortierten Collection. */
     public function paginate(Collection $rows, int $perPage, int $page): LengthAwarePaginator
     {
-        $page = max(1, $page);
+        $page    = max(1, $page);
+        $perPage = max(1, $perPage); // 0 aus der URL wäre eine Division durch null (#957)
 
         return new LengthAwarePaginator(
             $rows->forPage($page, $perPage)->values(),

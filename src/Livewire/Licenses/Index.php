@@ -2,6 +2,7 @@
 
 namespace Platform\AssetManager\Livewire\Licenses;
 
+use Platform\AssetManager\Concerns\ClampsListState;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Illuminate\Support\Facades\Auth;
@@ -18,6 +19,7 @@ use Platform\AssetManager\Support\LicensePriceBook;
 
 class Index extends Component
 {
+    use ClampsListState;
     use WithPagination;
 
     public string  $search        = '';
@@ -207,6 +209,9 @@ class Index extends Component
 
     public function render()
     {
+        // Vor jeder Abfrage: der rendering-Hook käme erst nach render() (#957).
+        $this->clampListState();
+
         $team  = Auth::user()->currentTeam;
         $query = AssetLicenseSku::where('team_id', $team->id);
         // Vor dem Preisfilter laden: dessen Closure fragt die Vertragszeilen ab (#937).
@@ -298,5 +303,17 @@ class Index extends Component
             'canSync'          => $canSync,
             'config'           => $config,
         ])->layout('platform::layouts.app');
+    }
+
+    /** Erlaubte Seitengrößen — alles andere aus URL/Client wird geklemmt (#957). */
+    protected function listPerPageOptions(): array
+    {
+        return [15, 25, 50, 100];
+    }
+
+    /** Erlaubte Sortierspalten (#957); die erste ist der Rückfall. */
+    protected function listSortable(): array
+    {
+        return ['display_name', 'consumed_units', 'monthly_cost'];
     }
 }
