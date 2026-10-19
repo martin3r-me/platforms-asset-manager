@@ -374,6 +374,71 @@ class IntuneGraphService
     }
 
     /**
+     * Letzte erfolgreiche Anmeldung je UPN (#970) — Basis für den Lizenz-Reclaim.
+     *
+     * Bewusst ein **eigener** Abruf: `signInActivity` braucht `AuditLog.Read.All` und Entra ID P1. Stünde
+     * das Feld im regulären `/users`-Select, scheiterte ohne diese Berechtigung der ganze User-Abgleich
+     * mit 403 — und damit das Stilllegen ausgeschiedener Träger. So bleibt bei fehlender Berechtigung
+     * nur diese eine Auskunft leer (`null`, Grund in `lastError`).
+     *
+     * @return array<string, string>|null kleingeschriebene UPN => ISO-Zeitpunkt; null = nicht verfügbar
+     */
+    public function getSignInActivity(AssetConnectorConfig $config): ?array
+    {
+        $this->lastError = null;
+        $token = $this->getAccessToken($config);
+        if (!$token) {
+            $this->lastError = 'Token-Abruf fehlgeschlagen.';
+            return null;
+        }
+
+        $result          = [];
+        $url             = "{$this->graphBase}/users?\$select=userPrincipalName,signInActivity&\$top=999";
+        $throttleRetries = 0;
+
+        while ($url) {
+            try {
+                $response = $this->http()->withHeaders(['Authorization' => 'Bearer ' . $token])->get($url);
+
+                if (($response->status() === 429 || $response->serverError()) && $throttleRetries < self::MAX_THROTTLE_RETRIES) {
+                    $throttleRetries++;
+                    sleep($this->throttleWaitSeconds($response));
+                    continue;
+                }
+
+                if (in_array($response->status(), [401, 403], true)) {
+                    $this->lastError = 'Anmeldedaten nicht verfügbar (HTTP ' . $response->status() . '): benötigt AuditLog.Read.All '
+                        . '(Application Permission mit Admin-Consent) und Entra ID P1. Graph: ' . $response->json('error.code', '');
+                    return null;
+                }
+
+                if (!$response->successful()) {
+                    $this->lastError = 'Graph-API Fehler (HTTP ' . $response->status() . ') beim Abruf der Anmeldedaten.';
+                    return null;
+                }
+
+                foreach ((array) $response->json('value', []) as $u) {
+                    $upn = mb_strtolower(trim((string) ($u['userPrincipalName'] ?? '')));
+                    $at  = $u['signInActivity']['lastSuccessfulSignInDateTime']
+                        ?? $u['signInActivity']['lastSignInDateTime']
+                        ?? null;
+                    if ($upn !== '' && $at) {
+                        $result[$upn] = (string) $at;
+                    }
+                }
+
+                $url             = $response->json('@odata.nextLink');
+                $throttleRetries = 0;
+            } catch (\Throwable $e) {
+                $this->lastError = 'Verbindungsfehler beim Abruf der Anmeldedaten: ' . $e->getMessage();
+                return null;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * Testet die Verbindung. Gibt null bei Erfolg zurück, sonst eine Fehlermeldung.
      */
     public function testConnection(AssetConnectorConfig $config): ?string

@@ -64,6 +64,7 @@ class AssetHolder extends Model
     }
 
     protected $fillable = [
+        'last_sign_in_at',
         'team_id',
         'tenant_id',
         'user_principal_name',
@@ -102,6 +103,7 @@ class AssetHolder extends Model
     ];
 
     protected $casts = [
+        'last_sign_in_at' => 'datetime',
         'is_active'           => 'boolean',
         'holder_type_pinned'  => 'boolean',
         'billing_excluded_at' => 'datetime',
