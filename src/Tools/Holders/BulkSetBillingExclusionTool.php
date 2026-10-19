@@ -4,6 +4,7 @@ namespace Platform\AssetManager\Tools\Holders;
 
 use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetHolder;
+use Platform\AssetManager\Models\AssetHolderEvent;
 use Platform\AssetManager\Services\BillingExclusionService;
 use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
@@ -99,15 +100,17 @@ class BulkSetBillingExclusionTool implements ToolContract, ToolMetadataContract
             // erst die konkrete Klasse gibt — deshalb defensiv, statt `->id` blind anzunehmen.
             $userId = $context->user->id ?? null;
 
-            $result = app(BillingExclusionService::class)->setExclusion(
+            // Verlauf (#897): auch das Aufheben braucht einen Urheber, und den kennt nur der Kontext.
+            $actorId = $userId !== null ? (int) $userId : null;
+            $result  = AssetHolderEvent::actingAs($actorId, fn () => app(BillingExclusionService::class)->setExclusion(
                 $teamId,
                 $tenantId,
                 $ids,
                 (bool) $arguments['excluded'],
                 $arguments['reason'] ?? null,
-                $userId !== null ? (int) $userId : null,
+                $actorId,
                 (bool) ($arguments['dry_run'] ?? false),
-            );
+            ));
 
             if (! $result['ok']) {
                 return ToolResult::error($result['code'] ?? 'VALIDATION_ERROR', $result['message']);

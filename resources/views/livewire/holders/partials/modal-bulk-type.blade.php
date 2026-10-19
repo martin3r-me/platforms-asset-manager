@@ -1,11 +1,11 @@
 {{--
     Vorschau der Typ-Sammelaktion (Dry-Run des HolderTypeService).
 
-    Die drei rechten Kacheln sind der Grund, warum es diesen Zwischenschritt überhaupt gibt: sie
-    benennen Nebenwirkungen, die man dem Vorgang sonst nicht ansieht — ein gelöschtes Funktions-
-    System, ein Funktionskonto ohne System (nach ADR 0019 nicht bewirtschaftbar) und Träger, die der
-    nächste Sync wieder zurückstellt. Der letzte Fall ist der heimtückischste: ohne diesen Hinweis
-    sieht man Erfolg und findet den Bestand am nächsten Morgen unverändert vor.
+    Die Hinweise sind der Grund, warum es diesen Zwischenschritt überhaupt gibt: sie benennen
+    Nebenwirkungen, die man dem Vorgang sonst nicht ansieht — ein gelöschtes Funktions-System, ein
+    Funktionskonto ohne System (nach ADR 0019 nicht bewirtschaftbar) und Träger, bei denen man eine
+    Erkennungsregel überstimmt. Seit #896 hält die Sammelaktion den Typ fest; der Sync stellt ihn
+    nicht mehr zurück (früher die Warnung „wird beim nächsten Sync zurückgestellt").
 --}}
 <x-ui-modal model="showBulkType" size="lg">
     <x-slot name="header">Träger-Typ setzen — Vorschau</x-slot>
@@ -46,12 +46,19 @@
                 </div>
             @endif
 
-            @if($bulkPreview['summary']['reverts_on_sync'] > 0)
+            @if(($bulkPreview['summary']['overrides_rule'] ?? 0) > 0)
                 <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
-                    <strong>{{ $bulkPreview['summary']['reverts_on_sync'] }} werden beim nächsten Sync zurückgestellt.</strong>
-                    Bei ihnen greift eine Erkennungsregel (oder eine synthetische Funktions-UPN), die stärker ist
-                    als die Einzelkorrektur. Dauerhaft ändern lässt sich das nur über die Regeln in den
-                    Moduleinstellungen.
+                    <strong>{{ $bulkPreview['summary']['overrides_rule'] }} überstimmen eine Erkennungsregel.</strong>
+                    Bei ihnen ergäbe eine Regel (oder eine synthetische Funktions-UPN) einen anderen Typ. Der Typ
+                    wird festgehalten und bleibt auch nach dem nächsten Sync stehen; zurück auf die Regeln geht es
+                    auf der Detailseite des Trägers.
+                </div>
+            @endif
+
+            @if(($bulkPreview['summary']['pinned_only'] ?? 0) > 0)
+                <div class="rounded-lg border border-[color:var(--am-border)] bg-[var(--am-bg)] px-3 py-2.5 text-xs text-[var(--am-text-secondary)]">
+                    <strong class="text-[var(--am-text)]">{{ $bulkPreview['summary']['pinned_only'] }} haben den Typ schon</strong>
+                    — bisher nur aus einer Regel. Sie werden festgehalten, ihr Typ ändert sich nicht.
                 </div>
             @endif
 
@@ -75,7 +82,8 @@
                                     <td class="px-3 py-1.5 text-amber-700">
                                         @if(! empty($row['clears_system'])) System wird gelöscht @endif
                                         @if(! empty($row['needs_system'])) kein System hinterlegt @endif
-                                        @if(! empty($row['reverts_on_sync'])) Sync stellt zurück @endif
+                                        @if(! empty($row['overrides_rule'])) überstimmt Regel @endif
+                                        @if(in_array($row['status'], ['would_pin', 'pinned'], true)) nur festhalten @endif
                                     </td>
                                 </tr>
                             @endforeach

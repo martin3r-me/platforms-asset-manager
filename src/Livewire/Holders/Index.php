@@ -10,15 +10,21 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Concerns\ResolvesCurrentTeam;
+use Platform\AssetManager\Models\AssetAssignment;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetDevice;
+use Platform\AssetManager\Models\AssetHandover;
 use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetUserLicense;
 use Platform\AssetManager\Services\BillingExclusionService;
+use Platform\AssetManager\Services\ControllingContext;
+use Platform\AssetManager\Services\CostAggregationService;
+use Platform\AssetManager\Services\HolderService;
 use Platform\AssetManager\Services\HolderTypeService;
 use Platform\AssetManager\Services\TenantContext;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class Index extends Component
 {
@@ -43,7 +49,7 @@ class Index extends Component
     /** Auswahlmöglichkeiten des Seitengrößen-Umschalters. */
     public const PER_PAGE_OPTIONS = [25, 50, 100, self::PER_PAGE_ALL];
 
-    public string $preset           = 'active'; // all|active|with_license|with_device|with_asset|unassigned|inactive|billing_excluded
+    public string $preset           = 'active'; // all|active|with_license|with_device|with_asset|unassigned|inactive|offboarding|billing_excluded
     public string $search           = '';
     public string $filterDept       = '';
     public string $filterSku        = '';
@@ -90,6 +96,19 @@ class Index extends Component
     public bool    $bulkExclude     = true;
     public bool    $showBulkBilling = false;
     public ?array  $bulkBillingPreview = null;
+
+    /**
+     * Träger von Hand anlegen (#881). `$newHolderType = ''` heißt „die Erkennungsregeln entscheiden";
+     * ein gewählter Typ wird festgehalten (#896).
+     */
+    public bool   $showCreate      = false;
+    public string $newUpn          = '';
+    public string $newDisplayName  = '';
+    public string $newEmail        = '';
+    public string $newHolderType   = '';
+    public string $newCostCenterId = '';
+    public string $newDepartment   = '';
+    public string $newJobTitle     = '';
 
     /**
      * Request-lokale Memoisierung der drei Zugehörigkeits-Listen. `protected` und damit nicht Teil
@@ -248,6 +267,54 @@ class Index extends Component
     }
 
     /**
+     * Träger-IDs mit offener Zuordnung (#884): `asset_assignments` ohne Ende. Die Tabelle hat kein
+     * `team_id` — gebunden wird über die Träger des Teams (und den Tenant-Scope beider Modelle).
+     */
+    protected function holderIdsWithOpenAssignment(int $teamId)
+    {
+        return $this->lookupMemo['open_assignment'] ??= AssetAssignment::query()
+            ->whereNull('returned_at')
+            ->whereNotNull('holder_id')
+            ->whereIn('holder_id', AssetHolder::where('team_id', $teamId)->select('id'))
+            ->distinct()
+            ->pluck('holder_id');
+    }
+
+    /** Träger-IDs mit nicht (vollständig) zurückgenommenem Übergabeprotokoll (#884). */
+    protected function holderIdsWithOpenHandover(int $teamId)
+    {
+        return $this->lookupMemo['open_handover'] ??= AssetHandover::where('team_id', $teamId)
+            ->whereIn('status', [AssetHandover::STATUS_OPEN, AssetHandover::STATUS_PARTIALLY_RETURNED])
+            ->whereNotNull('holder_id')
+            ->distinct()
+            ->pluck('holder_id');
+    }
+
+    /**
+     * Offboarding-Sicht (#884): stillgelegte Träger, an denen noch etwas hängt — Lizenz, Gerät
+     * (Intune-UPN), manuelles Asset, offene Zuordnung oder offenes Übergabeprotokoll.
+     *
+     * **Reine Sicht** (ADR 0023, ADR 0021): nichts wird zurückgenommen oder ausgebucht. Die Liste
+     * macht den Preis sichtbar, den ADR 0023 bewusst benennt — Stilllegen ohne Löschen lässt den
+     * Restbestand am Träger liegen.
+     */
+    protected function applyOffboarding($query, int $teamId): void
+    {
+        $allUpns = $this->upnsWithLicense($teamId)->merge($this->upnsWithDevice($teamId))->unique()->values();
+        $ids     = $this->holderIdsWithAsset($teamId)
+            ->merge($this->holderIdsWithOpenAssignment($teamId))
+            ->merge($this->holderIdsWithOpenHandover($teamId))
+            ->unique()
+            ->values();
+
+        $query->where('is_active', false)
+            ->where(function ($q) use ($allUpns, $ids) {
+                $q->whereIn('user_principal_name', $allUpns)
+                  ->orWhereIn('id', $ids);
+            });
+    }
+
+    /**
      * Wendet das Preset auf die Query an.
      * Preset 'inactive' überschreibt is_active-Filter — sonst implizit is_active=true.
      */
@@ -261,6 +328,9 @@ class Index extends Component
         switch ($this->preset) {
             case 'inactive':
                 $query->where('is_active', false);
+                return;
+            case 'offboarding':
+                $this->applyOffboarding($query, $teamId);
                 return;
             // Ausnahmen bewusst OHNE is_active-Filter: eine Ausnahme an einem stillgelegten Träger
             // wirkt zwar nicht mehr auf die Rechnung, aber sie steht noch da — und diese Ansicht ist
@@ -512,6 +582,234 @@ class Index extends Component
         }
     }
 
+    // ---- Träger von Hand anlegen (#881) ------------------------------------------------------
+
+    public function openCreate(): void
+    {
+        Gate::authorize('asset-manager.manage');
+
+        $this->resetCreateForm();
+        $this->showCreate = true;
+    }
+
+    /**
+     * Anlegen über den {@see HolderService} — dieselben Regeln wie der Sync (UPN-Normalisierung,
+     * Eindeutigkeit je Tenant, Klassifizierung) und wie das MCP-Tool `asset-manager.holders.POST`.
+     */
+    public function createHolder(HolderService $service): void
+    {
+        Gate::authorize('asset-manager.manage');
+
+        $this->validate([
+            'newUpn'          => 'required|string|max:255',
+            'newDisplayName'  => 'nullable|string|max:255',
+            'newEmail'        => 'nullable|email|max:255',
+            'newHolderType'   => 'nullable|in:' . implode(',', AssetHolder::TYPES),
+            'newCostCenterId' => 'nullable|integer',
+            'newDepartment'   => 'nullable|string|max:255',
+            'newJobTitle'     => 'nullable|string|max:255',
+        ], [], [
+            'newUpn'   => 'UPN',
+            'newEmail' => 'E-Mail',
+        ]);
+
+        $result = $service->createManual($this->teamId(), $this->activeTenantId(), [
+            'user_principal_name' => $this->newUpn,
+            'display_name'        => $this->newDisplayName,
+            'email'               => $this->newEmail,
+            'holder_type'         => $this->newHolderType,
+            'cost_center_id'      => $this->newCostCenterId !== '' ? (int) $this->newCostCenterId : null,
+            'department'          => $this->newDepartment,
+            'job_title'           => $this->newJobTitle,
+        ]);
+
+        if (! $result['ok']) {
+            $this->addError($result['code'] === 'COST_CENTER_NOT_FOUND' ? 'newCostCenterId' : 'newUpn', $result['message']);
+
+            return;
+        }
+
+        $this->showCreate = false;
+        $this->resetCreateForm();
+
+        // Direkt auf die Detailseite: der nächste Schritt ist fast immer eine Zuordnung.
+        $this->redirectRoute('asset-manager.holders.show', $result['holder'], navigate: true);
+    }
+
+    protected function resetCreateForm(): void
+    {
+        $this->newUpn          = '';
+        $this->newDisplayName  = '';
+        $this->newEmail        = '';
+        $this->newHolderType   = '';
+        $this->newCostCenterId = '';
+        $this->newDepartment   = '';
+        $this->newJobTitle     = '';
+        $this->resetValidation();
+    }
+
+    // ---- CSV-Export (#886) -----------------------------------------------------------------
+
+    /**
+     * Gefilterte Trägerliste als CSV. Muster: Devices\Index::exportCsv().
+     *
+     * Lesepfad, daher **ohne** `asset-manager.manage` (ADR 0004): die Liste ist die Grundlage für
+     * Abstimmungen mit dem Kunden („wer wird berechnet", „wer hat welche Lizenz").
+     */
+    public function exportCsv(): StreamedResponse
+    {
+        $rows     = $this->csvRows($this->teamId());
+        $filename = 'asset-traeger-' . now()->format('Y-m-d') . '.csv';
+
+        return new StreamedResponse(function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM für Excel
+
+            foreach ($rows as $row) {
+                fputcsv($out, $row, ';');
+            }
+
+            fclose($out);
+        }, 200, [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
+    /**
+     * Kopfzeile + Datenzeilen des Exports — getrennt vom Streamen, damit der Inhalt prüfbar ist.
+     *
+     * Folgt **genau** {@see filteredQuery()} und der Sortierung der Liste, lässt nichts weg (ADR 0020):
+     * die Zeilenzahl ist die Trefferzahl. Spalten in der Anzeigereihenfolge; die Offboarding-Spalten
+     * nur im Preset „Offboarding" (wie auf dem Bildschirm), die Kostenspalten nur bei aktivem
+     * Controlling (ADR 0008). Gelesen wird in Blöcken mit gebündelten Zählern — eine Abfrage je
+     * Zeile wäre bei „Alle" ein N+1 über den ganzen Bestand.
+     *
+     * @return \Generator<int, list<string|int|null>>
+     */
+    protected function csvRows(int $teamId): \Generator
+    {
+        $controlling = app(ControllingContext::class)->enabledFor($teamId);
+        $offboarding = $this->preset === 'offboarding';
+
+        yield array_merge(
+            ['ID', 'Name', 'Träger-Typ', 'Typ festgehalten', 'Nicht berechnet', 'Grund der Ausnahme', 'UPN',
+             'Abteilung', 'Kostenstelle', 'Geräte', 'Assets', 'Lizenzen', 'Quelle', 'Aktiv'],
+            $offboarding ? ['Offene Zuordnungen', 'Offene Protokolle'] : [],
+            $controlling ? ['Hardware EUR/Monat', 'Geräte EUR/Monat', 'Lizenzen EUR/Monat', 'Gesamt EUR/Monat'] : [],
+        );
+
+        // `id` als Zweitschlüssel: ohne ihn wäre das Blättern über eine nicht eindeutige Sortierspalte
+        // (Abteilung, Typ) nicht stabil — Zeilen könnten doppelt kommen oder fehlen.
+        $base = $this->filteredQuery($teamId)
+            ->orderBy($this->sortField, $this->sortDirection)
+            ->orderBy('id');
+
+        $page = 1;
+        do {
+            $chunk = (clone $base)->forPage($page++, 500)->get();
+            if ($chunk->isEmpty()) {
+                break;
+            }
+
+            $stats = $this->rowStats($teamId, $chunk, $offboarding, $controlling);
+
+            foreach ($chunk as $h) {
+                $upn  = $h->user_principal_name;
+                $cost = $stats['costs'][$h->id] ?? null;
+
+                yield array_merge(
+                    [
+                        $h->id,
+                        $h->name,
+                        $h->holderTypeLabel(),
+                        $h->holder_type_pinned ? 'ja' : 'nein',
+                        $h->isBillingExcluded() ? 'ja' : 'nein',
+                        $h->billing_excluded_reason,
+                        $upn,
+                        $h->department,
+                        $h->cost_center,
+                        (int) ($stats['devices'][$upn] ?? 0),
+                        (int) ($stats['items'][$h->id] ?? 0),
+                        (int) ($stats['licenses'][$upn] ?? 0),
+                        match ($h->source) {
+                            'graph'  => 'Graph',
+                            'manual' => 'Manuell',
+                            default  => 'Abgeleitet',
+                        },
+                        $h->is_active ? 'ja' : 'nein',
+                    ],
+                    $offboarding ? [
+                        (int) ($stats['open_assignments'][$h->id] ?? 0),
+                        (int) ($stats['open_handovers'][$h->id] ?? 0),
+                    ] : [],
+                    $controlling ? [
+                        number_format((float) ($cost['hardware'] ?? 0), 2, ',', ''),
+                        number_format((float) ($cost['device'] ?? 0), 2, ',', ''),
+                        number_format((float) ($cost['license'] ?? 0), 2, ',', ''),
+                        number_format((float) ($cost['total'] ?? 0), 2, ',', ''),
+                    ] : [],
+                );
+            }
+        } while ($chunk->count() === 500);
+    }
+
+    /**
+     * Zähler und (optional) Kosten für eine Menge Träger — gebündelt, eine feste Zahl Abfragen.
+     * Gemeinsame Quelle von Liste und Export, damit beide dieselben Zahlen zeigen.
+     *
+     * @param  \Illuminate\Support\Collection<int, AssetHolder>  $holders
+     * @return array{items: mixed, devices: mixed, licenses: mixed, open_assignments: mixed,
+     *               open_handovers: mixed, costs: array<int, array<string, float>>}
+     */
+    protected function rowStats(int $teamId, $holders, bool $offboarding, bool $controlling): array
+    {
+        $ids  = $holders->pluck('id')->all();
+        $upns = $holders->pluck('user_principal_name')->filter()->values()->all();
+
+        $stats = [
+            'items' => AssetItem::whereIn('assignee_id', $ids)
+                ->select('assignee_id', DB::raw('count(*) as count'))
+                ->groupBy('assignee_id')
+                ->pluck('count', 'assignee_id'),
+            'devices' => AssetDevice::where('team_id', $teamId)
+                ->whereIn('user_principal_name', $upns)
+                ->select('user_principal_name', DB::raw('count(*) as count'))
+                ->groupBy('user_principal_name')
+                ->pluck('count', 'user_principal_name'),
+            'licenses' => AssetUserLicense::where('team_id', $teamId)
+                ->whereIn('user_principal_name', $upns)
+                ->select('user_principal_name', DB::raw('count(*) as count'))
+                ->groupBy('user_principal_name')
+                ->pluck('count', 'user_principal_name'),
+            'open_assignments' => collect(),
+            'open_handovers'   => collect(),
+            'costs'            => [],
+        ];
+
+        if ($offboarding) {
+            $stats['open_assignments'] = AssetAssignment::query()
+                ->whereNull('returned_at')
+                ->whereIn('holder_id', $ids)
+                ->select('holder_id', DB::raw('count(*) as count'))
+                ->groupBy('holder_id')
+                ->pluck('count', 'holder_id');
+
+            $stats['open_handovers'] = AssetHandover::where('team_id', $teamId)
+                ->whereIn('status', [AssetHandover::STATUS_OPEN, AssetHandover::STATUS_PARTIALLY_RETURNED])
+                ->whereIn('holder_id', $ids)
+                ->select('holder_id', DB::raw('count(*) as count'))
+                ->groupBy('holder_id')
+                ->pluck('count', 'holder_id');
+        }
+
+        if ($controlling) {
+            $stats['costs'] = app(CostAggregationService::class)->holderCostsFor($teamId, $holders);
+        }
+
+        return $stats;
+    }
+
     protected function activeTenantId(): int
     {
         return TenantContext::resolveForWrite($this->teamId(), (int) Auth::id());
@@ -546,6 +844,8 @@ class Index extends Component
                                 ->whereNotIn('user_principal_name', $allUpns)
                                 ->whereNotIn('id', $assetIds)->count(),
             'inactive'     => (clone $base)->where('is_active', false)->count(),
+            // Offboarding (#884): stillgelegt, aber mit Restbestand — dieselbe Regel wie das Preset.
+            'offboarding'  => tap(clone $base, fn ($q) => $this->applyOffboarding($q, $teamId))->count(),
             // Die Zahl gehört sichtbar in die Liste: eine Ausnahmeliste, die man nur über den
             // Rechnungslauf findet, verrottet unbemerkt (ADR 0024).
             'billing_excluded' => (clone $base)->billingExcluded()->count(),
@@ -564,25 +864,15 @@ class Index extends Component
         );
 
         // --- Counts pro angezeigtem Asset-Träger ---
-        $pageEmpIds = $holders->pluck('id')->toArray();
-        $pageUpns   = $holders->pluck('user_principal_name')->toArray();
+        // Gemeinsame Quelle mit dem CSV-Export (#886). Offene Zuordnungen/Protokolle und Monatsbetrag
+        // nur in der Offboarding-Sicht (#884) — der Betrag zusätzlich nur bei aktivem Controlling.
+        $offboarding = $this->preset === 'offboarding';
+        $controlling = $offboarding && app(ControllingContext::class)->enabledFor($teamId);
+        $stats       = $this->rowStats($teamId, $holders->getCollection(), $offboarding, $controlling);
 
-        $itemCounts = AssetItem::whereIn('assignee_id', $pageEmpIds)
-            ->select('assignee_id', DB::raw('count(*) as count'))
-            ->groupBy('assignee_id')
-            ->pluck('count', 'assignee_id');
-
-        $deviceCounts = AssetDevice::where('team_id', $teamId)
-            ->whereIn('user_principal_name', $pageUpns)
-            ->select('user_principal_name', DB::raw('count(*) as count'))
-            ->groupBy('user_principal_name')
-            ->pluck('count', 'user_principal_name');
-
-        $licenseCounts = AssetUserLicense::where('team_id', $teamId)
-            ->whereIn('user_principal_name', $pageUpns)
-            ->select('user_principal_name', DB::raw('count(*) as count'))
-            ->groupBy('user_principal_name')
-            ->pluck('count', 'user_principal_name');
+        $itemCounts    = $stats['items'];
+        $deviceCounts  = $stats['devices'];
+        $licenseCounts = $stats['licenses'];
 
         // --- Dropdowns ---
         $departments = AssetHolder::where('team_id', $teamId)
@@ -607,6 +897,11 @@ class Index extends Component
             'itemCounts'    => $itemCounts,
             'deviceCounts'  => $deviceCounts,
             'licenseCounts' => $licenseCounts,
+            'offboarding'   => $offboarding,
+            'showCosts'     => $controlling,
+            'openAssignmentCounts' => $stats['open_assignments'],
+            'openHandoverCounts'   => $stats['open_handovers'],
+            'rowCosts'      => $stats['costs'],
             'counts'        => $counts,
             'departments'   => $departments,
             'skus'          => $skus,

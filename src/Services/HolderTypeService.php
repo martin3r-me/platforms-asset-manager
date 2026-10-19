@@ -47,6 +47,14 @@ class HolderTypeService
      * nutzt der {@see \Platform\AssetManager\Console\Commands\ClassifyHoldersCommand}, weil dort eine
      * Maschine reklassifiziert. Hier entscheidet ein Mensch.
      *
+     * **Ein Mensch setzt, also wird festgehalten (#896):** jeder geschriebene Träger bekommt
+     * `holder_type_pinned = true` — der Klassifizierer und die Entra-Gastregel lassen ihn danach
+     * stehen. Ein Träger, der den Zieltyp schon hat, aber nur aus einer Regel, wird ebenfalls
+     * festgehalten (`pinned_only`); erst wer Typ UND Festhalten schon hat, ist `unchanged`.
+     * `overrides_rule` zählt die Träger, bei denen eine Erkennungsregel (oder eine synthetische
+     * Funktions-UPN) etwas anderes ergäbe — früher die Warnung `reverts_on_sync`, die nach dem
+     * Festhalten nicht mehr eintritt, aber als Hinweis bleibt: man überstimmt hier eine Regel.
+     *
      * @param  list<int>  $holderIds
      * @return array{
      *     ok: bool,
@@ -56,7 +64,7 @@ class HolderTypeService
      *     target: string|null,
      *     dry_run: bool,
      *     summary: array{updated: int, unchanged: int, missing: int, total: int,
-     *                    clears_system: int, needs_system: int, reverts_on_sync: int},
+     *                    clears_system: int, needs_system: int, overrides_rule: int, pinned_only: int},
      *     missing_ids: list<int>,
      *     results: list<array<string, mixed>>
      * }
@@ -102,7 +110,8 @@ class HolderTypeService
         $unchanged = 0;
         $clears    = 0;
         $needs     = 0;
-        $reverts   = 0;
+        $overrides = 0;
+        $pinOnly   = 0;
 
         $touched = [];   // Träger, die die Funktionskonto-Grenze überqueren
         $pending = [];   // zu schreibende Träger — erst auswerten, dann in EINER Transaktion schreiben
@@ -110,12 +119,28 @@ class HolderTypeService
         foreach ($holders as $holder) {
             $from = $holder->holder_type;
 
-            if ($from === $type) {
+            if ($from === $type && $holder->holder_type_pinned) {
                 $unchanged++;
                 $results[] = [
                     'id'     => $holder->id,
                     'label'  => $holder->display_name ?: $holder->user_principal_name,
                     'status' => 'unchanged',
+                    'to'     => $targetLabel,
+                ];
+                continue;
+            }
+
+            // Typ stimmt schon, stammt aber aus einer Regel: nur festhalten (#896). Kein Typwechsel,
+            // also keine Neuverteilung und kein Eingriff ins System.
+            if ($from === $type) {
+                $pinOnly++;
+                $pending[] = $holder;
+                $results[] = [
+                    'id'     => $holder->id,
+                    'label'  => $holder->display_name ?: $holder->user_principal_name,
+                    'upn'    => $holder->user_principal_name,
+                    'status' => $dryRun ? 'would_pin' : 'pinned',
+                    'from'   => AssetHolder::holderTypeLabelFor($from),
                     'to'     => $targetLabel,
                 ];
                 continue;
@@ -136,10 +161,10 @@ class HolderTypeService
                 $needs++;
             }
 
-            $revertsOnSync = $this->revertsOnSync($holder, $type, $tenantId);
+            $overridesRule = $this->overridesRule($holder, $type, $tenantId);
 
-            if ($revertsOnSync) {
-                $reverts++;
+            if ($overridesRule) {
+                $overrides++;
             }
 
             $pending[] = $holder;
@@ -158,7 +183,7 @@ class HolderTypeService
                 'to'              => $targetLabel,
                 'clears_system'   => $losesSystem,
                 'needs_system'    => $lacksSystem,
-                'reverts_on_sync' => $revertsOnSync,
+                'overrides_rule'  => $overridesRule,
             ];
         }
 
@@ -169,8 +194,9 @@ class HolderTypeService
         if (! $dryRun && $pending !== []) {
             DB::transaction(function () use ($pending, $type, $targetIsFunction): void {
                 foreach ($pending as $holder) {
-                    $holder->holder_type     = $type;
-                    $holder->function_system = $targetIsFunction ? $holder->function_system : null;
+                    $holder->holder_type        = $type;
+                    $holder->holder_type_pinned = true;
+                    $holder->function_system    = $targetIsFunction ? $holder->function_system : null;
                     $holder->save();
                 }
             });
@@ -186,10 +212,11 @@ class HolderTypeService
             'ok'      => true,
             'code'    => null,
             'reason'  => null,
-            'message' => $dryRun
+            'message' => ($dryRun
                 ? "Vorschau: {$updated} Träger würden auf '{$targetLabel}' gesetzt. Kein Schreibvorgang."
                 : "{$updated} Träger auf '{$targetLabel}' gesetzt."
-                    . ($redistributed ? ' Lizenzverteilung neu berechnet.' : ''),
+                    . ($redistributed ? ' Lizenzverteilung neu berechnet.' : ''))
+                . ($pinOnly > 0 ? " {$pinOnly} hatten den Typ schon und werden nur festgehalten." : ''),
             'target'  => $targetLabel,
             'dry_run' => $dryRun,
             'summary' => [
@@ -199,7 +226,8 @@ class HolderTypeService
                 'total'           => count($ids),
                 'clears_system'   => $clears,
                 'needs_system'    => $needs,
-                'reverts_on_sync' => $reverts,
+                'overrides_rule'  => $overrides,
+                'pinned_only'     => $pinOnly,
             ],
             'missing_ids' => $missing,
             'results'     => $results,
@@ -244,32 +272,147 @@ class HolderTypeService
     }
 
     /**
-     * Würde der nächste Sync diesen Typ wieder überschreiben?
+     * Was würden die Regeln für diesen Träger entscheiden, wenn niemand ihn festgehalten hätte?
      *
-     * Nur bei Ziel `person` möglich: {@see HolderClassifier::classify()} lässt einen gesetzten
-     * Nicht-`person`-Typ jeden Sync überleben, aber `person` fällt zurück in die Tenant-Regeln — und
-     * bei einer synthetischen `@funktion.import.local`-UPN sogar garantiert auf `function`.
-     *
-     * Beantwortet wird die Frage mit der Produktionsregel selbst, an einem **Klon**: `classify()`
-     * schreibt nicht (nur `apply()` tut das), und der Klon wird nie gespeichert. Ein nachgebauter
-     * Regelvergleich würde beim ersten Regel-Update auseinanderlaufen.
+     * Beantwortet mit der Produktionsregel selbst, an einem **Klon** im Ausgangszustand (Default-Typ,
+     * nicht festgehalten): `classify()` schreibt nicht, und der Klon wird nie gespeichert. Ein
+     * nachgebauter Regelvergleich würde beim ersten Regel-Update auseinanderlaufen.
      */
-    protected function revertsOnSync(AssetHolder $holder, string $type, int $tenantId): bool
+    public function ruleTypeFor(AssetHolder $holder, int $tenantId): string
     {
-        if ($type !== AssetHolder::TYPE_PERSON) {
-            return false;
+        $probe                     = clone $holder;
+        $probe->holder_type        = AssetHolder::TYPE_PERSON;
+        $probe->holder_type_pinned = false;
+
+        return $this->classifier->classify($probe, $tenantId);
+    }
+
+    /**
+     * Überstimmt dieser Typ eine Erkennungsregel?
+     *
+     * Ja, wenn eine Regel (oder eine synthetische Funktions-UPN, ein Gast-Kennzeichen) aktiv einen
+     * **anderen** Typ ergäbe. Dass die Regeln nur den Default `person` liefern, ist kein Widerspruch
+     * — sonst wäre jede Handklassifizierung eine „Überstimmung". Früher hieß der Fall
+     * `reverts_on_sync`, weil der nächste Sync ihn zurückstellte; seit dem Festhalten (#896) tut er
+     * das nicht mehr, der Hinweis bleibt.
+     */
+    protected function overridesRule(AssetHolder $holder, string $type, int $tenantId): bool
+    {
+        $ruleType = $this->ruleTypeFor($holder, $tenantId);
+
+        return $ruleType !== AssetHolder::TYPE_PERSON && $ruleType !== $type;
+    }
+
+    /**
+     * Festhalten lösen — zurück auf „Regeln entscheiden" (#896).
+     *
+     * Der Typ wird sofort neu bestimmt, nicht erst beim nächsten Sync: sonst stünde bis dahin ein
+     * Typ da, den weder ein Mensch noch eine Regel mehr vertritt. Bestimmt wird aus dem
+     * Ausgangszustand ({@see ruleTypeFor()}) — sonst hielte Stufe 2 des Klassifizierers („gesetzter
+     * Nicht-Default-Typ bleibt") den eben freigegebenen Typ einfach weiter fest.
+     *
+     * Grenze: das Entra-Gastkennzeichen (`userType = Guest`) kennt nur der Sync. Ein Gast ohne
+     * `#EXT#` in der UPN wird deshalb erst beim nächsten Verzeichnis-Abgleich wieder `external`.
+     *
+     * @param  list<int>  $holderIds
+     * @return array{ok: bool, code: string|null, reason: string|null, message: string, dry_run: bool,
+     *     summary: array{updated: int, unchanged: int, missing: int, total: int, type_changed: int},
+     *     missing_ids: list<int>, results: list<array<string, mixed>>}
+     */
+    public function releasePin(int $teamId, int $tenantId, array $holderIds, bool $dryRun = false): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $holderIds))));
+
+        if ($ids === []) {
+            return [
+                'ok' => false, 'code' => 'VALIDATION_ERROR', 'reason' => 'no_holders',
+                'message' => 'Keine Asset-Träger ausgewählt.', 'dry_run' => $dryRun,
+                'summary' => ['updated' => 0, 'unchanged' => 0, 'missing' => 0, 'total' => 0, 'type_changed' => 0],
+                'missing_ids' => [], 'results' => [],
+            ];
         }
 
-        $probe              = clone $holder;
-        $probe->holder_type = AssetHolder::TYPE_PERSON;
+        $holders = AssetHolder::query()
+            ->withoutTenantScope()
+            ->forTenant($tenantId)
+            ->where('team_id', $teamId)
+            ->whereIn('id', $ids)
+            ->get();
 
-        return $this->classifier->classify($probe, $tenantId) !== AssetHolder::TYPE_PERSON;
+        $missing   = array_values(array_diff($ids, $holders->pluck('id')->all()));
+        $results   = [];
+        $pending   = [];
+        $unchanged = 0;
+        $changed   = 0;
+        $touched   = false;
+
+        foreach ($holders as $holder) {
+            if (! $holder->holder_type_pinned) {
+                $unchanged++;
+                $results[] = ['id' => $holder->id, 'status' => 'unchanged', 'to' => $holder->holderTypeLabel()];
+                continue;
+            }
+
+            $to = $this->ruleTypeFor($holder, $tenantId);
+
+            if ($to !== $holder->holder_type) {
+                $changed++;
+            }
+
+            if ($this->affectsAllocation($holder->holder_type, $to)) {
+                $touched = true;
+            }
+
+            $results[] = [
+                'id'     => $holder->id,
+                'label'  => $holder->display_name ?: $holder->user_principal_name,
+                'status' => $dryRun ? 'would_release' : 'released',
+                'from'   => AssetHolder::holderTypeLabelFor($holder->holder_type),
+                'to'     => AssetHolder::holderTypeLabelFor($to),
+            ];
+
+            $pending[] = [$holder, $to];
+        }
+
+        if (! $dryRun && $pending !== []) {
+            DB::transaction(function () use ($pending): void {
+                foreach ($pending as [$holder, $to]) {
+                    $holder->holder_type        = $to;
+                    $holder->holder_type_pinned = false;
+                    $holder->function_system    = $to === AssetHolder::TYPE_FUNCTION ? $holder->function_system : null;
+                    $holder->save();
+                }
+            });
+        }
+
+        $redistributed = ! $dryRun && $touched && $this->redistribute($teamId, $tenantId);
+        $released      = count($pending);
+
+        return [
+            'ok'      => true,
+            'code'    => null,
+            'reason'  => null,
+            'message' => ($dryRun
+                    ? "Vorschau: {$released} Träger würden wieder von den Regeln bestimmt, {$changed} davon mit anderem Typ."
+                    : "{$released} Träger werden wieder von den Regeln bestimmt, {$changed} davon mit anderem Typ.")
+                . ($redistributed ? ' Lizenzverteilung neu berechnet.' : ''),
+            'dry_run' => $dryRun,
+            'summary' => [
+                'updated'      => $released,
+                'unchanged'    => $unchanged,
+                'missing'      => count($missing),
+                'total'        => count($ids),
+                'type_changed' => $changed,
+            ],
+            'missing_ids' => $missing,
+            'results'     => $results,
+        ];
     }
 
     /**
      * @return array{ok: bool, code: string, reason: string, message: string, target: null, dry_run: bool,
      *     summary: array{updated: int, unchanged: int, missing: int, total: int,
-     *                    clears_system: int, needs_system: int, reverts_on_sync: int},
+     *                    clears_system: int, needs_system: int, overrides_rule: int, pinned_only: int},
      *     missing_ids: list<int>, results: list<array<string, mixed>>}
      */
     protected function fail(string $code, string $message, bool $dryRun, string $reason): array
@@ -288,7 +431,8 @@ class HolderTypeService
                 'total'           => 0,
                 'clears_system'   => 0,
                 'needs_system'    => 0,
-                'reverts_on_sync' => 0,
+                'overrides_rule'  => 0,
+                'pinned_only'     => 0,
             ],
             'missing_ids' => [],
             'results'     => [],

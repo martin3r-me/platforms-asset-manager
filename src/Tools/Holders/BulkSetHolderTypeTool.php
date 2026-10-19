@@ -41,8 +41,10 @@ class BulkSetHolderTypeTool implements ToolContract, ToolMetadataContract
             . 'holder_type: person|function|admin|service|external. dry_run=true liefert nur eine '
             . 'Vorschau samt Nebenwirkungen (clears_system: zugehöriges System geht verloren; '
             . 'needs_system: Funktionskonto ohne System, nach ADR 0019 nicht bewirtschaftbar; '
-            . 'reverts_on_sync: der nächste Sync stellt den Typ wieder zurück, weil eine '
-            . 'Erkennungsregel greift). Ein Wechsel von oder zu function löst die Neuverteilung der '
+            . 'overrides_rule: eine Erkennungsregel ergäbe einen anderen Typ; pinned_only: Typ stimmt '
+            . 'schon, wird nur festgehalten). Der gesetzte Typ wird festgehalten (holder_type_pinned, '
+            . '#896) und vom Sync nicht mehr zurückgestellt; lösen über asset-manager.holder.PUT mit '
+            . 'holder_type_pinned=false. Ein Wechsel von oder zu function löst die Neuverteilung der '
             . 'Lizenzmengen aus — genau einmal, am Ende.';
     }
 

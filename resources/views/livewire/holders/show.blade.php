@@ -69,11 +69,25 @@
                         </x-asset-manager-select>
                         @error('holderType')<span class="text-[10px] text-red-700">{{ $message }}</span>@enderror
 
-                        <p class="text-[10px] text-[var(--am-text-muted)] m-0">
-                            Von Hand gesetzt bleibt der Typ beim nächsten Sync erhalten. Automatisch erkennen
-                            lassen sich Muster über die Regeln in den
-                            <a href="{{ route('asset-manager.settings') }}" wire:navigate class="underline">Moduleinstellungen</a>.
-                        </p>
+                        {{-- Festgehalten oder von den Regeln bestimmt (#896). Ein hier geänderter Typ wird
+                             festgehalten; zurück auf die Regeln geht es nur ausdrücklich. --}}
+                        @if($holder->holder_type_pinned)
+                            <div class="flex items-start gap-1.5 text-[10px] text-[var(--am-text-secondary)]">
+                                @svg('heroicon-o-lock-closed', 'w-3 h-3 flex-shrink-0 mt-0.5')
+                                <span>Von Hand festgehalten — der Sync ändert den Typ nicht.</span>
+                            </div>
+                            <button type="button" wire:click="releaseTypePin"
+                                    wire:confirm="Festhalten lösen? Der Typ wird sofort aus den Erkennungsregeln bestimmt (ergäbe: {{ $ruleTypeLabel }})."
+                                    class="text-[10px] text-[var(--am-accent)] underline hover:opacity-80">
+                                Regeln entscheiden lassen (ergäbe: {{ $ruleTypeLabel }})
+                            </button>
+                        @else
+                            <p class="text-[10px] text-[var(--am-text-muted)] m-0">
+                                Bestimmt von den Erkennungsregeln in den
+                                <a href="{{ route('asset-manager.settings') }}" wire:navigate class="underline">Moduleinstellungen</a>.
+                                Wer den Typ hier ändert, hält ihn fest — auch gegen den nächsten Sync.
+                            </p>
+                        @endif
 
                         @if($holderType === 'function')
                             <div class="pt-1.5 space-y-1.5">
@@ -204,7 +218,7 @@
                     </x-slot>
                     <div class="divide-y divide-[color:var(--am-border)]">
                         @foreach($devices as $d)
-                            <a href="{{ route('asset-manager.devices.show', $d) }}" wire:navigate class="flex items-center gap-3 px-5 py-3 hover:bg-[var(--am-bg)]">
+                            <a href="{{ route('asset-manager.inventory.show', ['type' => 'intune', 'id' => $d->id]) }}" wire:navigate class="flex items-center gap-3 px-5 py-3 hover:bg-[var(--am-bg)]">
                                 @svg('heroicon-o-computer-desktop', 'w-4 h-4 text-[var(--am-text-muted)] flex-shrink-0')
                                 <div class="flex-1 min-w-0">
                                     <div class="text-sm font-medium text-[var(--am-text)] truncate">{{ $d->device_name }}</div>
@@ -260,7 +274,7 @@
                     </x-slot>
                     <div class="divide-y divide-[color:var(--am-border)]">
                         @foreach($items as $it)
-                            <a href="{{ route('asset-manager.assets.show', $it) }}" wire:navigate class="flex items-center gap-3 px-5 py-3 hover:bg-[var(--am-bg)]">
+                            <a href="{{ route('asset-manager.inventory.show', ['type' => 'manual', 'id' => $it->id]) }}" wire:navigate class="flex items-center gap-3 px-5 py-3 hover:bg-[var(--am-bg)]">
                                 @if($it->category?->icon) @svg($it->category->icon, 'w-4 h-4 text-[var(--am-text-muted)] flex-shrink-0') @else @svg('heroicon-o-cube', 'w-4 h-4 text-[var(--am-text-muted)] flex-shrink-0') @endif
                                 <div class="flex-1 min-w-0">
                                     <div class="text-sm font-medium text-[var(--am-text)] truncate">{{ $it->name }}</div>
@@ -383,6 +397,36 @@
                             Folgt der Zählregel des Abrechnungsprofils — keine Einzelausnahme hinterlegt.
                         </p>
                     @endif
+                </x-asset-manager-panel>
+            @endif
+
+            {{-- Verlauf (#897): nur die geldwirksamen Felder — Kostenstelle und Abrechnungs-Ausnahme.
+                 Sichtbar für alle Team-Mitglieder: „wer hat das gesetzt" ist eine Lesefrage. --}}
+            @if($events->isNotEmpty())
+                <x-asset-manager-panel title="Verlauf" body-class="p-0">
+                    <x-slot name="actions">
+                        <span class="text-xs text-[var(--am-text-secondary)]">Kostenstelle &amp; Weiterberechnung</span>
+                    </x-slot>
+                    <div class="divide-y divide-[color:var(--am-border)]">
+                        @foreach($events as $event)
+                            <div class="flex items-start gap-3 px-5 py-2.5" wire:key="hev-{{ $event->id }}">
+                                <x-asset-manager-badge :color="$event->eventColor()" size="xs" class="flex-shrink-0 mt-0.5">{{ $event->eventLabel() }}</x-asset-manager-badge>
+                                <div class="flex-1 min-w-0 text-xs text-[var(--am-text)]">
+                                    @if($event->event_type === \Platform\AssetManager\Models\AssetHolderEvent::TYPE_COST_CENTER)
+                                        <span class="tabular-nums">{{ $event->old_value ?? '—' }}</span> → <span class="tabular-nums font-medium">{{ $event->new_value ?? '—' }}</span>
+                                    @elseif($event->new_value || $event->old_value)
+                                        {{ $event->new_value ?? $event->old_value }}
+                                    @else
+                                        <span class="text-[var(--am-text-muted)]">{{ $event->description }}</span>
+                                    @endif
+                                </div>
+                                <div class="text-[11px] text-[var(--am-text-secondary)] whitespace-nowrap text-right">
+                                    {{ $event->created_at?->format('d.m.Y H:i') }}
+                                    · {{ $event->actor?->name ?? 'System' }}
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
                 </x-asset-manager-panel>
             @endif
 

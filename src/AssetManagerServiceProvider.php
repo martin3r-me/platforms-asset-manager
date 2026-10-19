@@ -159,6 +159,8 @@ class AssetManagerServiceProvider extends ServiceProvider
             // Asset-Träger
             $registry->register(new \Platform\AssetManager\Tools\Holders\ListHoldersTool());
             $registry->register(new \Platform\AssetManager\Tools\Holders\GetHolderTool());
+            // Träger von Hand anlegen (#881) — Manuell-Tenant ohne Verzeichnis.
+            $registry->register(new \Platform\AssetManager\Tools\Holders\CreateHolderTool());
             $registry->register(new \Platform\AssetManager\Tools\Holders\UpdateHolderTool());
             $registry->register(new \Platform\AssetManager\Tools\Holders\BulkAssignCostCenterTool());
             $registry->register(new \Platform\AssetManager\Tools\Holders\BulkSetHolderTypeTool());

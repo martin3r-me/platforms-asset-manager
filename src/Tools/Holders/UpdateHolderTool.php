@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetHolder;
+use Platform\AssetManager\Models\AssetHolderEvent;
 use Platform\AssetManager\Services\BillingExclusionService;
 use Platform\AssetManager\Services\CostBootstrapService;
 use Platform\AssetManager\Services\HolderTypeService;
@@ -37,7 +38,9 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
         return 'PUT /asset-manager/holder - Aktualisiert EINEN Asset-Träger (per id ODER '
             . 'user_principal_name). Optionale Felder: cost_center (Kostenstellen-Code; setzt Code + '
             . 'cost_center_id konsistent; "" leert die Zuordnung), department, is_active (boolean), '
-            . 'job_title, holder_type (person|function|admin|service|external), billing_excluded '
+            . 'job_title, holder_type (person|function|admin|service|external; wird festgehalten und '
+            . 'vom Sync nicht zurückgestellt, #896), holder_type_pinned (false = Festhalten lösen, die '
+            . 'Erkennungsregeln bestimmen den Typ sofort neu; true = aktuellen Typ festhalten), billing_excluded '
             . '(boolean; true nimmt den Träger von der Weiterberechnung aus und verlangt dann '
             . 'billing_exclusion_reason, ADR 0024). Unbekannter Kostenstellen-Code wird nur mit '
             . 'create_missing=true angelegt, sonst Fehler. Hinweis: is_active kommt aus Entra und '
@@ -56,7 +59,8 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
                 'department'          => ['type' => 'string', 'description' => 'Abteilung.'],
                 'is_active'           => ['type' => 'boolean', 'description' => 'Aktiv-Status.'],
                 'job_title'           => ['type' => 'string', 'description' => 'Jobtitel.'],
-                'holder_type'         => ['type' => 'string', 'enum' => ['person', 'function', 'admin', 'service', 'external'], 'description' => 'Traeger-Typ (ADR 0017). Nicht-Personen werden gelabelt, nicht gefiltert.'],
+                'holder_type'         => ['type' => 'string', 'enum' => ['person', 'function', 'admin', 'service', 'external'], 'description' => 'Traeger-Typ (ADR 0017). Nicht-Personen werden gelabelt, nicht gefiltert. Wird festgehalten (#896).'],
+                'holder_type_pinned'  => ['type' => 'boolean', 'description' => 'false = Festhalten lösen, Typ kommt wieder aus den Erkennungsregeln (#896). true = aktuellen Typ festhalten. Nicht zusammen mit holder_type=… und false.'],
                 'billing_excluded'    => ['type' => 'boolean', 'description' => 'true = von der Weiterberechnung ausnehmen (ADR 0024), false = Ausnahme aufheben.'],
                 'billing_exclusion_reason' => ['type' => 'string', 'description' => 'Grund der Ausnahme. Pflicht bei billing_excluded=true.'],
                 'account_type'        => ['type' => 'string', 'description' => 'DEPRECATED - Alias von holder_type.'],
@@ -134,6 +138,12 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('VALIDATION_ERROR', 'holder_type muss einer von person|function|admin|service|external sein.');
             }
 
+            // Typ setzen UND Festhalten lösen widerspricht sich — das Setzen hält fest (#896).
+            if (array_key_exists('holder_type_pinned', $arguments) && ! (bool) $arguments['holder_type_pinned']
+                && ! empty($arguments['holder_type'])) {
+                return ToolResult::error('VALIDATION_ERROR', 'holder_type und holder_type_pinned=false widersprechen sich: ein gesetzter Typ wird immer festgehalten.');
+            }
+
             foreach (['department', 'job_title'] as $field) {
                 if (array_key_exists($field, $arguments)) {
                     $emp->{$field} = $arguments[$field] !== '' ? $arguments[$field] : null;
@@ -147,8 +157,10 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
             // Abrechnungs-Ausnahme (z. B. ohne Grund) oder der Typ abgelehnt wurde — die Antwort
             // meldete einen Fehler, ein Teil der Änderung stand aber trotzdem in der Datenbank.
             $failure = null;
+            // Urheber für den Verlauf (#897): der Tool-Kontext kennt ihn, der Auth-Guard nicht zwingend.
+            $actorId = isset($context->user->id) ? (int) $context->user->id : null;
             try {
-                DB::transaction(function () use ($emp, $arguments, $teamId, $context, &$failure) {
+                AssetHolderEvent::actingAs($actorId, fn () => DB::transaction(function () use ($emp, $arguments, $teamId, $context, &$failure) {
                     $emp->save();
 
                     // Die Abrechnungs-Ausnahme läuft NICHT über die Feldschleife: an ihr hängen drei Felder
@@ -194,7 +206,23 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
 
                         $emp->refresh();
                     }
-                });
+
+                    // Festhalten lösen oder ausdrücklich festhalten (#896) — ebenfalls über den
+                    // Service, damit Neubestimmung und Neuverteilung dieselben bleiben wie im UI.
+                    if (array_key_exists('holder_type_pinned', $arguments)) {
+                        $types  = app(HolderTypeService::class);
+                        $result = (bool) $arguments['holder_type_pinned']
+                            ? $types->setType($teamId, (int) $emp->tenant_id, [$emp->id], (string) $emp->holder_type)
+                            : $types->releasePin($teamId, (int) $emp->tenant_id, [$emp->id]);
+
+                        if (! $result['ok']) {
+                            $failure = ToolResult::error($result['code'] ?? 'VALIDATION_ERROR', $result['message']);
+                            throw new \RuntimeException('rollback');
+                        }
+
+                        $emp->refresh();
+                    }
+                }));
             } catch (\RuntimeException $e) {
                 if ($failure !== null) {
                     return $failure;
@@ -216,6 +244,7 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
                 'billing_excluded_reason' => $emp->billing_excluded_reason,
                 'job_title'         => $emp->job_title,
                 'holder_type'       => $emp->holder_type,
+                'holder_type_pinned' => (bool) $emp->holder_type_pinned,
                 'account_type'      => $emp->holder_type, // DEPRECATED - Alias
                 'message'           => "Asset-Träger '{$emp->name}' aktualisiert.",
             ]);

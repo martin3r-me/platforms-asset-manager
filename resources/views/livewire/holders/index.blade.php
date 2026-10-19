@@ -9,6 +9,18 @@
             ['label' => 'Asset-Träger', 'icon' => 'users'],
         ]">
             <x-slot name="actions">
+                {{-- CSV folgt dem aktiven Filter (#886) — Lesepfad, daher für alle Team-Mitglieder. --}}
+                <x-asset-manager-button variant="ghost" size="sm" wire:click="exportCsv" wire:loading.attr="disabled" wire:target="exportCsv">
+                    @svg('heroicon-o-arrow-down-tray', 'w-3.5 h-3.5')
+                    Export CSV
+                </x-asset-manager-button>
+                {{-- Träger von Hand anlegen (#881) — der Weg für Tenants ohne Microsoft-Anbindung. --}}
+                @if($canManage)
+                    <x-asset-manager-button variant="primary" size="sm" wire:click="openCreate">
+                        @svg('heroicon-o-user-plus', 'w-3.5 h-3.5')
+                        Träger anlegen
+                    </x-asset-manager-button>
+                @endif
             </x-slot>
         </x-asset-manager-page-actionbar>
     </x-slot>
@@ -132,6 +144,7 @@
                     ['key' => 'with_asset',   'label' => 'Mit Asset',       'count' => $counts['with_asset'],   'color' => 'indigo',  'icon' => 'heroicon-o-cube-transparent', 'hint' => 'mindestens ein manuelles Asset'],
                     ['key' => 'unassigned',   'label' => 'Ohne alles',      'count' => $counts['unassigned'],   'color' => 'amber',   'icon' => 'heroicon-o-exclamation-triangle', 'hint' => 'Karteileichen — keine Zuweisung'],
                     ['key' => 'inactive',     'label' => 'Inaktiv',         'count' => $counts['inactive'],     'color' => 'red',     'icon' => 'heroicon-o-user-minus',       'hint' => 'is_active = false'],
+                    ['key' => 'offboarding',  'label' => 'Offboarding',     'count' => $counts['offboarding'],  'color' => 'amber',   'icon' => 'heroicon-o-archive-box',      'hint' => 'stillgelegt, hält aber noch Lizenz, Gerät, Asset, Zuordnung oder Übergabeprotokoll'],
                     ['key' => 'billing_excluded', 'label' => 'Nicht berechnet', 'count' => $counts['billing_excluded'], 'color' => 'slate', 'icon' => 'heroicon-o-receipt-percent', 'hint' => 'Einzelausnahme von der Weiterberechnung (ADR 0024)'],
                     ['key' => 'all',          'label' => 'Alle',            'count' => $counts['all'],          'color' => 'gray',    'icon' => 'heroicon-o-list-bullet',      'hint' => 'jeder Eintrag in der Tabelle'],
                 ];
@@ -203,6 +216,22 @@
                 </div>
             @endif
 
+            {{-- Offboarding (#884): reine Sicht, nichts wird zurückgenommen (ADR 0023, ADR 0021). --}}
+            @if($offboarding)
+                <div class="flex items-start gap-2 px-3 py-2 rounded-lg bg-[var(--am-bg)] border border-[color:var(--am-border)]">
+                    @svg('heroicon-o-information-circle', 'w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--am-text-muted)]')
+                    <p class="text-xs text-[var(--am-text-secondary)] m-0">
+                        Stillgelegte Träger, an denen noch etwas hängt: Lizenz, Intune-Gerät, manuelles Asset,
+                        offene Zuordnung oder ein nicht zurückgenommenes Übergabeprotokoll. Die Sicht nimmt
+                        nichts zurück und bucht nichts aus — zurückholen und umhängen bleibt eine bewusste Handlung
+                        auf der Detailseite.
+                        @if(! $showCosts)
+                            Monatsbeträge erscheinen nur bei aktivem Controlling.
+                        @endif
+                    </p>
+                </div>
+            @endif
+
             @if($flash)
                 <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                     {{ $flash }}
@@ -244,6 +273,13 @@
                                     <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Assets</th>
                                     <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Lizenzen</th>
                                     <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">Quelle</th>
+                                    @if($offboarding)
+                                        <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]" title="Zuordnungen ohne Ende">Offene Zuordn.</th>
+                                        <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]" title="Übergabeprotokolle offen oder teilweise zurück">Offene Protok.</th>
+                                        @if($showCosts)
+                                            <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--am-text-muted)]">€ / Monat</th>
+                                        @endif
+                                    @endif
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-[color:var(--am-border)]">
@@ -299,6 +335,13 @@
                                                 <x-asset-manager-badge color="gray" size="xs">Abgeleitet</x-asset-manager-badge>
                                             @endif
                                         </td>
+                                        @if($offboarding)
+                                            <td class="px-5 py-3 text-right text-sm tabular-nums text-[var(--am-text)]">{{ $openAssignmentCounts[$emp->id] ?? 0 }}</td>
+                                            <td class="px-5 py-3 text-right text-sm tabular-nums text-[var(--am-text)]">{{ $openHandoverCounts[$emp->id] ?? 0 }}</td>
+                                            @if($showCosts)
+                                                <td class="px-5 py-3 text-right text-sm tabular-nums text-[var(--am-text)] whitespace-nowrap">{{ number_format((float) ($rowCosts[$emp->id]['total'] ?? 0), 2, ',', '.') }} €</td>
+                                            @endif
+                                        @endif
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -325,5 +368,6 @@
     @if($canManage)
         @include('asset-manager::livewire.holders.partials.modal-bulk-billing')
         @include('asset-manager::livewire.holders.partials.modal-bulk-type')
+        @include('asset-manager::livewire.holders.partials.modal-create')
     @endif
 </x-ui-page>

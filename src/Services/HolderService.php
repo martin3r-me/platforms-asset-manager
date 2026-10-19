@@ -5,7 +5,9 @@ namespace Platform\AssetManager\Services;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Platform\AssetManager\Models\AssetDevice;
+use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetHolder;
+use Platform\AssetManager\Models\AssetHolderEvent;
 use Platform\AssetManager\Models\AssetHandover;
 use Platform\AssetManager\Models\AssetTenant;
 use Platform\AssetManager\Models\AssetUserLicense;
@@ -66,6 +68,17 @@ class HolderService
             'user_principal_name' => $upn,
         ]);
 
+        // Rückfall ohne Rücksicht auf Groß-/Kleinschreibung (#881): ein von Hand angelegter Träger
+        // („max.muster@firma.de") muss vom Sync gefunden werden, auch wenn Entra die UPN gemischt
+        // schreibt. MySQL vergleicht mit der Standard-Kollation ohnehin so, SQLite/Postgres nicht —
+        // ohne den Rückfall hinge das Verhalten an der Datenbank. Zweite Abfrage nur bei Fehltreffer.
+        if (! $holder->exists) {
+            $match = $this->findByUpnInsensitive($tenantId, $upn);
+            if ($match !== null) {
+                $holder = $match;
+            }
+        }
+
         if (!$holder->exists) {
             $holder->team_id      = $teamId;
             $holder->source       = $source;
@@ -110,6 +123,153 @@ class HolderService
     }
 
     /**
+     * Träger eines Tenants per UPN finden — ohne Rücksicht auf Groß-/Kleinschreibung.
+     *
+     * Verglichen wird die normalisierte UPN (Papierkorb-Präfix ab, ADR 0023) in Kleinschreibung.
+     */
+    public function findByUpnInsensitive(int $tenantId, string $upn): ?AssetHolder
+    {
+        $needle = mb_strtolower(self::normalizeUpn($upn));
+
+        if ($needle === '') {
+            return null;
+        }
+
+        return AssetHolder::withoutTenantScope()
+            ->where('tenant_id', $tenantId)
+            ->whereRaw('LOWER(user_principal_name) = ?', [$needle])
+            ->orderBy('id')
+            ->first();
+    }
+
+    /**
+     * Asset-Träger von Hand anlegen (#881) — der Weg für einen Tenant ohne Microsoft-Anbindung, für
+     * Externe und für Träger, die das Verzeichnis (noch) nicht kennt.
+     *
+     * Läuft über dieselben Regeln wie der Sync: UPN normalisiert (Papierkorb-Präfix, ADR 0023),
+     * eindeutig je Tenant ohne Rücksicht auf Schreibweise, Typ aus den Tenant-Regeln — es sei denn,
+     * der Mensch gibt ihn an; dann ist er festgehalten (#896). `source = 'manual'`: der Reconcile aus
+     * ADR 0023 fasst nur `graph` an, ein manueller Träger wird also nie stillgelegt. Findet der Sync
+     * später dieselbe UPN, reichert er diesen Träger an, statt einen zweiten anzulegen
+     * ({@see findOrCreateByUpn()}).
+     *
+     * Rückgabe wie im übrigen Service-Layer: `ok = false` heißt bewusst blockiert mit Begründung.
+     * **Autorisierung ist Aufruferpflicht.**
+     *
+     * @param  array{user_principal_name?: ?string, display_name?: ?string, email?: ?string,
+     *               holder_type?: ?string, cost_center_id?: int|string|null, cost_center?: ?string,
+     *               department?: ?string, job_title?: ?string}  $data
+     * @return array{ok: bool, code: ?string, message: string, holder: ?AssetHolder, existing_id?: int}
+     */
+    public function createManual(int $teamId, int $tenantId, array $data): array
+    {
+        $fail = fn (string $code, string $message, array $extra = []) => [
+            'ok' => false, 'code' => $code, 'message' => $message, 'holder' => null,
+        ] + $extra;
+
+        $upn = self::normalizeUpn(trim((string) ($data['user_principal_name'] ?? '')));
+
+        if ($upn === '') {
+            return $fail('VALIDATION_ERROR', 'Die UPN ist Pflicht — sie ist der Identitätsanker des Trägers.');
+        }
+
+        // Bewusst kein FILTER_VALIDATE_EMAIL: Gast-UPNs (`name_firma.de#EXT#@kunde.onmicrosoft.com`)
+        // sind gültige Anmeldenamen, aber keine RFC-Adressen.
+        if (mb_strlen($upn) > 255 || ! preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', $upn)) {
+            return $fail('VALIDATION_ERROR', 'Die UPN muss wie eine Anmeldeadresse aussehen (name@firma.de).');
+        }
+
+        $tenantOk = AssetTenant::query()->whereKey($tenantId)->where('team_id', $teamId)->exists();
+        if (! $tenantOk) {
+            return $fail('NOT_FOUND', 'Tenant nicht gefunden.');
+        }
+
+        $existing = $this->findByUpnInsensitive($tenantId, $upn);
+        if ($existing !== null) {
+            return $fail(
+                'DUPLICATE',
+                "Es gibt bereits einen Träger mit dieser UPN ({$existing->user_principal_name}).",
+                ['existing_id' => (int) $existing->id],
+            );
+        }
+
+        $email = trim((string) ($data['email'] ?? ''));
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            return $fail('VALIDATION_ERROR', 'Die E-Mail-Adresse ist ungültig.');
+        }
+
+        $type = trim((string) ($data['holder_type'] ?? ''));
+        if ($type !== '' && ! in_array($type, AssetHolder::TYPES, true)) {
+            return $fail('VALIDATION_ERROR', 'Unbekannter Träger-Typ. Erlaubt: ' . implode(', ', AssetHolder::TYPES) . '.');
+        }
+
+        // Kostenstelle team- UND tenant-gebunden auflösen (Cross-Team-FK-Muster): eine fremde ID darf
+        // nicht still übernommen werden. Code und FK werden immer gemeinsam gesetzt.
+        $center   = null;
+        $centerId = $data['cost_center_id'] ?? null;
+        $code     = trim((string) ($data['cost_center'] ?? ''));
+
+        if ($centerId !== null && $centerId !== '') {
+            $center = AssetCostCenter::withoutTenantScope()->forTenant($tenantId)
+                ->where('team_id', $teamId)->whereKey((int) $centerId)->first();
+            if ($center === null) {
+                return $fail('COST_CENTER_NOT_FOUND', 'Kostenstelle nicht gefunden.');
+            }
+        } elseif ($code !== '') {
+            $center = AssetCostCenter::withoutTenantScope()->forTenant($tenantId)
+                ->where('team_id', $teamId)->where('code', $code)->first();
+            if ($center === null) {
+                return $fail('COST_CENTER_NOT_FOUND', "Kostenstelle '{$code}' existiert nicht.");
+            }
+        }
+
+        $holder = new AssetHolder([
+            'team_id'             => $teamId,
+            'tenant_id'           => $tenantId,
+            'user_principal_name' => $upn,
+            'display_name'        => self::blankToNull($data['display_name'] ?? null),
+            'email'               => $email !== '' ? $email : $upn,
+            'department'          => self::blankToNull($data['department'] ?? null),
+            'job_title'           => self::blankToNull($data['job_title'] ?? null),
+            'cost_center'         => $center?->code,
+            'cost_center_id'      => $center?->id,
+            'is_active'           => true,
+            'source'              => 'manual',
+        ]);
+
+        // Typ angegeben = ein Mensch hat entschieden → festhalten (#896). Sonst entscheiden die Regeln,
+        // wie bei jedem Sync-Träger.
+        if ($type !== '') {
+            $holder->holder_type        = $type;
+            $holder->holder_type_pinned = true;
+        } else {
+            $holder->holder_type        = app(HolderClassifier::class)->classify($holder, $tenantId);
+            $holder->holder_type_pinned = false;
+        }
+
+        try {
+            $holder->save();
+        } catch (UniqueConstraintViolationException) {
+            // Zeitgleich vom Sync angelegt — dann gibt es ihn jetzt, und das ist die richtige Antwort.
+            return $fail('DUPLICATE', 'Es gibt bereits einen Träger mit dieser UPN.');
+        }
+
+        return [
+            'ok'      => true,
+            'code'    => null,
+            'message' => "Asset-Träger '" . ($holder->display_name ?: $holder->user_principal_name) . "' angelegt.",
+            'holder'  => $holder,
+        ];
+    }
+
+    private static function blankToNull(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
+    }
+
+    /**
      * Reichert einen Asset-Träger mit Graph-Profildaten an (department/jobTitle/Rufnummern) — die gemeinsame
      * Precedence-Logik für den User-Import UND den regulären Lizenz-Sync (ADR 0014), damit die Regel nicht
      * dupliziert wird:
@@ -123,8 +283,10 @@ class HolderService
     public function applyGraphProfile(AssetHolder $holder, array $graphUser): void
     {
         // Gastkonto laut Entra (#969): als extern führen, solange der Typ noch der Default ist —
-        // ein bewusst gesetzter Typ bleibt unangetastet.
+        // ein bewusst gesetzter Typ bleibt unangetastet. Ein von Hand festgehaltenes `person` (#896)
+        // ist ein solcher bewusst gesetzter Typ, auch wenn es wie der Default aussieht.
         if (($graphUser['userType'] ?? null) === 'Guest'
+            && ! $holder->holder_type_pinned
             && ($holder->holder_type === null || $holder->holder_type === AssetHolder::TYPE_PERSON)) {
             $holder->holder_type = AssetHolder::TYPE_EXTERNAL;
         }
@@ -258,7 +420,15 @@ class HolderService
                 }
             }
 
-            $holder->update([
+            // Der Verlauf (#897) trägt den Ausnahmegrund als Freitext — derselbe Personenbezug wie am
+            // Träger selbst. Werte leeren, die Tatsache (wann, wer, welche Art) bleibt. Das Leeren am
+            // Träger darf seinerseits keinen neuen Eintrag mit dem alten Grund erzeugen.
+            AssetHolderEvent::withoutTenantScope()
+                ->where('holder_id', $holder->id)
+                ->whereIn('event_type', AssetHolderEvent::BILLING_TYPES)
+                ->update(['old_value' => null, 'new_value' => null]);
+
+            AssetHolderEvent::withoutRecording(fn () => $holder->update([
                 'user_principal_name' => $pseudoUpn,
                 'display_name'        => $pseudoName,
                 'email'               => null,
@@ -269,7 +439,7 @@ class HolderService
                 // Träger nicht berechnet wird, ist eine kaufmännische Tatsache und darf durch eine
                 // Anonymisierung nicht stillschweigend auf eine Rechnung zurückkehren (ADR 0024).
                 'billing_excluded_reason' => null,
-            ]);
+            ]));
         });
     }
 

@@ -96,7 +96,10 @@ class MasterDataDeletionService
 
         // Der alte Code-String am Träger (`cost_center`) bliebe sonst als Altwert neben einer leeren
         // `cost_center_id` stehen und tauchte in Auswertungen über den Freitext wieder auf.
-        AssetHolder::where('team_id', $teamId)->where('cost_center_id', $center->id)->update(['cost_center' => null]);
+        // Je Träger über `save()` statt Query-Builder-`update()`: der Verlust der Kostenstelle ist eine
+        // Buchungsänderung und gehört in den Verlauf (#897). FK und Code gemeinsam leeren.
+        AssetHolder::where('team_id', $teamId)->where('cost_center_id', $center->id)->get()
+            ->each(fn (AssetHolder $holder) => $holder->update(['cost_center' => null, 'cost_center_id' => null]));
 
         // Kinder ausdrücklich abhängen statt sich nur auf nullOnDelete zu verlassen — ohne aktive
         // FK-Prüfung (SQLite) blieben sie sonst unter einer gelöschten Kostenstelle hängen.

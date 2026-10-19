@@ -587,6 +587,68 @@ class CostAggregationService
         ];
     }
 
+    /**
+     * {@see holderCost()} für viele Träger auf einmal — für Listen und Exporte (#884, #886).
+     *
+     * Dieselben drei Buckets nach denselben Regeln, aber mit einer festen Zahl Abfragen statt drei je
+     * Träger: Items über `assignee_id`, Geräte über die (ohnehin gecachten) {@see deviceCostRows()},
+     * Lizenzen über den Seat-Preis des {@see LicensePriceBook}. Ein Träger ohne Kosten bekommt
+     * Nullen, damit der Aufrufer nicht zwischen „0 €" und „fehlt" unterscheiden muss.
+     *
+     * @param  iterable<AssetHolder>  $holders
+     * @return array<int, array{hardware: float, device: float, license: float, total: float}>  je Träger-ID
+     */
+    public function holderCostsFor(int $teamId, iterable $holders): array
+    {
+        $holders = collect($holders);
+        if ($holders->isEmpty()) {
+            return [];
+        }
+
+        $ids  = $holders->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $upns = $holders->pluck('user_principal_name')->filter()->values()->all();
+
+        $itemIdsWithCostLine = $this->itemIdsWithCostLine($teamId);
+        $hardware = AssetItem::with('category')
+            ->where('team_id', $teamId)
+            ->whereIn('assignee_id', $ids)
+            ->get()
+            ->reject(fn ($i) => $itemIdsWithCostLine->has($i->id))
+            ->groupBy('assignee_id')
+            ->map(fn ($group) => (float) $group->sum(fn ($i) => $i->monthlyCost()));
+
+        $device = $this->deviceCostRows($teamId)
+            ->groupBy('upn')
+            ->map(fn ($group) => (float) $group->sum('amount'));
+
+        $license = collect();
+        if ($upns !== []) {
+            $book    = LicensePriceBook::for($teamId);
+            $license = AssetUserLicense::where('team_id', $teamId)
+                ->whereIn('user_principal_name', $upns)
+                ->get()
+                ->groupBy('user_principal_name')
+                ->map(fn ($group) => (float) $group->sum(fn ($lic) => $book->seatPrice($lic)));
+        }
+
+        $result = [];
+        foreach ($holders as $holder) {
+            $upn = $holder->user_principal_name;
+            $h   = (float) ($hardware[$holder->id] ?? 0);
+            $d   = $upn ? (float) ($device[$upn] ?? 0) : 0.0;
+            $l   = $upn ? (float) ($license[$upn] ?? 0) : 0.0;
+
+            $result[(int) $holder->id] = [
+                'hardware' => round($h, 2),
+                'device'   => round($d, 2),
+                'license'  => round($l, 2),
+                'total'    => round($h + $d + $l, 2),
+            ];
+        }
+
+        return $result;
+    }
+
     /** Map-Key für den (Hersteller, Modell)-Abgleich Gerät ↔ Geräte-Modell — delegiert an die zentrale Normalisierung. */
     protected function deviceModelKey(?string $manufacturer, ?string $model): string
     {

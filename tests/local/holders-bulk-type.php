@@ -35,6 +35,7 @@ Schema::create('asset_holders', function (Blueprint $t) {
     $t->unsignedBigInteger('cost_center_id')->nullable();
     $t->string('source')->default('graph');
     $t->string('holder_type')->default('person');
+    $t->boolean('holder_type_pinned')->default(false);   // #896
     $t->string('function_system')->nullable();
     $t->boolean('is_active')->default(true);
     $t->timestamps();

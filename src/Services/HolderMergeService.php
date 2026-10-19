@@ -44,6 +44,8 @@ class HolderMergeService
         'asset_cost_lines'  => ['assignee_id'],
         'asset_assignments' => ['holder_id', 'employee_id'],
         'asset_handovers'   => ['holder_id', 'employee_id'],
+        // Verlauf (#897): die Spur der Dublette gehört nach dem Zusammenführen zum Ziel.
+        'asset_holder_events' => ['holder_id'],
     ];
 
     /**

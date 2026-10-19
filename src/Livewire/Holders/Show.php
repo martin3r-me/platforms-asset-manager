@@ -36,7 +36,8 @@ class Show extends Component
     /**
      * Träger-Typ (ADR 0017). Von Hand setzbar, weil die Erkennungsregeln nur Namensmuster kennen: ein
      * Funktionskonto, dessen Kennung wie die einer Person aussieht, findet keine Regel. Ein hier
-     * gesetzter Nicht-Personen-Typ **überlebt jeden Sync** ({@see HolderClassifier::classify()}).
+     * geänderter Typ wird **festgehalten** (`holder_type_pinned`, #896) und überlebt jeden Sync —
+     * auch `person`, das vorher an die Tenant-Regel zurückfiel ({@see HolderClassifier::classify()}).
      *
      * Für die Lizenz-Verteilung ist das der entscheidende Schalter: nur Funktionskonten erhalten die
      * Monatspreis-Zeilen (ADR 0019, Schritt 1).
@@ -127,8 +128,14 @@ class Show extends Component
         $isFunction   = $this->holderType === AssetHolder::TYPE_FUNCTION;
         $systemBefore = $this->holder->function_system;
 
+        // Ein Mensch hat den Typ geändert → festhalten (#896). Nur bei echter Änderung: das Formular
+        // schickt den Typ bei jedem Speichern mit, auch wenn nur ein Tippfehler im Namen korrigiert
+        // wird — das allein soll keinen Regel-Typ festschreiben.
+        $pin = $typeBefore !== $this->holderType ? true : (bool) $this->holder->holder_type_pinned;
+
         $this->holder->update([
             'holder_type'    => $this->holderType,
+            'holder_type_pinned' => $pin,
             'display_name'   => $this->displayName ?: null,
             'email'          => $this->email ?: null,
             'department'     => $this->department ?: null,
@@ -155,6 +162,25 @@ class Show extends Component
         }
 
         $this->saved = true;
+    }
+
+    /**
+     * Festhalten lösen — der Typ kommt wieder aus den Erkennungsregeln (#896).
+     *
+     * Bestimmt den Typ sofort neu (nicht erst beim nächsten Sync) und verteilt Lizenzen neu, wenn
+     * dabei die Funktionskonto-Grenze überquert wird — dieselbe Regel wie MCP `holder.PUT`.
+     */
+    public function releaseTypePin(HolderTypeService $types): void
+    {
+        Gate::authorize('asset-manager.manage');
+        $this->assertTenantBoundary($this->holder);
+
+        $types->releasePin((int) $this->holder->team_id, (int) $this->holder->tenant_id, [(int) $this->holder->id]);
+
+        $this->holder->refresh();
+        $this->holderType     = $this->holder->holder_type ?? AssetHolder::TYPE_PERSON;
+        $this->functionSystem = $this->holder->function_system ?? '';
+        $this->saved          = true;
     }
 
     /**
@@ -358,8 +384,30 @@ class Show extends Component
             ->orderBy('extension')
             ->get();
 
+        // Verlauf der geldwirksamen Felder (#897) — kurz, die jüngsten zuerst. Vor der Migration gibt
+        // es die Tabelle noch nicht; dann bleibt der Block einfach leer.
+        $events = \Illuminate\Support\Facades\Schema::hasTable('asset_holder_events')
+            ? \Platform\AssetManager\Models\AssetHolderEvent::with('actor')
+                ->where('team_id', $teamId)
+                ->where('holder_id', $this->holder->id)
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->limit(15)
+                ->get()
+            : collect();
+
+        // Was die Regeln ohne Festhalten entschieden (#896) — damit „Regeln entscheiden lassen" nicht
+        // ins Blaue geklickt wird.
+        $ruleTypeLabel = $this->holder->holder_type_pinned
+            ? AssetHolder::holderTypeLabelFor(
+                app(HolderTypeService::class)->ruleTypeFor($this->holder, (int) $this->holder->tenant_id),
+            )
+            : null;
+
         return view('asset-manager::livewire.holders.show', [
             'holder'           => $this->holder,
+            'events'             => $events,
+            'ruleTypeLabel'      => $ruleTypeLabel,
             'telephonySeats'     => $telephonySeats,
             'items'              => $items,
             'devices'            => $devices,

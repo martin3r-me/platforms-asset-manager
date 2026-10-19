@@ -5,6 +5,7 @@ namespace Platform\AssetManager\Tools\Holders;
 use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetHolder;
+use Platform\AssetManager\Models\AssetHolderEvent;
 use Platform\AssetManager\Services\CostBootstrapService;
 use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
@@ -94,6 +95,7 @@ class BulkAssignCostCenterTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('ACCESS_DENIED', 'Diese Aktion erfordert die Rolle Owner oder Admin im Team.');
             }
 
+            $actorId       = isset($context->user->id) ? (int) $context->user->id : null;
             $createMissing = (bool) ($arguments['create_missing'] ?? false);
             $dryRun        = (bool) ($arguments['dry_run'] ?? false);
 
@@ -203,7 +205,8 @@ class BulkAssignCostCenterTool implements ToolContract, ToolMetadataContract
 
                 $emp->cost_center    = $center->code;
                 $emp->cost_center_id = $center->id;
-                $emp->save();
+                // Verlauf (#897): der Tool-Kontext kennt den Urheber, der Auth-Guard nicht zwingend.
+                AssetHolderEvent::actingAs($actorId, fn () => $emp->save());
                 $touched[$emp->id] = true;
                 $updated++;
                 $results[] = ['ref' => $ref, 'holder' => $emp->name, 'status' => 'updated', 'from' => $from, 'to' => $center->label ?? $code];

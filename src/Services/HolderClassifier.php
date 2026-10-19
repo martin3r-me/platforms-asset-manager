@@ -41,16 +41,26 @@ class HolderClassifier
      * Typ für einen Träger bestimmen.
      *
      * Reihenfolge und ihre Begründung:
+     *  0. **Von Hand festgehalten** (`holder_type_pinned`, #896) — ein Mensch hat den Typ ausdrücklich
+     *     gesetzt; das schlägt jede Ableitung, auch die beiden Fakten unten. Vorher ließ sich
+     *     „manuell gesetzt" nur über „nicht Default" erkennen, und für `person` stimmte das nie: die
+     *     Korrektur fiel beim nächsten Sync an die Tenant-Regel zurück. Zurück auf „Regeln
+     *     entscheiden" geht es über {@see HolderTypeService::releasePin()}.
      *  1. **Funktionskonto an der synthetischen UPN** — das ist eine Tatsache über die Herkunft des
      *     Datensatzes, keine Konvention, und darf von einer Kundenregel nicht übersteuert werden.
-     *  2. **Ein bereits gesetzter Nicht-Default-Typ** — eine manuelle Korrektur im UI ist die bessere
-     *     Information als jede Regel und überlebt daher jeden Sync.
+     *  2. **Ein bereits gesetzter Nicht-Default-Typ** — Bestandsschutz für Korrekturen von vor #896
+     *     (ohne Flag) und für Typen, die der Sync selbst gesetzt hat (Entra-Gast → `external`). Ein
+     *     neuer, von Hand gesetzter Typ ist über Stufe 0 geschützt.
      *  3. **Tenant-Regeln**, erste Übereinstimmung.
      *  4. `person` als Default.
      */
     public function classify(AssetHolder $holder, ?int $tenantId = null): string
     {
         $upn = (string) $holder->user_principal_name;
+
+        if ($holder->holder_type_pinned && in_array($holder->holder_type, AssetHolder::TYPES, true)) {
+            return $holder->holder_type;
+        }
 
         if ($upn !== '' && str_ends_with(mb_strtolower($upn), self::FUNCTION_UPN_SUFFIX)) {
             return AssetHolder::TYPE_FUNCTION;

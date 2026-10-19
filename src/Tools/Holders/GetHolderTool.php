@@ -174,6 +174,19 @@ class GetHolderTool implements ToolContract, ToolMetadataContract
                 ->whereHas('costType', fn ($q) => $q->where('aggregation_source', AssetCostType::SOURCE_COST_LINE))
                 ->sum('monthly_amount');
 
+            // Verlauf (#897) — vor der Migration gibt es die Tabelle noch nicht; dann leer statt Fehler.
+            $history = \Illuminate\Support\Facades\Schema::hasTable('asset_holder_events')
+                ? $emp->events()->with('actor')->limit(20)->get()->map(fn ($e) => [
+                    'at'          => $e->created_at?->toIso8601String(),
+                    'event_type'  => $e->event_type,
+                    'label'       => $e->eventLabel(),
+                    'old_value'   => $e->old_value,
+                    'new_value'   => $e->new_value,
+                    'description' => $e->description,
+                    'by'          => $e->actor?->name,
+                ])->values()->all()
+                : [];
+
             return ToolResult::success([
                 'holder' => [
                     'id'                  => $emp->id,
@@ -193,6 +206,8 @@ class GetHolderTool implements ToolContract, ToolMetadataContract
                     ] : null,
                     'holder_type'         => $emp->holder_type,
                     'holder_type_label'   => $emp->holderTypeLabel(),
+                    // Von Hand festgehalten (#896): der Sync stellt den Typ dann nicht mehr um.
+                    'holder_type_pinned'  => (bool) $emp->holder_type_pinned,
                     // Explizit, damit ein Modell nicht aus dem Typ-String raten muss, ob es eine
                     // Person vor sich hat (ADR 0017).
                     'is_person'           => ! $emp->isNonPerson(),
@@ -207,6 +222,8 @@ class GetHolderTool implements ToolContract, ToolMetadataContract
                 'items'          => $items,
                 'licenses'       => $licenses,
                 'cost_lines'     => $costLines,
+                // Verlauf der geldwirksamen Felder (#897): Kostenstelle und Abrechnungs-Ausnahme.
+                'history'        => $history,
                 'monthly_costs'  => [
                     'hardware'  => $hardware,
                     'licenses'  => round($licCost, 2),

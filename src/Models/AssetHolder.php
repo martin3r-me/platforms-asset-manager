@@ -86,6 +86,8 @@ class AssetHolder extends Model
         'billing_excluded_reason',
         'billing_excluded_by',
         'holder_type',
+        // Von Hand festgehaltener Typ (#896): Klassifizierer und Entra-Gastregel lassen ihn stehen.
+        'holder_type_pinned',
         // Zugehöriges System eines Funktionskontos — zusammen mit der Kostenstelle die zweite
         // Pflichtangabe, ohne die die Lizenz-Verteilungs-Kaskade ein Funktionskonto nicht
         // bevorzugt behandelt. Freitext, weil „das System" je Kunde etwas anderes ist.
@@ -101,11 +103,35 @@ class AssetHolder extends Model
 
     protected $casts = [
         'is_active'           => 'boolean',
+        'holder_type_pinned'  => 'boolean',
         'billing_excluded_at' => 'datetime',
         'phone_overridden'    => 'boolean',
         'raw_data'         => 'array',
         'synced_at'        => 'datetime',
     ];
+
+    /**
+     * Verlauf der geldwirksamen Felder (#897): jede Änderung an Kostenstelle oder
+     * Abrechnungs-Ausnahme, die über `save()` läuft, landet in {@see AssetHolderEvent} — egal über
+     * welchen Schreibweg. Query-Builder-`update()` umgeht das (bewusst nur im Team-Reset).
+     */
+    protected static function booted(): void
+    {
+        static::created(fn (self $holder) => AssetHolderEvent::recordChanges($holder, true));
+        static::updated(fn (self $holder) => AssetHolderEvent::recordChanges($holder));
+    }
+
+    /** Verlauf (Kostenstelle, Abrechnungs-Ausnahme), neueste zuerst. */
+    public function events(): HasMany
+    {
+        return $this->hasMany(AssetHolderEvent::class, 'holder_id')->orderByDesc('created_at')->orderByDesc('id');
+    }
+
+    /** Ist der Typ von Hand festgehalten (#896)? */
+    public function isHolderTypePinned(): bool
+    {
+        return (bool) $this->holder_type_pinned;
+    }
 
     public function team(): BelongsTo
     {

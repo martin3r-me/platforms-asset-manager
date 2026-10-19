@@ -19,6 +19,7 @@ use Platform\AssetManager\Models\AssetDeviceModel;
 use Platform\AssetManager\Models\AssetDeviceSource;
 use Platform\AssetManager\Models\AssetDeviceSyncLog;
 use Platform\AssetManager\Models\AssetHolder;
+use Platform\AssetManager\Models\AssetHolderEvent;
 use Platform\AssetManager\Models\AssetHandover;
 use Platform\AssetManager\Models\AssetItem;
 use Platform\AssetManager\Models\AssetLicenseSku;
@@ -28,7 +29,8 @@ use Platform\AssetManager\Models\AssetVendor;
 
 /**
  * Setzt ein Team vollständig auf null zurück: löscht **alle fachlichen Einträge** (Inventar, Geräte,
- * Asset-Träger, Zuordnungen, Ausgaben, Kostenzeilen, Lizenzen, Historie und team-eigene Stammdaten).
+ * Asset-Träger samt ihrem Verlauf (#897), Zuordnungen, Ausgaben, Kostenzeilen, Lizenzen, Historie und
+ * team-eigene Stammdaten).
  *
  * Bewusst **nicht** angefasst (die „Anbindung" bleibt, damit Intune/Azure nicht neu eingerichtet werden muss):
  *   - asset_tenants, asset_connector_configs, asset_tenant_selections — die Intune-/Azure-Anbindung
@@ -108,6 +110,8 @@ class AssetResetService
             //    Monatsstände der Rechnungen, dann die Asset-Träger (ADR 0017).
             $telephonySeats = AssetTelephonySeat::withoutTenantScope()->where('team_id', $teamId)->delete();
             $snapshots      = AssetInvoiceSnapshot::withoutTenantScope()->where('team_id', $teamId)->delete();
+            // Verlauf am Träger (#897) vor den Trägern — holder_id hat keinen FK, der ihn mitnähme.
+            $holderEvents = AssetHolderEvent::withoutTenantScope()->where('team_id', $teamId)->delete();
             $holders = AssetHolder::withoutTenantScope()->where('team_id', $teamId)->delete();
 
             // 7) Team-eigene Stammdaten (untereinander nur nullOnDelete-FKs → Reihenfolge unkritisch).
@@ -132,6 +136,7 @@ class AssetResetService
                 'billing_aliases' => (int) $billingAliases,
                 'telephony_seats' => (int) $telephonySeats,
                 'invoice_snapshots' => (int) $snapshots,
+                'holder_events' => (int) $holderEvents,
                 'holders'       => (int) $holders,
                 'device_models' => (int) $deviceModels,
                 'cost_centers'  => (int) $costCenters,

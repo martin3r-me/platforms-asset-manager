@@ -28,6 +28,7 @@ Schema::create('asset_holders', function (Blueprint $t) {
     $t->string('user_principal_name')->nullable();
     $t->string('display_name')->nullable();
     $t->string('holder_type')->default('person');
+    $t->boolean('holder_type_pinned')->default(false);   // #896
     $t->string('function_system')->nullable();
     $t->boolean('is_active')->default(true);
     $t->timestamps();
@@ -151,13 +152,18 @@ check('affectsAllocation person->function', true, $service->affectsAllocation('p
 check('affectsAllocation function->admin', true, $service->affectsAllocation('function', 'admin'));
 check('affectsAllocation admin->service', false, $service->affectsAllocation('admin', 'service'));
 
-// --- reverts_on_sync ------------------------------------------------------
-// Synthetische Funktions-UPN: Regel 1 des Classifiers, staerker als jede Handkorrektur.
+// --- overrides_rule + Festhalten (#896) -----------------------------------
+// Frueher `reverts_on_sync`: der naechste Sync stellte den Typ zurueck. Seit dem Festhalten tut er
+// das nicht mehr — der Hinweis bleibt als `overrides_rule`, und der Klassifizierer laesst den Typ stehen.
+// Synthetische Funktions-UPN: Regel 1 des Classifiers.
 $syn = holder('kasse' . HolderClassifier::FUNCTION_UPN_SUFFIX, AssetHolder::TYPE_FUNCTION);
 $r   = $service->setType(TEAM, TENANT, [$syn->id], AssetHolder::TYPE_PERSON, true);
-check('synthetische UPN -> person: reverts_on_sync', 1, $r['summary']['reverts_on_sync']);
+check('synthetische UPN -> person: overrides_rule', 1, $r['summary']['overrides_rule']);
+$service->setType(TEAM, TENANT, [$syn->id], AssetHolder::TYPE_PERSON, false);
+check('synthetische UPN -> person: festgehalten', true, $syn->fresh()->holder_type_pinned);
+check('… und der Klassifizierer laesst person stehen', 'person', (new HolderClassifier())->classify($syn->fresh(), TENANT));
 
-// Tenant-Regel: adm-Praefix wird beim naechsten Sync wieder als admin erkannt.
+// Tenant-Regel: adm-Praefix wuerde ohne Festhalten wieder als admin erkannt.
 DB::table('asset_team_settings')->insert([
     'team_id'           => TEAM,
     'tenant_id'         => TENANT,
@@ -167,14 +173,37 @@ HolderClassifier::forget();   // Regeln sind request-lokal memoisiert
 
 $adm = holder('adm-hans@kunde.de', AssetHolder::TYPE_ADMIN);
 $r   = $service->setType(TEAM, TENANT, [$adm->id], AssetHolder::TYPE_PERSON, true);
-check('Tenant-Regel -> person: reverts_on_sync', 1, $r['summary']['reverts_on_sync']);
+check('Tenant-Regel -> person: overrides_rule', 1, $r['summary']['overrides_rule']);
+$service->setType(TEAM, TENANT, [$adm->id], AssetHolder::TYPE_PERSON, false);
+check('Tenant-Regel -> person: Sync-Klassifizierung bleibt person', 'person', (new HolderClassifier())->classify($adm->fresh(), TENANT));
 
 $plain = holder('plain@kunde.de', AssetHolder::TYPE_ADMIN);
 $r     = $service->setType(TEAM, TENANT, [$plain->id], AssetHolder::TYPE_PERSON, true);
-check('ohne passende Regel: kein reverts_on_sync', 0, $r['summary']['reverts_on_sync']);
+check('ohne passende Regel: kein overrides_rule', 0, $r['summary']['overrides_rule']);
 
 $r = $service->setType(TEAM, TENANT, [$plain->id], AssetHolder::TYPE_SERVICE, true);
-check('Ziel != person: nie reverts_on_sync', 0, $r['summary']['reverts_on_sync']);
+check('Regel ergibt nur Default: kein overrides_rule', 0, $r['summary']['overrides_rule']);
+
+// Typ stimmt schon, stammt aber aus einer Regel: nur festhalten.
+$ruled = holder('adm-eva@kunde.de', AssetHolder::TYPE_ADMIN);
+$r     = $service->setType(TEAM, TENANT, [$ruled->id], AssetHolder::TYPE_ADMIN, true);
+check('gleicher Typ, nicht festgehalten: pinned_only', 1, $r['summary']['pinned_only']);
+check('… kein Typwechsel gezaehlt', 0, $r['summary']['updated']);
+$service->setType(TEAM, TENANT, [$ruled->id], AssetHolder::TYPE_ADMIN, false);
+check('… danach festgehalten', true, $ruled->fresh()->holder_type_pinned);
+
+// Festhalten loesen: Regeln entscheiden sofort neu, Stufe 2 haelt den alten Typ NICHT fest.
+$r = $service->releasePin(TEAM, TENANT, [$adm->id], true);
+check('releasePin Vorschau: 1 wuerde freigegeben', 1, $r['summary']['updated']);
+check('releasePin Vorschau: schreibt nicht', true, $adm->fresh()->holder_type_pinned);
+$service->setType(TEAM, TENANT, [$plain->id], AssetHolder::TYPE_SERVICE, false);
+$r = $service->releasePin(TEAM, TENANT, [$adm->id, $plain->id]);
+check('releasePin: adm-Traeger wieder admin (Regel)', 'admin', $adm->fresh()->holder_type);
+check('releasePin: nicht mehr festgehalten', false, $adm->fresh()->holder_type_pinned);
+check('releasePin: Typwechsel gezaehlt (beide)', 2, $r['summary']['type_changed']);
+$plainFresh = $plain->fresh();
+check('releasePin: plain (festgehalten service) faellt auf person', 'person', $plainFresh->holder_type);
+check('releasePin: ruleTypeFor plain', 'person', $service->ruleTypeFor($plainFresh, TENANT));
 
 // --- Grenzen --------------------------------------------------------------
 $fremd = holder('fremd@kunde.de', AssetHolder::TYPE_PERSON, null, 99);
