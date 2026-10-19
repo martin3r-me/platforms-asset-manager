@@ -2,6 +2,8 @@
 
 namespace Platform\AssetManager\Tools\Devices;
 
+use Platform\AssetManager\Services\AssetWriteService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostType;
@@ -22,6 +24,9 @@ use Platform\Core\Contracts\ToolResult;
  */
 class BulkUpdateDeviceCostTool implements ToolContract, ToolMetadataContract
 {
+    /** Obergrenze je Aufruf — ein Sammel-Override über die ganze Flotte gehört in mehrere Schritte. */
+    private const MAX_DEVICES = 500;
+
     use ResolvesTeam;
     use ResolvesTenant;
 
@@ -83,6 +88,15 @@ class BulkUpdateDeviceCostTool implements ToolContract, ToolMetadataContract
             if (empty($ids)) {
                 return ToolResult::error('VALIDATION_ERROR', 'device_ids[] ist erforderlich.');
             }
+            if (count($ids) > self::MAX_DEVICES) {
+                return ToolResult::error('VALIDATION_ERROR', 'Höchstens ' . self::MAX_DEVICES . ' Geräte je Aufruf.');
+            }
+
+            // Dieselben Regeln wie die Detailseite (#959): keine negativen Beträge, AfA ab 1 Monat.
+            $costErrors = AssetWriteService::deviceCostErrors($arguments);
+            if ($costErrors !== []) {
+                return ToolResult::error('VALIDATION_ERROR', implode(' ', $costErrors));
+            }
 
             // Anzuwendende Override-Felder einsammeln
             $changes = [];
@@ -92,9 +106,14 @@ class BulkUpdateDeviceCostTool implements ToolContract, ToolMetadataContract
                     $changes[$f] = ($v === '' || $v === null) ? null : $v;
                 }
             }
+            $warnings = [];
             if (array_key_exists('cost_type_id', $arguments) && $arguments['cost_type_id']) {
-                if (!AssetCostType::where('team_id', $teamId)->whereKey((int) $arguments['cost_type_id'])->exists()) {
+                $type = AssetCostType::where('team_id', $teamId)->find((int) $arguments['cost_type_id']);
+                if (!$type) {
                     return ToolResult::error('VALIDATION_ERROR', 'cost_type_id gehört nicht zum Team.');
+                }
+                if ($type->aggregation_source !== AssetCostType::SOURCE_ASSET_DEVICE) {
+                    $warnings[] = "Kostenart '{$type->name}' hat aggregation_source='{$type->aggregation_source}' — Gerätekosten zählen nur auf Kostenarten mit Quelle asset_device; die Geräte fallen mit 0 € aus der Aufteilung.";
                 }
                 $changes['cost_type_id'] = (int) $arguments['cost_type_id'];
             }
@@ -119,6 +138,8 @@ class BulkUpdateDeviceCostTool implements ToolContract, ToolMetadataContract
 
             $results = [];
             $updated = 0;
+            // Alles oder nichts — ein Fehler mitten in der Liste ließ sonst einen Teil geändert zurück.
+            DB::beginTransaction();
             foreach ($devices as $d) {
                 $before = $resolver->monthlyCost($d);
                 foreach ($changes as $k => $v) {
@@ -138,8 +159,11 @@ class BulkUpdateDeviceCostTool implements ToolContract, ToolMetadataContract
                 ];
             }
 
+            DB::commit();
+
             return ToolResult::success([
                 'dry_run'        => $dryRun,
+                'warnings'       => $warnings,
                 'summary'        => ['updated' => $updated, 'missing' => count($missing), 'total' => count($ids)],
                 'missing_ids'    => $missing,
                 'results'        => $results,
@@ -148,6 +172,9 @@ class BulkUpdateDeviceCostTool implements ToolContract, ToolMetadataContract
                     : "{$updated} Geräte aktualisiert.",
             ]);
         } catch (\Throwable $e) {
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
             return ToolResult::error('EXECUTION_ERROR', 'Fehler beim Bulk-Update der Gerätekosten: ' . $e->getMessage());
         }
     }

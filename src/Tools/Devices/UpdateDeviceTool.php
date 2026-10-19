@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Gate;
 use Platform\AssetManager\Models\AssetCostCenter;
 use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetDevice;
+use Platform\AssetManager\Services\AssetWriteService;
 use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Tools\Concerns\ResolvesTeam;
 use Platform\AssetManager\Tools\Concerns\ResolvesTenant;
@@ -85,9 +86,26 @@ class UpdateDeviceTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('NOT_FOUND', 'Gerät nicht gefunden.');
             }
 
+            // Die Zuordnung eines Intune-Geräts kommt aus Intune (#959): der stündliche Sync überschriebe
+            // eine hier gesetzte UPN, und der Verlauf zeigte zwei Besitzerwechsel, die es nie gab.
+            if (array_key_exists('user_principal_name', $arguments) && $d->intune_id) {
+                return ToolResult::error('VALIDATION_ERROR', 'Die Zuordnung dieses Geräts kommt aus Intune und wird beim nächsten Sync überschrieben — bitte in Intune (primärer Benutzer) ändern.');
+            }
+
+            $costErrors = AssetWriteService::deviceCostErrors($arguments);
+            if ($costErrors !== []) {
+                return ToolResult::error('VALIDATION_ERROR', implode(' ', $costErrors));
+            }
+
+            $warnings = [];
             if (array_key_exists('cost_type_id', $arguments) && $arguments['cost_type_id']) {
-                if (!AssetCostType::where('team_id', $teamId)->whereKey((int) $arguments['cost_type_id'])->exists()) {
+                $type = AssetCostType::where('team_id', $teamId)->find((int) $arguments['cost_type_id']);
+                if (!$type) {
                     return ToolResult::error('VALIDATION_ERROR', 'cost_type_id gehört nicht zum Team. Nutze asset-manager.cost-types.GET.');
+                }
+                // Laptop-Falle: auf einer Kostenart ohne Quelle asset_device zählt das Gerät still 0 €.
+                if ($type->aggregation_source !== AssetCostType::SOURCE_ASSET_DEVICE) {
+                    $warnings[] = "Kostenart '{$type->name}' hat aggregation_source='{$type->aggregation_source}' — Gerätekosten zählen nur auf Kostenarten mit Quelle asset_device; dieses Gerät fällt mit 0 € aus der Aufteilung.";
                 }
                 $d->cost_type_id = (int) $arguments['cost_type_id'];
             }
@@ -118,6 +136,7 @@ class UpdateDeviceTool implements ToolContract, ToolMetadataContract
                 'user_principal_name' => $d->user_principal_name,
                 'cost_type_id'        => $d->cost_type_id,
                 'cost_center_id'      => $d->cost_center_id,
+                'warnings'            => $warnings,
                 'message'             => "Gerät '{$d->device_name}' aktualisiert.",
             ]);
         } catch (\Throwable $e) {

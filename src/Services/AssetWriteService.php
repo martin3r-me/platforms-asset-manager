@@ -196,6 +196,43 @@ class AssetWriteService
     // beim Aufrufer. Leere Strings/0-FKs werden zu null normalisiert (wie Devices/Show).
     // =====================================================================
 
+    /**
+     * Fachliche Regeln der Geräte-Kostenfelder — dieselben, die die Detailseite per Livewire prüft
+     * (#959). Schlüssel = Spaltennamen; nur übergebene Felder werden geprüft.
+     *
+     * @param  array<string, mixed>  $fields  monthly_cost, purchase_price, depreciation_months, purchase_date
+     * @return array<string, string> Feld → Meldung (leer = ok)
+     */
+    public static function deviceCostErrors(array $fields): array
+    {
+        $errors = [];
+
+        foreach (['monthly_cost' => 'Monatsrate', 'purchase_price' => 'Kaufpreis'] as $f => $label) {
+            if (array_key_exists($f, $fields) && $fields[$f] !== null && $fields[$f] !== '') {
+                if (! is_numeric($fields[$f]) || (float) $fields[$f] < 0) {
+                    $errors[$f] = "{$label} muss eine Zahl ab 0 sein.";
+                }
+            }
+        }
+
+        if (array_key_exists('depreciation_months', $fields) && $fields['depreciation_months'] !== null && $fields['depreciation_months'] !== '') {
+            $v = $fields['depreciation_months'];
+            if (! is_numeric($v) || (int) $v != $v || (int) $v < 1) {
+                $errors['depreciation_months'] = 'Abschreibungsdauer muss eine ganze Zahl ab 1 Monat sein.';
+            }
+        }
+
+        if (array_key_exists('purchase_date', $fields) && $fields['purchase_date'] !== null && $fields['purchase_date'] !== '') {
+            try {
+                \Carbon\Carbon::parse((string) $fields['purchase_date']);
+            } catch (\Throwable) {
+                $errors['purchase_date'] = 'Kaufdatum ist kein gültiges Datum (YYYY-MM-DD).';
+            }
+        }
+
+        return $errors;
+    }
+
     /** Kosten-Override eines Geräts (Leasing-Rate ODER Kauf/AfA + Kostenart/-stelle). */
     public function updateDeviceCost(AssetDevice $device, array $data): void
     {
