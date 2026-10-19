@@ -90,7 +90,7 @@
 
                 <x-asset-manager-stat-card
                     href="{{ route('asset-manager.devices.index', ['filterCompliance' => 'unknown']) }}" wire:navigate
-                    label="Unbekannt" :value="$stats['unknown']" sub="Unknown / Error"
+                    label="Unbekannt" :value="$stats['unknown']" :sub="$stats['issues'] > 0 ? '+ ' . $stats['issues'] . ' Fehler/Konflikt' : 'Status unknown'"
                     icon="heroicon-o-question-mark-circle" value-class="text-[var(--am-text-muted)]" />
             </div>
 
@@ -110,7 +110,7 @@
 
                 <x-asset-manager-stat-card
                     href="{{ route('asset-manager.devices.index', ['preset' => 'expiring']) }}" wire:navigate
-                    label="Garantie/Leasing läuft ab" :value="$stats['expiring']" sub="Innerhalb der nächsten 90 Tage"
+                    label="Garantie/Leasing läuft ab" :value="$stats['expiring']" :sub="'In den nächsten 90 Tagen' . ($stats['expired'] > 0 ? ' · ' . $stats['expired'] . ' bereits abgelaufen' : '')"
                     icon="heroicon-o-shield-exclamation" accent="red"
                     value-class="{{ $stats['expiring'] > 0 ? 'text-red-600' : '' }}" />
             </div>
