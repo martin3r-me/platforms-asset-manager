@@ -212,22 +212,26 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
                     $skuId = $license['skuId'] ?? null;
                     if (!$skuId) continue;
 
-                    $record = AssetUserLicense::updateOrCreate(
-                        [
-                            'tenant_id'           => $this->tenantId,
-                            'user_principal_name' => $upn,
-                            'sku_id'              => $skuId,
-                        ],
-                        [
-                            'team_id'         => $this->teamId,
-                            'sku_part_number' => $skuPartMap[$skuId] ?? null,
-                            'display_name'    => $displayName,
-                            'raw_data'        => $license,
-                        ]
-                    );
+                    $record = AssetUserLicense::firstOrNew([
+                        'tenant_id'           => $this->tenantId,
+                        'user_principal_name' => $upn,
+                        'sku_id'              => $skuId,
+                    ]);
+                    $record->fill([
+                        'team_id'         => $this->teamId,
+                        'sku_part_number' => $skuPartMap[$skuId] ?? null,
+                        'display_name'    => $displayName,
+                        'raw_data'        => $license,
+                    ]);
+                    // assigned_at gleich beim Anlegen statt per zweitem UPDATE (#978); unveränderte
+                    // Zuweisungen schreibt save() gar nicht erst.
+                    $isNew = ! $record->exists;
+                    if ($isNew) {
+                        $record->assigned_at = now();
+                    }
+                    $record->save();
 
-                    if ($record->wasRecentlyCreated) {
-                        $record->update(['assigned_at' => now()]);
+                    if ($isNew) {
                         $added++;
                     }
 

@@ -41,6 +41,17 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
     protected ?int $teamId   = null;
     protected ?int $tenantId = null;
 
+    /**
+     * Vorgeladene Nachschlagetabellen für syncDeviceAssignment() (#978) — vorher zwei Queries je Gerät
+     * und Stunde (Träger per LOWER(upn), offene Zuordnungen). Null = noch nicht geladen (Fallback auf Query).
+     *
+     * @var array<string, int>|null  kleingeschriebene, normalisierte UPN => holder_id
+     */
+    protected ?array $holderIdByUpn = null;
+
+    /** @var array<int, \Illuminate\Support\Collection<int, AssetAssignment>>|null  device_id => offene Zuordnungen */
+    protected ?array $openAssignmentsByDevice = null;
+
     /** Serialisiert parallele Geraete-Syncs DESSELBEN Connectors (Multi-Tenant: ein Connector = ein Tenant) —
      *  schliesst das check-then-act-Rennen (first()->create()) gegen den (tenant_id,intune_id)-Unique-Index. */
     public function uniqueId(): string
@@ -155,6 +166,18 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
             [$devices, $shadowIds] = self::dedupeBySerial($devices);
             $intuneIds = $shadowIds;
 
+            // Träger und offene Zuordnungen EINMAL laden (#978) statt je Gerät zu fragen.
+            $this->holderIdByUpn = [];
+            foreach (AssetHolder::withoutTenantScope()->where('tenant_id', $this->tenantId)
+                ->whereNotNull('user_principal_name')->get(['id', 'user_principal_name']) as $h) {
+                $this->holderIdByUpn[mb_strtolower(HolderService::normalizeUpn((string) $h->user_principal_name))] ??= (int) $h->id;
+            }
+            $this->openAssignmentsByDevice = AssetAssignment::where('assignable_type', AssetAssignment::SUBJECT_DEVICE)
+                ->whereNull('returned_at')
+                ->get()
+                ->groupBy('assignable_id')
+                ->all();
+
             foreach ($devices as $device) {
                 $intuneIds[] = $device['id'];
 
@@ -245,7 +268,7 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                 // Asset-Träger aus UPN ableiten (Intune liefert userPrincipalName). Nur für noch unbekannte UPNs
                 // inline anlegen — bestehende werden vom backfillForTenant-Safety-Net (unten) nachgepflegt.
                 if (!empty($device['userPrincipalName']) && !$knownUpns->has($device['userPrincipalName'])) {
-                    $holderService->findOrCreateByUpn(
+                    $newHolder = $holderService->findOrCreateByUpn(
                         $this->teamId,
                         $this->tenantId,
                         $device['userPrincipalName'],
@@ -253,6 +276,9 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                         'derived'
                     );
                     $knownUpns->put($device['userPrincipalName'], true);
+                    if ($this->holderIdByUpn !== null) {
+                        $this->holderIdByUpn[mb_strtolower(HolderService::normalizeUpn((string) $newHolder->user_principal_name))] = (int) $newHolder->id;
+                    }
                 }
 
                 // Geräte-Zuordnung aus dem aktuellen UPN ableiten (Frage 6 / 2b) — auf der stabilen
@@ -442,16 +468,21 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
             // Normalisiert + ohne Groß-/Kleinschreibung (#939): sonst hängt eine Papierkorb-UPN oder eine
             // abweichende Schreibweise die Zuordnung an einen anderen (bzw. keinen) Träger.
             $upn = !empty($device->user_principal_name) ? HolderService::normalizeUpn($device->user_principal_name) : null;
-            $holderId = !empty($upn)
-                ? AssetHolder::withoutTenantScope()->where('tenant_id', $this->tenantId)
-                    ->whereRaw('LOWER(user_principal_name) = ?', [mb_strtolower($upn)])
-                    ->value('id')
-                : null;
+            if ($this->holderIdByUpn !== null) {
+                $holderId = !empty($upn) ? ($this->holderIdByUpn[mb_strtolower($upn)] ?? null) : null;
+                $open     = $this->openAssignmentsByDevice[$device->id] ?? collect();
+            } else {
+                $holderId = !empty($upn)
+                    ? AssetHolder::withoutTenantScope()->where('tenant_id', $this->tenantId)
+                        ->whereRaw('LOWER(user_principal_name) = ?', [mb_strtolower($upn)])
+                        ->value('id')
+                    : null;
 
-            $open = AssetAssignment::where('assignable_type', AssetAssignment::SUBJECT_DEVICE)
-                ->where('assignable_id', $device->id)
-                ->whereNull('returned_at')
-                ->get();
+                $open = AssetAssignment::where('assignable_type', AssetAssignment::SUBJECT_DEVICE)
+                    ->where('assignable_id', $device->id)
+                    ->whereNull('returned_at')
+                    ->get();
+            }
 
             // Bereits korrekt? Genau eine offene Zuordnung zum Ziel — oder keine offene + kein Ziel.
             if ($holderId !== null && $open->count() === 1 && (int) $open->first()->holder_id === (int) $holderId) {
