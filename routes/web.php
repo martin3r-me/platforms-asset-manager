@@ -8,8 +8,6 @@ use Platform\AssetManager\Livewire\Licenses\Index as LicensesIndex;
 use Platform\AssetManager\Livewire\Licenses\Contracts as LicensesContracts;
 use Platform\AssetManager\Livewire\Licenses\Show as LicensesShow;
 use Platform\AssetManager\Livewire\Assets\Index as AssetsIndex;
-use Platform\AssetManager\Livewire\Assets\Create as AssetsCreate;
-use Platform\AssetManager\Livewire\Assets\Show as AssetsShow;
 use Platform\AssetManager\Livewire\Inventory\Index as InventoryIndex;
 use Platform\AssetManager\Livewire\Inventory\Show as InventoryShow;
 use Platform\AssetManager\Livewire\Holders\Index as HoldersIndex;

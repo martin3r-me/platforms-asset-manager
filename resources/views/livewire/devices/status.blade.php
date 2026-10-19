@@ -57,7 +57,7 @@
                         @forelse($devices as $device)
                             <tr class="hover:bg-[var(--am-bg)] transition-colors">
                                 <td class="px-4 py-2.5">
-                                    <a href="{{ route('asset-manager.devices.show', $device) }}" wire:navigate
+                                    <a href="{{ route('asset-manager.inventory.show', ['type' => 'intune', 'id' => $device->id]) }}" wire:navigate
                                        class="font-medium text-[var(--am-accent)] hover:underline">
                                         {{ $device->device_name ?: '—' }}
                                     </a>

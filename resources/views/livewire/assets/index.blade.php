@@ -16,7 +16,7 @@
                         Mehrere anlegen
                     </x-asset-manager-button>
                     <x-asset-manager-button variant="primary" size="sm"
-                                 href="{{ route('asset-manager.assets.create') }}" wire:navigate>
+                                 href="{{ route('asset-manager.inventory.index', ['create' => 1]) }}" wire:navigate>
                         @svg('heroicon-o-plus', 'w-3.5 h-3.5')
                         Asset anlegen
                     </x-asset-manager-button>
@@ -228,7 +228,7 @@
                         @if(!$search && !$filterCategory && !$filterStatus && !$filterSource && !$filterAssignee)
                             @can('asset-manager.manage')
                                 <x-asset-manager-button variant="primary" size="md"
-                                             href="{{ route('asset-manager.assets.create') }}" wire:navigate>
+                                             href="{{ route('asset-manager.inventory.index', ['create' => 1]) }}" wire:navigate>
                                     @svg('heroicon-o-plus', 'w-4 h-4')
                                     Erstes Asset anlegen
                                 </x-asset-manager-button>
@@ -276,7 +276,7 @@
                                     </td>
                                     @endcan
                                     <td class="px-5 py-3">
-                                        <a href="{{ route('asset-manager.assets.show', $item) }}" wire:navigate
+                                        <a href="{{ route('asset-manager.inventory.show', ['type' => 'manual', 'id' => $item->id]) }}" wire:navigate
                                            class="font-medium text-[var(--am-text)] hover:text-[var(--am-accent)]">
                                             {{ $item->name }}
                                         </a>

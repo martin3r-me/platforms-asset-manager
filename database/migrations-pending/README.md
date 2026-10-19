@@ -4,18 +4,12 @@ Dieser Ordner wird vom ServiceProvider **nicht** geladen (`loadMigrationsFrom` z
 `database/migrations`). Hier liegen Migrationen, die bewusst **später** und **separat** angewendet
 werden — nicht im selben Deploy wie der Code, der sie erst möglich macht.
 
-## `2026_06_18_000003_set_tenant_id_not_null.php`
+Derzeit liegt hier keine Migration. Die frühere `2026_06_18_000003_set_tenant_id_not_null.php` ist
+entfernt (#880): die Verschärfung lief längst über `database/migrations/2026_08_07_000004_tenant_id_not_null.php`
+(14 Tabellen, mit bewussten Ausnahmen), und die alte Datei nannte noch `asset_employees` — eine Tabelle,
+die es seit der Umbenennung in `asset_holders` nicht mehr gibt.
 
-Setzt `tenant_id` auf **NOT NULL** auf den 8 Inventar-Tabellen. **Voraussetzung:**
+## Aktivieren (künftige Dateien)
 
-1. **M3 ist live** — der Tenant-Selektor setzt `tenant_id` auf **allen** Anlage-Pfaden
-   (Sync **und** manuelle UI-Anlage wie `Assets/Create`). Solange ein manueller Pfad `tenant_id`
-   offen lässt, würde NOT NULL die Anlage mit einer Constraint-Verletzung brechen.
-2. **Mindestens ein grüner Sync** lief, und `Model::whereNull('tenant_id')->count() === 0` gilt für
-   alle 8 Tabellen (live geprüft).
-
-## Aktivieren
-
-Datei nach `database/migrations/` verschieben, lokal via
-`php artisan migrate --path=vendor/martin3r/platform-asset-manager/database/migrations` auf SQLite
-smoke-testen (Index-/Spalten-Umbau ist cross-DB heikel), dann normal deployen.
+Datei nach `database/migrations/` verschieben, lokal auf SQLite smoke-testen (Index-/Spalten-Umbau ist
+cross-DB heikel), dann normal deployen.

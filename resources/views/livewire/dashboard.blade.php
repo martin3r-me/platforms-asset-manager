@@ -143,7 +143,7 @@
                     </x-slot>
                     <div class="divide-y divide-[color:var(--am-border)]">
                         @forelse($recentDevices as $device)
-                            <a href="{{ route('asset-manager.devices.show', $device) }}" wire:navigate
+                            <a href="{{ route('asset-manager.inventory.show', ['type' => 'intune', 'id' => $device->id]) }}" wire:navigate
                                class="flex items-center gap-3 px-4 py-3 hover:bg-[var(--am-bg)] transition-colors group">
                                 <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-[var(--am-bg)] flex items-center justify-center">
                                     @svg('heroicon-o-computer-desktop', 'w-4 h-4 text-[var(--am-text-muted)]')
