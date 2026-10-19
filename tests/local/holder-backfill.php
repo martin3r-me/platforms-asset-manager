@@ -100,4 +100,18 @@ check('Quelle derived', 'derived', AssetHolder::withoutTenantScope()->where('use
 check('zweiter Lauf legt nichts an', 0, $svc->backfillForTenant(TEAM, TENANT));
 check('Gesamtzahl Träger', 3, AssetHolder::withoutTenantScope()->count());
 
+
+// Gastkonto (#969): „#EXT#" in der UPN → extern, auch ohne Regel.
+$license('m.partner_agentur.de#EXT#@broich.onmicrosoft.com', 'Partner');
+$svc->backfillForTenant(TEAM, TENANT);
+check('Gastkonto wird als extern angelegt', 'external', AssetHolder::withoutTenantScope()->where('user_principal_name', 'like', '%#EXT#%')->value('holder_type'));
+
+// Gastkonto laut Graph (userType=Guest) ohne #EXT#-UPN
+$guest = AssetHolder::create(['team_id' => TEAM, 'tenant_id' => TENANT, 'user_principal_name' => 'gast@extern.de', 'source' => 'graph']);
+$svc->applyGraphProfile($guest, ['userType' => 'Guest']);
+check('userType=Guest → extern', 'external', $guest->holder_type);
+$admin = AssetHolder::create(['team_id' => TEAM, 'tenant_id' => TENANT, 'user_principal_name' => 'adm2@broich.com', 'source' => 'graph', 'holder_type' => 'admin']);
+$svc->applyGraphProfile($admin, ['userType' => 'Guest']);
+check('bewusst gesetzter Typ bleibt', 'admin', $admin->holder_type);
+
 check_summary();

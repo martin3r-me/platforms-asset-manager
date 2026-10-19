@@ -421,7 +421,13 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
             return null;
         }
 
-        return $dt->year < 1970 ? null : $dt;
+        if ($dt->year < 1970) {
+            return null;
+        }
+
+        // In die App-Zeitzone umrechnen (#965): Eloquent speichert die Wanduhrzeit des Carbon-Objekts
+        // ohne Umrechnung. Ein UTC-Wert landete so in einer Europe/Berlin-App 1–2 h zu früh.
+        return $dt->setTimezone(config('app.timezone'));
     }
 
     /**

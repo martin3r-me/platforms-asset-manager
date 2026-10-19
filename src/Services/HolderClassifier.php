@@ -31,6 +31,9 @@ class HolderClassifier
     /** Synthetische UPN-Domain der Funktionskonten (vom Excel-Import erzeugt). */
     public const FUNCTION_UPN_SUFFIX = '@funktion.import.local';
 
+    /** Kennzeichen eines B2B-Gastkontos in der UPN (Entra: name_domain#EXT#@tenant.onmicrosoft.com). */
+    public const GUEST_UPN_MARKER = '#ext#';
+
     /** @var array<string, array<int, array<string, string>>> Regeln je Tenant, request-lokal memoisiert. */
     private static array $rulesCache = [];
 
@@ -51,6 +54,14 @@ class HolderClassifier
 
         if ($upn !== '' && str_ends_with(mb_strtolower($upn), self::FUNCTION_UPN_SUFFIX)) {
             return AssetHolder::TYPE_FUNCTION;
+        }
+
+        // B2B-Gastkonten (#969) tragen „#EXT#" in der UPN — ein Fakt wie das Funktionskonten-Suffix,
+        // vor den Tenant-Regeln. Sonst zählten Gäste als Personen in Kosten und Weiterberechnung,
+        // solange niemand eine Regel dafür pflegt.
+        if ($upn !== '' && str_contains(mb_strtolower($upn), self::GUEST_UPN_MARKER)
+            && ($holder->holder_type === null || $holder->holder_type === AssetHolder::TYPE_PERSON)) {
+            return AssetHolder::TYPE_EXTERNAL;
         }
 
         $current = $holder->holder_type;

@@ -117,14 +117,20 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
 
             // BEWUSST NUR Upsert, KEIN Reconcile-Delete (N11): aus dem Tenant verschwundene/gekündigte SKUs
             // bleiben in asset_license_skus stehen (mit altem Stand). Anders als bei Geräten gibt es hier
-            // KEINE Soft-Delete-Strecke — der Katalog kann daher Karteileichen enthalten, die in
-            // SKU-Katalog-Auswertungen (z. B. licenses_catalog/Kapazität) mitzählen. Akzeptiert, weil
+            // KEINE Soft-Delete-Strecke — der Katalog kann daher Karteileichen enthalten; seit #968 stehen
+            // ihre Mengen auf 0 (siehe unten), sie zählen also nicht mehr als Kapazität. Akzeptiert, weil
             // SKUs selten gekündigt werden und unit_price (manuell gepflegt) erhalten bleiben soll;
             // ein späterer Soft-Delete bräuchte ein Schema-Feld + Reconcile analog reconcileDelete().
             foreach ($skus as $sku) {
                 $purchased = $sku['prepaidUnits']['enabled'] ?? 0;
                 $consumed  = $sku['consumedUnits'] ?? 0;
                 $available = max(0, $purchased - $consumed);
+                // Gesperrte/abgelaufene Abos (#968) haben keine nutzbaren freien Plätze — sonst stünden
+                // sie dauerhaft als „ungenutzt, Sparpotenzial" in der Auswertung. „Warning" ist die
+                // Kulanzphase und bleibt nutzbar.
+                if (in_array($sku['capabilityStatus'] ?? 'Enabled', ['Suspended', 'LockedOut', 'Deleted'], true)) {
+                    $available = 0;
+                }
                 $partNum   = $sku['skuPartNumber'] ?? '';
 
                 $existing = AssetLicenseSku::where('tenant_id', $this->tenantId)
@@ -152,6 +158,17 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
                         'unit_price' => null,
                     ]));
                 }
+            }
+
+            // Aus dem Tenant verschwundene SKUs (#968): nicht löschen (unit_price und Historie bleiben, N11),
+            // aber Mengen auf 0 — sonst zählten gekündigte Abos weiter als Kapazität und Sparpotenzial.
+            // Nur bei nicht-leerer Antwort: eine leere Seite ist ein Glitch, kein Massen-Kündigen.
+            $seenSkuIds = array_values(array_filter(array_map(fn ($s) => $s['skuId'] ?? null, $skus)));
+            if ($seenSkuIds !== []) {
+                AssetLicenseSku::where('tenant_id', $this->tenantId)
+                    ->whereNotIn('sku_id', $seenSkuIds)
+                    ->where(fn ($q) => $q->where('purchased_units', '>', 0)->orWhere('available_units', '>', 0)->orWhere('consumed_units', '>', 0))
+                    ->update(['purchased_units' => 0, 'consumed_units' => 0, 'available_units' => 0, 'updated_at' => now()]);
             }
 
             // SKU-Lookup für Part Numbers

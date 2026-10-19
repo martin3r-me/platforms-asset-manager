@@ -122,6 +122,13 @@ class HolderService
      */
     public function applyGraphProfile(AssetHolder $holder, array $graphUser): void
     {
+        // Gastkonto laut Entra (#969): als extern führen, solange der Typ noch der Default ist —
+        // ein bewusst gesetzter Typ bleibt unangetastet.
+        if (($graphUser['userType'] ?? null) === 'Guest'
+            && ($holder->holder_type === null || $holder->holder_type === AssetHolder::TYPE_PERSON)) {
+            $holder->holder_type = AssetHolder::TYPE_EXTERNAL;
+        }
+
         if (! empty($graphUser['department'])) {
             $holder->department = $graphUser['department'];
         }

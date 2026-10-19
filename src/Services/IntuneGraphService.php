@@ -37,7 +37,9 @@ class IntuneGraphService
     {
         $retryAfter = (int) $response->header('Retry-After');
 
-        return max(1, min($retryAfter, 60));
+        // Obergrenze 120 s (#965): ein längeres Retry-After auf 60 s zu kappen hieß, zu früh erneut zu
+        // fragen und den nächsten 429 zu kassieren. Die Job-Timeouts (300/600 s) vertragen das.
+        return max(1, min($retryAfter, 120));
     }
 
     public function getAccessToken(AssetConnectorConfig $config): ?string
@@ -190,6 +192,9 @@ class IntuneGraphService
                 $data    = $response->json();
                 $devices = array_merge($devices, $data['value'] ?? []);
                 $url     = $data['@odata.nextLink'] ?? null;
+                // Drossel-Zähler gilt je Seite, nicht für den ganzen Lauf (#965): sonst bricht ein großer
+                // Tenant nach drei über viele Seiten verteilten 429ern ab.
+                $throttleRetries = 0;
 
             } catch (\Throwable $e) {
                 $this->lastError = 'Verbindungsfehler: ' . $e->getMessage();
@@ -221,7 +226,7 @@ class IntuneGraphService
         }
 
         $skus            = [];
-        $url             = "{$this->graphBase}/subscribedSkus?\$select=id,skuId,skuPartNumber,consumedUnits,prepaidUnits,servicePlans";
+        $url             = "{$this->graphBase}/subscribedSkus?\$select=id,skuId,skuPartNumber,consumedUnits,prepaidUnits,servicePlans,capabilityStatus";
         $throttleRetries = 0;
 
         // @odata.nextLink-Paging wie bei Devices/Users — sonst stille Datenlücke ab > einer Graph-Seite.
@@ -260,6 +265,9 @@ class IntuneGraphService
                 $data = $response->json();
                 $skus = array_merge($skus, $data['value'] ?? []);
                 $url  = $data['@odata.nextLink'] ?? null;
+                // Drossel-Zähler gilt je Seite, nicht für den ganzen Lauf (#965): sonst bricht ein großer
+                // Tenant nach drei über viele Seiten verteilten 429ern ab.
+                $throttleRetries = 0;
 
             } catch (\Throwable $e) {
                 $this->lastError = 'Verbindungsfehler: ' . $e->getMessage();
@@ -292,7 +300,7 @@ class IntuneGraphService
         // `accountEnabled` ist die einzige Auskunft darüber, ob ein Konto noch benutzt wird. Ohne das
         // Feld blieb jeder Träger für immer aktiv — auch Jahre nach dem Austritt (siehe
         // ImportTenantUsersJob::reconcileHolders()).
-        $url   = "{$this->graphBase}/users?\$select=id,displayName,userPrincipalName,department,jobTitle,mobilePhone,businessPhones,assignedLicenses,accountEnabled&\$top=999";
+        $url   = "{$this->graphBase}/users?\$select=id,displayName,userPrincipalName,department,jobTitle,mobilePhone,businessPhones,assignedLicenses,accountEnabled,userType&\$top=999";
 
         $retried        = false;
         $throttleRetries = 0;
@@ -348,6 +356,9 @@ class IntuneGraphService
                 $data  = $response->json();
                 $users = array_merge($users, $data['value'] ?? []);
                 $url   = $data['@odata.nextLink'] ?? null;
+                // Drossel-Zähler gilt je Seite, nicht für den ganzen Lauf (#965): sonst bricht ein großer
+                // Tenant nach drei über viele Seiten verteilten 429ern ab.
+                $throttleRetries = 0;
 
             } catch (\Throwable $e) {
                 $this->lastError = 'Verbindungsfehler: ' . $e->getMessage();
