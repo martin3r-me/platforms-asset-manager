@@ -6,7 +6,6 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Platform\AssetManager\Models\AssetDevice;
@@ -50,7 +49,7 @@ class AssetManagerServiceProvider extends ServiceProvider
         if (
             config()->has('asset-manager.routing') &&
             config()->has('asset-manager.navigation') &&
-            Schema::hasTable('modules')
+            PlatformCore::modulesTableExists()
         ) {
             PlatformCore::registerModule([
                 'key'        => 'asset-manager',
