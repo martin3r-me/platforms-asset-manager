@@ -34,7 +34,7 @@ class ListDeviceEventsTool implements ToolContract, ToolMetadataContract
         return 'GET /asset-manager/device-events - Verlauf aller Geräte des Tenants (neueste zuerst): '
             . 'Besitzerwechsel, Compliance, OS, Neu-Einbindung, Lifecycle, Ausgabe/Rücknahme, Abgang/Wiederkehr '
             . 'aus Intune. Filter: event_type (z. B. owner_changed, compliance_changed, os_changed, reenrolled, '
-            . 'lifecycle_changed, issued, returned, removed, restored, created), device_id, from/to (YYYY-MM-DD), '
+            . 'lifecycle_changed, issued, returned, handover_deleted, removed, restored, created), device_id, from/to (YYYY-MM-DD), '
             . 'limit (Default 100, max 500). Mit Gerätename, Seriennummer und Urheber (bei manuellen Änderungen).';
     }
 

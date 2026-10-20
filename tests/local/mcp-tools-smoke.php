@@ -201,6 +201,26 @@ check('handovers.GET: nur nicht unterschriebene', [2], array_column(data($r)['ha
 $r = run(\Platform\AssetManager\Tools\Handovers\ListHandoversTool::class, ['device_id' => 1], $ctxA);
 check('handovers.GET: mit Positionen', 'NB-01', data($r)['handovers'][0]['lines'][0]['device_name'] ?? null);
 
+// #982: ein gelöschtes Protokoll (Soft-Delete, Zeile bleibt) taucht in device.GET nicht als Leiche auf.
+// device.GET liest zusätzlich Modell, Modellkosten und Zuordnungen — Schema aus den $fillable.
+foreach ([\Platform\AssetManager\Models\AssetDeviceModel::class, \Platform\AssetManager\Models\AssetDeviceModelCost::class, \Platform\AssetManager\Models\AssetAssignment::class] as $class) {
+    $m = new $class();
+    if (! Schema::hasTable($m->getTable())) {
+        Schema::create($m->getTable(), function (Blueprint $t) use ($m) {
+            $t->id();
+            foreach (array_unique(array_merge($m->getFillable(), ['team_id', 'tenant_id'])) as $col) {
+                $t->text($col)->nullable();
+            }
+            $t->timestamps();
+            $t->softDeletes();
+        });
+    }
+}
+DB::table('asset_handovers')->insert(['id' => 3, 'team_id' => TEAM_A, 'tenant_id' => TENANT, 'holder_id' => 1, 'issued_at' => '2026-10-20', 'status' => 'open', 'deleted_at' => '2026-10-20 09:00:00']);
+DB::table('asset_handover_lines')->insert(['tenant_id' => TENANT, 'handover_id' => 3, 'asset_device_id' => 1]);
+$r = run(\Platform\AssetManager\Tools\Devices\GetDeviceTool::class, ['id' => 1], $ctxA);
+check('device.GET: gelöschtes Protokoll nicht im Verlauf (#982)', [1], array_column(data($r)['history']['handovers'] ?? [], 'handover_id'));
+
 $r = run(\Platform\AssetManager\Tools\Costs\DatevStatusTool::class, ['month' => '2026-09'], $ctxA);
 $sep = data($r)['months'][0] ?? [];
 $statusByInvoice = array_column($sep['invoices'] ?? [], 'status', 'invoice');

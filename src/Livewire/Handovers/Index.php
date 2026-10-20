@@ -389,8 +389,18 @@ class Index extends Component
     {
         Gate::authorize('asset-manager.manage');
 
-        $handover = AssetHandover::where('team_id', $this->teamId())->findOrFail($id);
-        $handover->delete(); // cascade: Zeilen
+        $handover = AssetHandover::with('lines.device')->where('team_id', $this->teamId())->findOrFail($id);
+
+        // Soft-Delete: die Zeilen bleiben stehen (kein DB-Cascade) und werden über whereHas('handover')
+        // ausgeblendet. Der Geräteverlauf trägt aber „Ausgegeben … (Protokoll #n)" — ohne Gegenereignis
+        // sähe das Gerät dort weiter ausgegeben aus (#982).
+        foreach ($handover->lines as $line) {
+            if ($line->returned_at === null && $line->device) {
+                AssetDeviceEvent::record($line->device, 'handover_deleted', 'Ausgabe-Protokoll #' . $handover->id . ' gelöscht', userId: Auth::id());
+            }
+        }
+
+        $handover->delete();
         if ($this->editId === $id) {
             $this->resetEditor();
             $this->showEditor = false;

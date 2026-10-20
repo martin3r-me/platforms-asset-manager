@@ -409,18 +409,24 @@ class Show extends Component
             ->get()
             ->keyBy('sku_id');
 
+        // Ohne Controlling (ADR 0008) keine Beträge auf dieser Seite — und die Kostendaten gar nicht
+        // erst rechnen (#981). Vorher war nur der Mobilfunk-Preis gegated; „pro Monat", Geräte- und
+        // Lizenzkosten standen trotzdem da.
+        $controllingEnabled = app(ControllingContext::class)->enabledFor($teamId);
+
         // Geräte-Kosten: gated (nur Kostenart aggregation_source='asset_device'), nur für die Geräte
         // DIESES Trägers (#977). Keyed nach device_id für den Per-Gerät-Betrag in der Liste.
-        $deviceRows = $this->deviceCostRows((int) $teamId, $devices);
+        $deviceRows = $controllingEnabled ? $this->deviceCostRows((int) $teamId, $devices) : [];
 
         // Monatliche Kosten: gemeinsame Quelle der Wahrheit (identisch mit dem Panel der Liste).
         // $deviceRows wird durchgereicht, damit deviceCostRows() nicht ein zweites Mal läuft.
-        $cost = app(CostAggregationService::class)->holderCost($teamId, $this->holder, $deviceRows);
+        $cost = $controllingEnabled
+            ? app(CostAggregationService::class)->holderCost($teamId, $this->holder, $deviceRows)
+            : ['hardware' => 0.0, 'device' => 0.0, 'license' => 0.0, 'total' => 0.0];
 
         // Mobilfunk-Kosten dieses Asset-Trägers (ADR 0014): Summe der aktiven Mobilfunk-Kostenpositionen
         // (cost_line, cost_type.key='mobilfunk'). Nur wenn Controlling aktiv — sonst kein Preis im Block.
         // Der Preis lebt in der Kostenposition, NICHT am Asset-Träger (keine Doppelpflege).
-        $controllingEnabled = app(ControllingContext::class)->enabledFor($teamId);
         $mobileCost = $controllingEnabled
             ? (float) AssetCostLine::active()->validOn(now())
                 ->where('team_id', $teamId)

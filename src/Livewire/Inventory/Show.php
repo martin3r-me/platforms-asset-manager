@@ -187,6 +187,14 @@ class Show extends Component
             'eStatus'       => 'required|in:in_stock,assigned,retired,lost',
         ]);
 
+        // „Zugeordnet" ohne Träger lehnt setItemStatus() ab (#941) — vorher still, mit „Details
+        // gespeichert." obendrauf (#980). Den Weg dorthin nennt die Meldung.
+        if ($this->eStatus === 'assigned' && $this->eStatus !== $item->status && ! $item->assignee_id) {
+            $this->addError('eStatus', '„Zugeordnet" geht nur mit Asset-Träger — bitte über „Zuordnen" einem Träger zuweisen.');
+
+            return;
+        }
+
         $writer->updateItemDetails($item, [
             'categoryId'   => $this->eCategoryId,
             'name'         => $this->eName,

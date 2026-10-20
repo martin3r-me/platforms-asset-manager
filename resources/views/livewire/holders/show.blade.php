@@ -181,17 +181,20 @@
             </div>
 
             {{-- Counts --}}
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {{-- Beträge nur mit Controlling (ADR 0008, #981). --}}
+            <div class="grid grid-cols-2 {{ $controllingEnabled ? 'sm:grid-cols-4' : 'sm:grid-cols-3' }} gap-3">
                 <x-asset-manager-stat-card label="Intune-Geräte" :value="$devices->count()" icon="heroicon-o-computer-desktop" accent="sky" />
                 <x-asset-manager-stat-card label="Sonstige Assets" :value="$items->count()" icon="heroicon-o-cube" accent="indigo" />
                 <x-asset-manager-stat-card label="Lizenzen" :value="$licenses->count()" icon="heroicon-o-key" accent="violet" />
-                <x-asset-manager-stat-card label="pro Monat" :value="number_format($totalCost, 2, ',', '.') . ' €'" icon="heroicon-o-banknotes" accent="navy" value-class="text-[var(--am-accent)]" />
+                @if($controllingEnabled)
+                    <x-asset-manager-stat-card label="pro Monat" :value="number_format($totalCost, 2, ',', '.') . ' €'" icon="heroicon-o-banknotes" accent="navy" value-class="text-[var(--am-accent)]" />
+                @endif
             </div>
 
             {{-- Kostenaufschlüsselung. Stand bis S8 in einer rechten Sidebar, die per Default
                  zugeklappt war — die Kachel „pro Monat" oben nannte damit eine Summe, deren
                  Herkunft erst nach einem Klick sichtbar wurde. --}}
-            @if($totalCost > 0)
+            @if($controllingEnabled && $totalCost > 0)
                 <x-asset-manager-panel title="Kosten pro Monat">
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
@@ -280,7 +283,7 @@
                                     <div class="text-sm font-medium text-[var(--am-text)] truncate">{{ $it->name }}</div>
                                     <div class="text-xs text-[var(--am-text-secondary)]">{{ $it->category?->name }} · {{ trim($it->manufacturer . ' ' . $it->model) }}</div>
                                 </div>
-                                @if($it->monthlyCost() > 0)
+                                @if($controllingEnabled && $it->monthlyCost() > 0)
                                     <span class="text-xs text-[var(--am-text-secondary)] tabular-nums">{{ number_format($it->monthlyCost(), 2, ',', '.') }} €</span>
                                 @endif
                             </a>
@@ -317,7 +320,7 @@
                                     // derselben Lizenz können unterschiedliche Tarife tragen.
                                     $seatPrice = $lic->unit_price ?? $sku?->unit_price;
                                 @endphp
-                                @if($seatPrice !== null)
+                                @if($controllingEnabled && $seatPrice !== null)
                                     <span class="text-xs text-[var(--am-text-secondary)] tabular-nums whitespace-nowrap">
                                         {{ number_format((float) $seatPrice, 2, ',', '.') }} €
                                         @if($lic->unit_price !== null && $lic->contractLine?->isYearly())

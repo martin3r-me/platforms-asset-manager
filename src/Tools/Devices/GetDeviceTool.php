@@ -113,7 +113,10 @@ class GetDeviceTool implements ToolContract, ToolMetadataContract
                             'returned_at' => $a->returned_at?->toIso8601String(),
                             'source'      => $a->source,
                         ])->values()->all(),
+                    // Nur Zeilen mit lebendem Kopf — ein gelöschtes Protokoll (Soft-Delete, Zeilen bleiben)
+                    // tauchte sonst als Eintrag ohne Empfänger und Datum auf (#982).
                     'handovers' => \Platform\AssetManager\Models\AssetHandoverLine::where('asset_device_id', $d->id)
+                        ->whereHas('handover')
                         ->with('handover.holder')->orderByDesc('id')->limit(20)->get()
                         ->map(fn ($l) => [
                             'handover_id' => $l->handover_id,
