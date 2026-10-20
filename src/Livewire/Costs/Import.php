@@ -52,6 +52,11 @@ class Import extends Component
     public bool $seatWasDryRun = true;
 
     /** Fünfter Upload: Vodafone-Festnetzrechnung „Rechnung CSV" (#931). */
+    /** Preis-Historie nachtragen (ADR 0029): mehrere Rechnungsdateien, Typ wird je Datei erkannt. */
+    public $historyFiles = [];
+    /** @var ?list<array{file: string, type: string, invoice: ?string, period: ?string, rows: int, error: ?string}> */
+    public ?array $historyResults = null;
+
     public $fixednetFile;
     public ?array $fixednetResult = null;
     public ?string $fixednetError = null;
@@ -465,6 +470,96 @@ class Import extends Component
         } finally {
             $this->running = false;
         }
+    }
+
+    // ---- Preis-Historie nachtragen (ADR 0029) ----------------------------------------------------
+
+    public function updatedHistoryFiles(): void
+    {
+        $this->historyResults = null;
+        $this->resetErrorBag('historyFiles');
+    }
+
+    /**
+     * Ältere Rechnungen nur in die Preis-Historie übernehmen. Je Datei rechnet der passende Importer wie
+     * immer und rollt zurück; geschrieben werden ausschließlich die Verlaufszeilen — Kosten, Monatsstände
+     * und DATEV bleiben, wie sie sind. Deshalb kein Bestätigungsdialog und keine Sperre gegen alte Monate.
+     */
+    public function runHistoryBackfill(VodafoneInvoiceImportService $mobile, VodafoneFixedNetImportService $fixed): void
+    {
+        abort_unless($this->canManage(), 403);
+        $this->resetErrorBag('historyFiles');
+
+        $files = array_values(array_filter((array) $this->historyFiles));
+        if ($files === []) {
+            $this->addError('historyFiles', 'Bitte eine oder mehrere Rechnungsdateien wählen.');
+            return;
+        }
+        if (count($files) > 40) {
+            $this->addError('historyFiles', 'Höchstens 40 Dateien auf einmal.');
+            return;
+        }
+
+        $this->running = true;
+        $results = [];
+
+        foreach ($files as $file) {
+            $name = $file->getClientOriginalName();
+            $row  = ['file' => $name, 'type' => '—', 'invoice' => null, 'period' => null, 'rows' => 0, 'error' => null];
+
+            try {
+                if ($file->getSize() > 20 * 1024 * 1024) {
+                    throw new \RuntimeException('Datei zu groß (max. 20 MB).');
+                }
+
+                $type = self::historyFileType($file->getRealPath(), strtolower((string) $file->getClientOriginalExtension()));
+                if ($type === null) {
+                    throw new \RuntimeException('Unbekanntes Format — erwartet „Rechnungsdaten" (Mobilfunk) oder „Rechnung CSV" (Festnetz).');
+                }
+
+                if ($type === 'mobile') {
+                    $res = $mobile->import($this->teamId(), $file->getRealPath(), 'history-upload', false, $this->activeTenantId(), historyOnly: true);
+                    $row['type']    = 'Mobilfunk';
+                    $row['invoice'] = $res['period']['invoice'] ?? null;
+                    $row['period']  = ($res['period']['from'] ?? null) && ($res['period']['to'] ?? null)
+                        ? $res['period']['from']->format('d.m.Y') . '–' . $res['period']['to']->format('d.m.Y') : null;
+                } else {
+                    $res = $fixed->import($this->teamId(), $file->getRealPath(), 'history-upload', false, $this->activeTenantId(), [], historyOnly: true);
+                    $row['type']    = 'Festnetz ' . ($res['account'] ?? '');
+                    $row['invoice'] = $res['invoice'] ?? null;
+                    $row['period']  = $res['period'] ?? null;
+                }
+                $row['rows'] = (int) ($res['history_rows'] ?? 0);
+            } catch (\Throwable $e) {
+                Log::warning('AssetManager: Historie nachtragen fehlgeschlagen', ['team_id' => $this->teamId(), 'file' => $name, 'error' => $e->getMessage()]);
+                $row['error'] = $e instanceof \RuntimeException ? $e->getMessage() : 'Fehlgeschlagen — Details im Server-Log.';
+            }
+
+            $results[] = $row;
+        }
+
+        usort($results, fn ($a, $b) => [$a['type'], $a['invoice']] <=> [$b['type'], $b['invoice']]);
+
+        $this->historyResults = $results;
+        $this->historyFiles   = [];
+        $this->running        = false;
+    }
+
+    /** 'mobile' (Rechnungsdaten-Export, .xlsx oder CSV), 'fixednet' (Rechnung CSV eines Festnetzkontos) oder null. */
+    public static function historyFileType(string $path, string $extension): ?string
+    {
+        if ($extension === 'xlsx') {
+            return 'mobile';
+        }
+
+        $head = (string) @file_get_contents($path, false, null, 0, 200);
+        $head = ltrim($head, "\xEF\xBB\xBF");
+
+        return match (true) {
+            str_starts_with($head, 'Typ;Rechnungskonto')  => 'mobile',
+            str_starts_with($head, 'Dokument Nummer;')     => 'fixednet',
+            default                                        => null,
+        };
     }
 
     /**

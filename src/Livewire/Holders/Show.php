@@ -17,6 +17,9 @@ use Platform\AssetManager\Models\AssetLicenseSku;
 use Platform\AssetManager\Models\AssetUserLicense;
 use Platform\AssetManager\Services\BillingExclusionService;
 use Platform\AssetManager\Services\ControllingContext;
+use Platform\AssetManager\Services\CostLineHistoryService;
+use Platform\AssetManager\Services\VodafoneFixedNetImportService;
+use Platform\AssetManager\Services\VodafoneInvoiceImportService;
 use Platform\AssetManager\Services\CostAggregationService;
 use Platform\AssetManager\Services\HolderService;
 use Platform\AssetManager\Services\HolderTypeService;
@@ -370,6 +373,33 @@ class Show extends Component
             ->keyBy('device_id');
     }
 
+    /**
+     * Preisverlauf je Rechnungs-Kostenposition des Trägers (Mobilfunk, RingCentral-Platz), letzte 12 Monate.
+     *
+     * @return list<array{label: string, summary: array<string, mixed>}>
+     */
+    protected function priceHistory(int $teamId): array
+    {
+        $lines = AssetCostLine::where('team_id', $teamId)
+            ->where('assignee_id', $this->holder->id)
+            ->whereIn('source', [VodafoneInvoiceImportService::SOURCE, VodafoneFixedNetImportService::SOURCE])
+            ->whereNotNull('import_hash')
+            ->orderBy('label')
+            ->get(['id', 'label', 'import_hash']);
+
+        if ($lines->isEmpty()) {
+            return [];
+        }
+
+        $byHash = app(CostLineHistoryService::class)->forHashes((int) $this->holder->tenant_id, $lines->pluck('import_hash')->all(), 12);
+
+        return $lines
+            ->filter(fn (AssetCostLine $l) => isset($byHash[$l->import_hash]))
+            ->map(fn (AssetCostLine $l) => ['label' => (string) $l->label, 'summary' => CostLineHistoryService::summarize($byHash[$l->import_hash])])
+            ->values()
+            ->all();
+    }
+
     public function render()
     {
         $teamId = $this->holder->team_id;
@@ -437,6 +467,9 @@ class Show extends Component
                 ->sum('monthly_amount')
             : 0.0;
 
+        // Preisverlauf der Rechnungs-Kostenpositionen dieses Trägers (ADR 0029) — nur mit Controlling.
+        $priceHistory = $controllingEnabled ? $this->priceHistory((int) $teamId) : [];
+
         // Telefonie-Plätze aus der RingCentral-Benutzerliste (#931) — nur lesend, gepflegt beim Anbieter.
         $telephonySeats = \Platform\AssetManager\Models\AssetTelephonySeat::where('team_id', $teamId)
             ->where('holder_id', $this->holder->id)
@@ -480,6 +513,7 @@ class Show extends Component
             'totalCost'          => $cost['total'],
             'controllingEnabled' => $controllingEnabled,
             'mobileCost'         => $mobileCost,
+            'priceHistory'       => $priceHistory,
             'canManage'          => Gate::allows('asset-manager.manage'),
         ])->layout('platform::layouts.app');
     }

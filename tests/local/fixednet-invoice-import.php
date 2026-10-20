@@ -154,6 +154,11 @@ $excel(['cost_type_id' => $tRcRab, 'assignee_id' => $anna, 'cost_center_id' => $
 $fixednet = fn () => AssetCostLine::where('source', 'vodafone_fixednet');
 $service  = new VodafoneFixedNetImportService();
 
+// Preis-Historie (ADR 0029) — Tabelle aus der echten Migration.
+(require dirname(__DIR__, 2) . '/database/migrations/2026_10_20_000001_create_asset_cost_line_history_table.php')->up();
+\Platform\AssetManager\Services\CostLineHistoryService::forgetTableCheck();
+$history = fn () => \Platform\AssetManager\Models\AssetCostLineHistory::withoutTenantScope()->where('source', 'vodafone_fixednet');
+
 // ---- Probelauf ----------------------------------------------------------------------------
 
 $file = $accountA();
@@ -197,12 +202,26 @@ check('Monatsstand: Kostenarten der Rechnung', ['internet', 'telefonie', 'vf_liz
     array_values(array_unique(array_column((array) $snap?->distribution, 'cost_type_key'))));
 check('Monatsstand: im Ergebnis', ['2026-09', []], [$r['snapshot']['month'] ?? null, $r['snapshot']['findings'] ?? null]);
 
+// Preis-Historie (ADR 0029): je gebuchter Zeile ein Eintrag, Summe = Rechnungsnetto, Leistungsmonat September.
+check('Historie: ein Eintrag je Zeile', $fixednet()->count(), $history()->count());
+check('Historie: Summe = Rechnungsnetto (nach Rundungsausgleich)', 308.0, round((float) $history()->sum('amount'), 2));
+check('Historie: Leistungsmonat', ['2026-09-01'], $history()->get()->map(fn ($h) => $h->booking_month?->toDateString())->unique()->values()->all());
+
 // ---- Zweiter Lauf derselben Datei: idempotent ---------------------------------------------
 
 $ids = $fixednet()->orderBy('id')->pluck('id')->all();
 $r2 = $service->import(TEAM, $file, 'test', false, TENANT);
 check('Wiederholung: gleiche Zeilen-IDs (Leitung jetzt über die Kennung gefunden)', $ids, $fixednet()->orderBy('id')->pluck('id')->all());
 check('Wiederholung: nichts entfernt', [0, 0], [$r2['pruned_rows'], $r2['removed_excel']]);
+check('Wiederholung: Historie bleibt bei einem Eintrag je Zeile', $fixednet()->count(), $history()->count());
+
+// Nur Historie: rechnet, rollt zurück, schreibt nur den Verlauf — Kosten und Monatsstand bleiben.
+$costsBefore = $fixednet()->orderBy('id')->get(['id', 'amount'])->toArray();
+$snapsBefore = AssetInvoiceSnapshot::withoutTenantScope()->count();
+$rh = $service->import(TEAM, $file, 'test', false, TENANT, [], historyOnly: true);
+check('Nur Historie: Kosten unverändert', $costsBefore, $fixednet()->orderBy('id')->get(['id', 'amount'])->toArray());
+check('Nur Historie: Monatsstände unverändert', $snapsBefore, AssetInvoiceSnapshot::withoutTenantScope()->count());
+check('Nur Historie: Einträge gemeldet', [true, $fixednet()->count()], [$rh['history_only'] ?? false, $rh['history_rows'] ?? 0]);
 @unlink($file);
 
 // ---- Konto B räumt Konto A nicht ab --------------------------------------------------------

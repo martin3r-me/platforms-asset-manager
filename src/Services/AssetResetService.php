@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Platform\AssetManager\Models\AssetInvoiceSnapshot;
+use Platform\AssetManager\Models\AssetCostLineHistory;
 use Platform\AssetManager\Models\AssetTelephonySeat;
 use Platform\AssetManager\Models\AssetLicenseBillingAlias;
 use Platform\AssetManager\Models\AssetLicenseContractLine;
@@ -110,6 +111,8 @@ class AssetResetService
             //    Monatsstände der Rechnungen, dann die Asset-Träger (ADR 0017).
             $telephonySeats = AssetTelephonySeat::withoutTenantScope()->where('team_id', $teamId)->delete();
             $snapshots      = AssetInvoiceSnapshot::withoutTenantScope()->where('team_id', $teamId)->delete();
+            // Preis-Historie der Rechnungsimporte (ADR 0029) — gehört zu den Kosten wie die Monatsstände.
+            $costHistory    = AssetCostLineHistory::withoutTenantScope()->where('team_id', $teamId)->delete();
             // Verlauf am Träger (#897) vor den Trägern — holder_id hat keinen FK, der ihn mitnähme.
             $holderEvents = AssetHolderEvent::withoutTenantScope()->where('team_id', $teamId)->delete();
             $holders = AssetHolder::withoutTenantScope()->where('team_id', $teamId)->delete();
@@ -136,6 +139,7 @@ class AssetResetService
                 'billing_aliases' => (int) $billingAliases,
                 'telephony_seats' => (int) $telephonySeats,
                 'invoice_snapshots' => (int) $snapshots,
+                'cost_line_history' => (int) $costHistory,
                 'holder_events' => (int) $holderEvents,
                 'holders'       => (int) $holders,
                 'device_models' => (int) $deviceModels,

@@ -264,6 +264,9 @@
             {{-- ── Telefonie & Festnetz: RingCentral-Benutzerliste + Vodafone-Festnetz (#931) ── --}}
             @include('asset-manager::livewire.costs._telephony')
 
+            {{-- ── Preis-Historie nachtragen (ADR 0029) ─────────────────────────────────────── --}}
+            @include('asset-manager::livewire.costs._history-backfill')
+
             {{-- ── Import-Protokoll (alle Quellen) ─────────────────────────────────────────── --}}
             @include('asset-manager::livewire.costs._import-log')
 

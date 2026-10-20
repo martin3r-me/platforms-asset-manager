@@ -367,6 +367,34 @@
                             </x-asset-manager-detail-row>
                         @endforeach
                     </x-asset-manager-detail-list>
+
+                    {{-- Preisverlauf aus den Rechnungsimporten (ADR 0029): Regelpreis = häufigster Betrag. --}}
+                    @if($controllingEnabled && $priceHistory !== [])
+                        <div class="mt-4 pt-3 border-t border-[color:var(--am-border)] space-y-3">
+                            <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">Preisverlauf (Rechnungen)</div>
+                            @foreach($priceHistory as $ph)
+                                @php $s = $ph['summary']; @endphp
+                                <div>
+                                    <div class="flex flex-wrap items-center gap-2 text-xs">
+                                        <span class="font-medium text-[var(--am-text)]">{{ $ph['label'] }}</span>
+                                        @if($s['regular'] !== null)
+                                            <span class="text-[var(--am-text-secondary)] tabular-nums">Regelpreis {{ number_format($s['regular'], 2, ',', '.') }} €</span>
+                                        @endif
+                                        @if($s['deviates'])
+                                            <x-asset-manager-badge color="amber" size="xs">zuletzt {{ number_format($s['latest'], 2, ',', '.') }} €</x-asset-manager-badge>
+                                        @endif
+                                    </div>
+                                    <div class="mt-1 flex flex-wrap gap-1">
+                                        @foreach($s['months'] as $m)
+                                            @php $off = $s['regular'] !== null && abs($m['amount'] - $s['regular']) >= 0.01; @endphp
+                                            <span class="text-[10px] tabular-nums rounded px-1.5 py-0.5 bg-[var(--am-bg)] {{ $off ? 'text-amber-800 font-semibold' : 'text-[var(--am-text-secondary)]' }}"
+                                                  title="{{ $m['label'] ?? $m['month'] }} · Rechnung {{ $m['invoice'] }}">{{ $m['month'] ? substr($m['month'], 5, 2) . '/' . substr($m['month'], 2, 2) : '—' }} · {{ number_format($m['amount'], 2, ',', '.') }} €</span>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
                 </x-asset-manager-panel>
             @endif
 

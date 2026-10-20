@@ -82,14 +82,19 @@ class VodafoneInvoiceImportService
     public function __construct(
         protected XlsxReader $reader = new XlsxReader(),
         protected InvoiceSnapshotService $snapshots = new InvoiceSnapshotService(),
+        protected CostLineHistoryService $history = new CostLineHistoryService(),
     ) {}
 
     /**
      * Rechnungsdatei einlesen und die Mobilfunk-Kostenpositionen des Tenants darauf ausrichten.
      *
+     * `$historyOnly` (ADR 0029): nur die Preis-Historie nachtragen — der Lauf rechnet wie ein Import,
+     * wird zurückgerollt, und nur die Verlaufszeilen bleiben. Kosten, Monatsstand und die Sperre gegen
+     * ältere Rechnungen (#948) sind davon nicht betroffen, deshalb darf die Rechnung auch älter sein.
+     *
      * @return array<string, mixed> Statistik + Prüfsummen + Auffälligkeiten
      */
-    public function import(int $teamId, string $path, string $batchId = 'vodafone-upload', bool $dryRun = true, ?int $tenantId = null): array
+    public function import(int $teamId, string $path, string $batchId = 'vodafone-upload', bool $dryRun = true, ?int $tenantId = null, bool $historyOnly = false): array
     {
         $this->teamId   = $teamId;
         $this->tenantId = $tenantId ?? TenantContext::defaultTenantId($teamId);
@@ -123,7 +128,9 @@ class VodafoneInvoiceImportService
         ];
         $this->account = $period['account'];
 
-        $this->snapshots->assertNotOlderThanLatest($this->tenantId, self::SOURCE, $period['account'], $period['invoice'], $period['to']);
+        if (! $historyOnly) {
+            $this->snapshots->assertNotOlderThanLatest($this->tenantId, self::SOURCE, $period['account'], $period['invoice'], $period['to']);
+        }
 
         DB::beginTransaction();
 
@@ -155,6 +162,36 @@ class VodafoneInvoiceImportService
 
             [$rounding, $unbalanced] = $this->balanceRounding(round($this->num($header['J'] ?? null), 2));
 
+            // Preis-Historie (ADR 0029): je Kostenposition der Betrag dieser Rechnung, nach dem Rundungsausgleich.
+            $historyRows = $this->history->rows($this->written, [
+                'source'        => self::SOURCE,
+                'account'       => $period['account'],
+                'invoice'       => $period['invoice'],
+                'from'          => $period['from'],
+                'to'            => $period['to'],
+                'booking_month' => $period['to'],
+            ]);
+
+            if ($historyOnly) {
+                DB::rollBack();
+                $stored = $this->history->store($this->teamId, $this->tenantId, $historyRows, resolveLineIds: true);
+
+                return [
+                    'dry_run'           => false,
+                    'history_only'      => true,
+                    'history_rows'      => $stored,
+                    'period'            => $period,
+                    'stats'             => $stats,
+                    'sum_net'           => $sum,
+                    'invoice_total_net' => round($this->num($header['J'] ?? null), 2),
+                    'reconciles'        => abs($sum - round($this->num($header['J'] ?? null), 2)) < 0.01,
+                ];
+            }
+
+            if (! $dryRun) {
+                $this->history->store($this->teamId, $this->tenantId, $historyRows);
+            }
+
             // Monatsstand für die DATEV-Umbuchung — in der Transaktion, ein Probelauf hinterlässt nichts.
             $snapshot = $this->snapshots->capture($this->teamId, $this->tenantId, [
                 'source'       => self::SOURCE,
@@ -182,6 +219,7 @@ class VodafoneInvoiceImportService
                 'rounding'           => $rounding,
                 'rounding_unbalanced'=> $unbalanced,
                 'snapshot'           => InvoiceSnapshotService::summary($snapshot),
+                'history_rows'       => count($historyRows),
             ];
 
             $dryRun ? DB::rollBack() : DB::commit();

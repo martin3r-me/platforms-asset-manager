@@ -221,6 +221,19 @@ DB::table('asset_handover_lines')->insert(['tenant_id' => TENANT, 'handover_id' 
 $r = run(\Platform\AssetManager\Tools\Devices\GetDeviceTool::class, ['id' => 1], $ctxA);
 check('device.GET: gelöschtes Protokoll nicht im Verlauf (#982)', [1], array_column(data($r)['history']['handovers'] ?? [], 'handover_id'));
 
+// ADR 0029: Preisverlauf per Rufnummer in beliebiger Schreibweise — auch ohne heutige Kostenposition.
+(require dirname(__DIR__, 2) . '/database/migrations/2026_10_20_000001_create_asset_cost_line_history_table.php')->up();
+\Platform\AssetManager\Services\CostLineHistoryService::forgetTableCheck();
+foreach (['2026-07-01' => 21.0, '2026-08-01' => 21.0, '2026-09-01' => 4.06] as $month => $amount) {
+    DB::table('asset_cost_line_history')->insert(['team_id' => TEAM_A, 'tenant_id' => TENANT, 'import_hash' => 'h-owusu', 'source' => 'vodafone_invoice',
+        'account' => '86839593', 'invoice' => 'R' . $month, 'booking_month' => $month, 'label' => 'Mobilfunk 01733185736', 'amount' => $amount]);
+}
+$r = run(\Platform\AssetManager\Tools\CostLines\CostLineHistoryTool::class, ['phone' => '+49 173 318 5736'], $ctxA);
+$hl = data($r)['lines'][0] ?? [];
+check('cost-lines.history.GET: Regelpreis, letzter Betrag, Abweichung', [21.0, 4.06, true, 3], [(float) ($hl['regular_price'] ?? 0), (float) ($hl['latest'] ?? 0), $hl['deviates'] ?? null, count($hl['months'] ?? [])]);
+$r = run(\Platform\AssetManager\Tools\CostLines\CostLineHistoryTool::class, [], $ctxA);
+check('cost-lines.history.GET: ohne Suchkriterium VALIDATION_ERROR', 'VALIDATION_ERROR', code($r));
+
 $r = run(\Platform\AssetManager\Tools\Costs\DatevStatusTool::class, ['month' => '2026-09'], $ctxA);
 $sep = data($r)['months'][0] ?? [];
 $statusByInvoice = array_column($sep['invoices'] ?? [], 'status', 'invoice');

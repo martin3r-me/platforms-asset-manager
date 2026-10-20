@@ -11,7 +11,7 @@
                 <p class="text-sm font-medium text-[var(--am-text)]">Wirklich alles löschen?</p>
                 <p class="text-xs text-[var(--am-text-secondary)] mt-1">
                     Alle Einträge dieses Teams (Inventar, Geräte, Asset-Träger, Zuordnungen, Ausgaben,
-                    Kostenzeilen, Lizenzen samt Vertragszeilen, Telefonie-Plätze, Monatsstände der Rechnungen,
+                    Kostenzeilen, Lizenzen samt Vertragszeilen, Telefonie-Plätze, Monatsstände und Preis-Historie der Rechnungen,
                     Verlauf und Stammdaten) werden dauerhaft gelöscht. Die Intune-Anbindung, die Einstellungen
                     (Controlling, Abrechnungsprofile) und die Revisionsspur (Abrechnungsläufe, DATEV-Stapel,
                     Import-Protokolle) bleiben erhalten. Diese Aktion kann

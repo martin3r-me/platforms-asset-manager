@@ -66,14 +66,20 @@ class VodafoneFixedNetImportService
     public function __construct(
         protected VodafoneFixedNetCsv $parser = new VodafoneFixedNetCsv(),
         protected InvoiceSnapshotService $snapshots = new InvoiceSnapshotService(),
+        protected CostLineHistoryService $history = new CostLineHistoryService(),
     ) {}
 
     /**
+     * `$historyOnly` (ADR 0029): nur die Preis-Historie nachtragen — rechnet wie ein Import, rollt
+     * zurück, behält nur die Verlaufszeilen. Die Plätze kommen dabei aus der HEUTIGEN RingCentral-
+     * Benutzerliste; die Beträge je Platz stimmen, die Zuordnung zur Person ist für alte Monate eine
+     * Näherung.
+     *
      * @param  array<string, int>  $lineMapping  Anschlusskennung => AssetItem-ID für Leitungen, die
      *                                           im Inventar noch keine Kennung tragen (erster Lauf)
      * @return array<string, mixed>
      */
-    public function import(int $teamId, string $path, string $batchId = 'fixednet-upload', bool $dryRun = true, ?int $tenantId = null, array $lineMapping = []): array
+    public function import(int $teamId, string $path, string $batchId = 'fixednet-upload', bool $dryRun = true, ?int $tenantId = null, array $lineMapping = [], bool $historyOnly = false): array
     {
         $this->teamId        = $teamId;
         $this->tenantId      = $tenantId ?? TenantContext::defaultTenantId($teamId);
@@ -104,7 +110,9 @@ class VodafoneFixedNetImportService
         $bookingMonth = $bill['period']['label'] !== null
             ? new \DateTimeImmutable($bill['period']['label'] . '-01')
             : $bill['period']['to'];
-        $this->snapshots->assertNotOlderThanLatest($this->tenantId, self::SOURCE, $bill['account'], $bill['invoice'], $bookingMonth);
+        if (! $historyOnly) {
+            $this->snapshots->assertNotOlderThanLatest($this->tenantId, self::SOURCE, $bill['account'], $bill['invoice'], $bookingMonth);
+        }
 
         DB::beginTransaction();
 
@@ -149,6 +157,31 @@ class VodafoneFixedNetImportService
                 $result['telephony']['pool_amount'] = round($result['telephony']['pool_amount'] + $residual, 2);
             }
             $result['pruned_rows'] = $this->prune($bill['account']);
+
+            // Preis-Historie (ADR 0029): je Kostenposition der Betrag dieser Rechnung, nach dem Rundungsausgleich.
+            $historyRows = $this->history->rows($this->written, [
+                'source'        => self::SOURCE,
+                'account'       => $bill['account'],
+                'invoice'       => $bill['invoice'],
+                'from'          => $bill['period']['from'],
+                'to'            => $bill['period']['to'],
+                'booking_month' => $bookingMonth,
+            ]);
+            $result['history_rows'] = count($historyRows);
+
+            if ($historyOnly) {
+                DB::rollBack();
+                $result['history_rows'] = $this->history->store($this->teamId, $this->tenantId, $historyRows, resolveLineIds: true);
+                $result['history_only'] = true;
+                $result['dry_run']      = false;
+                $result['findings']     = $this->findings;
+
+                return $result;
+            }
+
+            if (! $dryRun) {
+                $this->history->store($this->teamId, $this->tenantId, $historyRows);
+            }
 
             // Monatsstand für die DATEV-Umbuchung — in der Transaktion, ein Probelauf hinterlässt nichts.
             $snapshot = $this->snapshots->capture($this->teamId, $this->tenantId, [

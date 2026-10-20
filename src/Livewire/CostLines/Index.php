@@ -24,6 +24,7 @@ use Platform\AssetManager\Services\MasterDataDeletionService;
 use Platform\AssetManager\Services\TenantContext;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Platform\AssetManager\Concerns\ValidatesInGerman;
+use Platform\AssetManager\Services\CostLineHistoryService;
 
 class Index extends Component
 {
@@ -85,6 +86,8 @@ class Index extends Component
     // Editor (Create/Update)
     public bool    $showEditor    = false;
     public ?int    $editId        = null;
+    /** Preisverlauf der geöffneten Position aus den Rechnungsimporten (ADR 0029), sonst null. */
+    public ?array  $editHistory   = null;
     public ?int    $fCostType     = null;
     public string  $fCostCenter   = '';   // Code
     public ?int    $fVendor       = null;
@@ -219,6 +222,14 @@ class Index extends Component
         $this->fValidTo    = $line->valid_to?->format('Y-m-d') ?? '';
         $this->fCurrency   = $line->currency ?: 'EUR';
         $this->fFxRate     = $line->fx_rate !== null ? (string) $line->fx_rate : '';
+
+        // Rechnungs-Positionen tragen ihren Verlauf (ADR 0029) — der Betrag oben ist nur der letzte Monat.
+        $this->editHistory = null;
+        if ($line->import_hash) {
+            $entries = app(CostLineHistoryService::class)->forHashes((int) $line->tenant_id, [(string) $line->import_hash], 24)[$line->import_hash] ?? null;
+            $this->editHistory = $entries ? CostLineHistoryService::summarize($entries) : null;
+        }
+
         $this->showEditor  = true;
         $this->resetValidation();
     }
@@ -368,7 +379,7 @@ class Index extends Component
     {
         $this->reset([
             'editId', 'fCostType', 'fCostCenter', 'fVendor', 'fLabel', 'fAmount',
-            'fAssignee', 'fHolderSearch', 'fValidFrom', 'fValidTo', 'fFxRate',
+            'fAssignee', 'fHolderSearch', 'fValidFrom', 'fValidTo', 'fFxRate', 'editHistory',
         ]);
         $this->fFrequency = 'monthly';
         $this->fActive    = true;

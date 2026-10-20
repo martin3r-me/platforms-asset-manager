@@ -210,6 +210,7 @@ class AssetManagerServiceProvider extends ServiceProvider
 
             // Kostenpositionen
             $registry->register(new \Platform\AssetManager\Tools\CostLines\ListCostLinesTool());
+            $registry->register(new \Platform\AssetManager\Tools\CostLines\CostLineHistoryTool());
             $registry->register(new \Platform\AssetManager\Tools\CostLines\CreateCostLineTool());
             $registry->register(new \Platform\AssetManager\Tools\CostLines\UpdateCostLineTool());
             $registry->register(new \Platform\AssetManager\Tools\CostLines\DeleteCostLineTool());

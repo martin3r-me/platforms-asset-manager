@@ -151,6 +151,36 @@
         <label class="flex items-center gap-2 text-sm text-[var(--am-text-secondary)]">
             <input type="checkbox" wire:model="fActive" class="rounded"> Aktiv
         </label>
+
+        {{-- Preisverlauf aus den Rechnungsimporten (ADR 0029) — der Betrag oben ist nur der letzte Monat. --}}
+        @if($editId && $editHistory)
+            <div class="pt-3 border-t border-[color:var(--am-border)]">
+                <div class="flex flex-wrap items-center gap-2 mb-2">
+                    <span class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">Preisverlauf (Rechnungen)</span>
+                    @if($editHistory['regular'] !== null)
+                        <span class="text-xs text-[var(--am-text-secondary)] tabular-nums">Regelpreis {{ number_format($editHistory['regular'], 2, ',', '.') }} €</span>
+                    @endif
+                    @if($editHistory['deviates'])
+                        <x-asset-manager-badge color="amber" size="xs">zuletzt {{ number_format($editHistory['latest'], 2, ',', '.') }} €</x-asset-manager-badge>
+                    @endif
+                </div>
+                <div class="max-h-48 overflow-y-auto rounded-lg border border-[color:var(--am-border)]">
+                    <table class="w-full text-xs">
+                        <tbody class="divide-y divide-[color:var(--am-border)]">
+                            @foreach(array_reverse($editHistory['months']) as $m)
+                                @php $off = $editHistory['regular'] !== null && abs($m['amount'] - $editHistory['regular']) >= 0.01; @endphp
+                                <tr>
+                                    <td class="px-3 py-1.5 text-[var(--am-text-secondary)] tabular-nums">{{ $m['month'] ? substr($m['month'], 5, 2) . '/' . substr($m['month'], 0, 4) : '—' }}</td>
+                                    <td class="px-3 py-1.5 text-[var(--am-text-muted)] tabular-nums">{{ $m['label'] ?? '' }}</td>
+                                    <td class="px-3 py-1.5 text-[var(--am-text-muted)] tabular-nums">{{ $m['invoice'] }}</td>
+                                    <td class="px-3 py-1.5 text-right tabular-nums {{ $off ? 'text-amber-800 font-semibold' : 'text-[var(--am-text)]' }}">{{ number_format($m['amount'], 2, ',', '.') }} €</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        @endif
     </div>
 
     <x-slot name="footer">

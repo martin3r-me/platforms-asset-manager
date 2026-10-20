@@ -74,7 +74,7 @@ abschaltbar (ADR 0008).
 | [`CONTEXT.md`](CONTEXT.md) | Domänen-Sprache, Glossar, Datenquellen, Pivot, Tenant/Connector |
 | [`DESIGN.md`](DESIGN.md) | UI-Design-System (flach, Navy-Primary, `--am-*`-Tokens) |
 | [`LLM_GUIDE.md`](LLM_GUIDE.md) | Kurzkontext für LLMs, die an diesem Modul arbeiten |
-| [`docs/adr/`](docs/adr/) | Entscheidungen 0001–0028 (Übersicht unten) |
+| [`docs/adr/`](docs/adr/) | Entscheidungen 0001–0029 (Übersicht unten) |
 | [`docs/connector-microsoft-onboarding.md`](docs/connector-microsoft-onboarding.md) | Microsoft-Connector anbinden (zentrale App, manueller Consent) |
 | [`docs/agents/`](docs/agents/) | Agent-Skills: Issue-Tracker, Triage-Labels, Domain-Docs, Logic-Audit, Architecture-Review |
 | [`tests/README.md`](tests/README.md) | Die drei Test-Ebenen (Guardrails, `tests/local`, Host-Feature-Tests) |
@@ -112,6 +112,7 @@ abschaltbar (ADR 0008).
 | 0026 | Festnetz und RingCentral aus der Vodafone-Rechnung |
 | 0027 | DATEV-Umbuchung aus den Monatsständen der Rechnungen |
 | 0028 | Geräteausgabe: Signatur optional, eine offene je Gerät, Abdeckung als Kennzahl |
+| 0029 | Preis-Historie der Rechnungsimporte: Betrag je Kostenposition und Rechnung, Regelpreis, Historie nachtragen |
 
 ## Struktur
 
