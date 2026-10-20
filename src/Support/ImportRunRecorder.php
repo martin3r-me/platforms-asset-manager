@@ -131,10 +131,6 @@ final class ImportRunRecorder
         $metrics = [
             'Benutzer im Verzeichnis' => $this->number($result['count'] ?? 0, 0),
             'Stillgelegt'             => $this->number($result['deactivated'] ?? 0, 0),
-            // #970: null = Graph liefert keine Anmeldedaten (AuditLog.Read.All / Entra P1 fehlen).
-            'Letzte Anmeldung'        => array_key_exists('sign_ins', $result) && $result['sign_ins'] === null
-                ? 'nicht verfügbar (Berechtigung fehlt)'
-                : $this->number($result['sign_ins'] ?? 0, 0) . ' aktualisiert',
         ];
 
         $findings = [];

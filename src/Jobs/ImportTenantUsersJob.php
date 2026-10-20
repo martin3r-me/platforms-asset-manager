@@ -129,13 +129,10 @@ class ImportTenantUsersJob implements ShouldQueue, ShouldBeUnique
 
         $deactivated = $this->reconcileHolders($teamId, $tenantId, $seenUpns);
 
-        // Letzte Anmeldung (#970) — degradiert: ohne AuditLog.Read.All bleibt sie einfach leer.
-        $signIns = $this->syncSignInActivity($graph, $config, $teamId, $tenantId);
-
         // Nachweis, dass der Abgleich lief — die Weiterberechnung zählt `is_active`, und ein still
         // ausgefallener Abgleich rechnete Ausgeschiedene weiter ab (#954).
         app(ImportRunRecorder::class)->record(AssetImportRun::SOURCE_DIRECTORY, $teamId, $tenantId,
-            ['count' => $count, 'deactivated' => $deactivated, 'sign_ins' => $signIns], null, false, null, $startedAt);
+            ['count' => $count, 'deactivated' => $deactivated], null, false, null, $startedAt);
 
         Log::info('AssetManager: Tenant-User-Import abgeschlossen', [
             'connector_id' => $this->connectorId,
@@ -143,42 +140,6 @@ class ImportTenantUsersJob implements ShouldQueue, ShouldBeUnique
             'count'        => $count,
             'deactivated'  => $deactivated,
         ]);
-    }
-
-    /**
-     * Letzte Anmeldung je Träger übernehmen (#970). Gibt die Zahl aktualisierter Träger zurück, oder
-     * null, wenn Graph die Daten nicht liefert (fehlende Berechtigung/Lizenz) — dann bleibt alles, wie es war.
-     */
-    protected function syncSignInActivity(IntuneGraphService $graph, AssetConnectorConfig $config, int $teamId, int $tenantId): ?int
-    {
-        $activity = $graph->getSignInActivity($config);
-        if ($activity === null) {
-            Log::info('AssetManager: Anmeldedaten nicht verfügbar', ['connector_id' => $this->connectorId, 'reason' => $graph->lastError]);
-            return null;
-        }
-
-        $updated = 0;
-        \Platform\AssetManager\Models\AssetHolder::withoutTenantScope()
-            ->forTenant($tenantId)
-            ->where('team_id', $teamId)
-            ->whereNotNull('user_principal_name')
-            ->get(['id', 'user_principal_name', 'last_sign_in_at'])
-            ->each(function ($holder) use ($activity, &$updated) {
-                $at = $activity[mb_strtolower((string) $holder->user_principal_name)] ?? null;
-                if ($at === null) {
-                    return;
-                }
-                $at = \Carbon\Carbon::parse($at)->setTimezone(config('app.timezone'));
-                if ($holder->last_sign_in_at === null || ! $holder->last_sign_in_at->equalTo($at)) {
-                    // Query-Update statt save(): die Anmeldung ist kein fachlicher Änderungsvorgang und soll
-                    // keine Verlaufs-Events (#897) und keine updated_at-Bewegung auslösen.
-                    \Platform\AssetManager\Models\AssetHolder::withoutTenantScope()->whereKey($holder->id)
-                        ->update(['last_sign_in_at' => $at]);
-                    $updated++;
-                }
-            });
-
-        return $updated;
     }
 
     /**

@@ -198,7 +198,6 @@ class AssetManagerServiceProvider extends ServiceProvider
             // Lizenzen
             $registry->register(new \Platform\AssetManager\Tools\Licenses\ListLicensesTool());
             $registry->register(new \Platform\AssetManager\Tools\Licenses\ListUserLicensesTool());
-            $registry->register(new \Platform\AssetManager\Tools\Licenses\LicenseReclaimTool());
 
             // Kosten-Auswertungen (read-only)
             $registry->register(new \Platform\AssetManager\Tools\Costs\CostSummaryTool());

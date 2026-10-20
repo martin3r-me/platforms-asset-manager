@@ -138,29 +138,6 @@
                 </x-asset-manager-stat-card>
             </div>
 
-            {{-- Lizenz-Reclaim (#970): Lizenz, aber seit 90 Tagen keine Anmeldung. Ohne Entra-Anmeldedaten
-                 (AuditLog.Read.All / P1) bleibt der Abschnitt weg statt „alle genutzt" zu behaupten. --}}
-            @if($reclaim['available'] && $reclaim['count'] > 0)
-                <details class="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
-                    <summary class="cursor-pointer text-sm text-amber-900">
-                        <strong>{{ $reclaim['count'] }} Träger</strong> mit Lizenz, aber ohne Anmeldung seit {{ $reclaim['days'] }} Tagen{{ $controllingEnabled ? ' — ' . number_format($reclaim['monthly'], 2, ',', '.') . ' € / Monat' : '' }}
-                    </summary>
-                    <ul class="mt-2 divide-y divide-amber-200 text-sm">
-                        @foreach($reclaim['rows'] as $r)
-                            <li class="flex items-center justify-between gap-3 py-1.5">
-                                <span class="min-w-0 truncate">
-                                    <a href="{{ route('asset-manager.holders.show', $r['holder_id']) }}" wire:navigate class="text-amber-950 hover:underline">{{ $r['name'] }}</a>
-                                    <span class="text-xs text-amber-800">· zuletzt {{ \Illuminate\Support\Carbon::parse($r['last_sign_in_at'])->format('d.m.Y') }} · {{ implode(', ', $r['licenses']) }}</span>
-                                </span>
-                                @if($controllingEnabled)
-                                    <span class="text-xs tabular-nums text-amber-900 flex-shrink-0">{{ number_format($r['monthly'], 2, ',', '.') }} €</span>
-                                @endif
-                            </li>
-                        @endforeach
-                    </ul>
-                </details>
-            @endif
-
             @if($priceNotice)
                 <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-sky-50 border border-sky-200">
                     @svg('heroicon-o-information-circle', 'w-4 h-4 text-sky-600 flex-shrink-0')

@@ -299,9 +299,6 @@ class Index extends Component
             'totalMonthlyCost' => $totalMonthlyCost,
             'unusedLicenses'   => $unusedLicenses,
             'unpricedCount'    => $unpricedCount,
-            // Lizenz-Reclaim (#970): aktive Träger mit Lizenz, aber ohne Anmeldung seit 90 Tagen.
-            'reclaim'          => app(\Platform\AssetManager\Services\LicenseReclaimService::class)->candidates($team->id),
-            'controllingEnabled' => app(\Platform\AssetManager\Services\ControllingContext::class)->enabledFor($team->id),
             'lastLog'          => $lastLog,
             'canSync'          => $canSync,
             'config'           => $config,
