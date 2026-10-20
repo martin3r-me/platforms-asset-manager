@@ -15,6 +15,7 @@ use Platform\AssetManager\Services\BillingRunService;
 use Platform\AssetManager\Services\BillingUnitPriceResolver;
 use Platform\AssetManager\Services\TenantContext;
 use Throwable;
+use Platform\AssetManager\Concerns\ValidatesInGerman;
 
 /**
  * Weiterberechnung: Abrechnungsprofile pflegen und daraus Rechnungsentwürfe erzeugen
@@ -29,6 +30,7 @@ class Index extends Component
 {
     use ResolvesCurrentTeam;
     use AuthorizesTeamRole;
+    use ValidatesInGerman;
 
     /**
      * Wie lange ein in easybill bestätigter Beleg für die **Vorschau** als vorhanden gilt (#977).

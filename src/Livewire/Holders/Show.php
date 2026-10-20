@@ -21,10 +21,12 @@ use Platform\AssetManager\Services\CostAggregationService;
 use Platform\AssetManager\Services\HolderService;
 use Platform\AssetManager\Services\HolderTypeService;
 use Platform\AssetManager\Support\DeviceCostResolver;
+use Platform\AssetManager\Concerns\ValidatesInGerman;
 
 class Show extends Component
 {
     use GuardsTenantBoundary;
+    use ValidatesInGerman;
 
     public AssetHolder $holder;
 

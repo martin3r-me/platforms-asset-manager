@@ -150,7 +150,7 @@
                 <x-asset-manager-stat-card
                     href="{{ route('asset-manager.licenses.index') }}" wire:navigate
                     label="Ungenutzte Lizenzen" :value="$unusedLicenses"
-                    sub="{{ $lastLicenseSync ? 'Letzter Sync ' . $lastLicenseSync->started_at->diffForHumans() : 'Noch kein Lizenz-Sync' }}"
+                    sub="{{ $lastLicenseSync ? 'Letzter Sync ' . $lastLicenseSync->started_at->locale('de')->diffForHumans() : 'Noch kein Lizenz-Sync' }}"
                     icon="heroicon-o-key" accent="amber"
                     value-class="{{ $unusedLicenses > 0 ? 'text-amber-600' : '' }}" />
             </div>
@@ -207,7 +207,7 @@
                                         @endif
                                     </div>
                                     @if($config->last_sync_at)
-                                        <div class="text-xs text-[var(--am-text-muted)]">{{ $config->last_sync_at->diffForHumans() }}</div>
+                                        <div class="text-xs text-[var(--am-text-muted)]">{{ $config->last_sync_at->locale('de')->diffForHumans() }}</div>
                                     @endif
                                 </div>
                             </div>

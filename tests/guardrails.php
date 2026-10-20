@@ -301,6 +301,23 @@ foreach (collectFiles($root . '/src/Tools', '.php') as $toolFile) {
     }
 }
 
+// ---- Check 10: deutsche Texte trotz englischer Host-Locale --------------------------------
+// Die Host-App läuft mit locale=en (#983): jede validierende Komponente bringt die deutschen
+// Meldungen über ValidatesInGerman mit, jede relative Zeitangabe setzt die Sprache selbst.
+foreach (collectFiles($root . '/src/Livewire', '.php') as $lwFile) {
+    $code = (string) file_get_contents($lwFile);
+    if (preg_match('/->validate(Only)?\(/', $code) && ! str_contains($code, 'use ValidatesInGerman;')) {
+        $failures[] = 'Check 10 (deutsch): ' . relpath($root, $lwFile) . ' validiert ohne ValidatesInGerman (englische Meldungen).';
+    }
+}
+foreach (array_merge(collectFiles($root . '/resources/views', '.blade.php'), collectFiles($root . '/src', '.php')) as $f) {
+    foreach (file($f) as $no => $line) {
+        if (str_contains($line, 'diffForHumans(') && ! str_contains($line, "locale('de')")) {
+            $failures[] = 'Check 10 (deutsch): ' . relpath($root, $f) . ':' . ($no + 1) . " diffForHumans() ohne ->locale('de') (\"2 hours ago\").";
+        }
+    }
+}
+
 // ---- Report ---------------------------------------------------------------------------
 echo "Asset-Manager static guardrails\n";
 echo "  Tools:    {$toolCount} found, " . ($toolCount - count($unregistered)) . " registered\n";

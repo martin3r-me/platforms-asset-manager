@@ -12,6 +12,7 @@ use Platform\AssetManager\Models\AssetTenant;
 use Platform\AssetManager\Services\ControllingContext;
 use Platform\AssetManager\Services\HolderClassifier;
 use Platform\AssetManager\Services\TenantContext;
+use Platform\AssetManager\Concerns\ValidatesInGerman;
 
 /**
  * Modul-Einstellungen je Team (ADR 0008). Controlling-Schalter + Gefahrenzone (Team-Reset).
@@ -20,6 +21,7 @@ use Platform\AssetManager\Services\TenantContext;
 class Index extends Component
 {
     use ResolvesCurrentTeam;
+    use ValidatesInGerman;
 
     public bool $controllingEnabled = false;
 

@@ -439,7 +439,7 @@
                                 @if($ev->old_value !== null || $ev->new_value !== null)
                                     <div class="text-[11px] text-[var(--am-text-secondary)] mt-1">{{ $ev->old_value ?: '—' }} → {{ $ev->new_value ?: '—' }}</div>
                                 @endif
-                                <div class="text-[10px] text-[var(--am-text-muted)] mt-0.5">{{ $ev->created_at?->diffForHumans() }}@if($ev->actor) · {{ $ev->actor->name }}@endif</div>
+                                <div class="text-[10px] text-[var(--am-text-muted)] mt-0.5">{{ $ev->created_at?->locale('de')->diffForHumans() }}@if($ev->actor) · {{ $ev->actor->name }}@endif</div>
                             </div>
                         @empty
                             <p class="text-sm text-[var(--am-text-secondary)]">Noch keine Änderungen erfasst.</p>
@@ -468,7 +468,7 @@
                                 @elseif($log->status === 'error' && $log->error_message)
                                     <div class="text-[11px] text-red-700 mt-0.5 break-words">{{ Str::limit($log->error_message, 140) }}</div>
                                 @endif
-                                <div class="text-[10px] text-[var(--am-text-muted)] mt-0.5">{{ $log->started_at?->diffForHumans() }}@if($log->duration_ms) · {{ number_format($log->duration_ms / 1000, 1) }}s @endif</div>
+                                <div class="text-[10px] text-[var(--am-text-muted)] mt-0.5">{{ $log->started_at?->locale('de')->diffForHumans() }}@if($log->duration_ms) · {{ number_format($log->duration_ms / 1000, 1) }}s @endif</div>
                             </div>
                         @empty
                             <p class="text-sm text-[var(--am-text-secondary)]">Noch keine Synchronisierungen.</p>

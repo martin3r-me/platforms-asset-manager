@@ -331,7 +331,7 @@ final class ImportRunRecorder
         $stats = (array) ($result['stats'] ?? []);
 
         $metrics = [
-            'Zeitraum'       => trim(($result['period']['from'] ?? '') . '–' . ($result['period']['to'] ?? ''), '–') ?: '—',
+            'Zeitraum'       => trim($this->date($result['period']['from'] ?? null) . '–' . $this->date($result['period']['to'] ?? null), '–') ?: '—',
             'Rechnung'       => (string) ($result['period']['invoice'] ?? '—'),
             'Rufnummern'     => $this->number($stats['numbers'] ?? 0, 0),
             'Zugeordnet'     => $this->number($stats['matched'] ?? 0, 0),
@@ -487,5 +487,19 @@ final class ImportRunRecorder
     private function number(mixed $value, int $decimals = 2): string
     {
         return number_format((float) $value, $decimals, ',', '.');
+    }
+
+    /** Datum als 15.08.2026 — vorher stand der Rohwert „2026-08-15 00:00:00“ im Protokoll (#983). */
+    private function date(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        try {
+            return \Illuminate\Support\Carbon::parse($value)->format('d.m.Y');
+        } catch (\Throwable) {
+            return (string) $value;
+        }
     }
 }

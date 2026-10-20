@@ -229,7 +229,7 @@
                             @endif
 
                             @if($connector && $connector->last_sync_at)
-                                <p class="text-xs text-[var(--am-text-secondary)]">Letzter Sync: {{ $connector->last_sync_at->diffForHumans() }}
+                                <p class="text-xs text-[var(--am-text-secondary)]">Letzter Sync: {{ $connector->last_sync_at->locale('de')->diffForHumans() }}
                                     @if($connector->sync_error) · <span class="text-red-700">{{ $connector->sync_error }}</span> @endif
                                 </p>
                             @endif

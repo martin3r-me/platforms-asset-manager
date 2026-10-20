@@ -23,6 +23,7 @@ use Platform\AssetManager\Models\AssetVendor;
 use Platform\AssetManager\Services\AssetWriteService;
 use Platform\AssetManager\Services\ControllingContext;
 use Platform\AssetManager\Support\AssetSubject;
+use Platform\AssetManager\Concerns\ValidatesInGerman;
 
 /**
  * Vereinte „Inventar"-Detailseite über beide Hardware-Welten (E1/E3): per Typ-Dispatch wird
@@ -41,6 +42,7 @@ class Show extends Component
     use ResolvesCurrentTeam;
     use AuthorizesTeamRole;
     use GuardsTenantBoundary;
+    use ValidatesInGerman;
 
     public string $type;
     public int    $id;

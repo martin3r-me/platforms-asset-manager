@@ -26,6 +26,7 @@ use Platform\AssetManager\Services\HolderService;
 use Platform\AssetManager\Services\HolderTypeService;
 use Platform\AssetManager\Services\TenantContext;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Platform\AssetManager\Concerns\ValidatesInGerman;
 
 class Index extends Component
 {
@@ -33,6 +34,7 @@ class Index extends Component
     use CustomizesTableView;
     use WithPagination;
     use ResolvesCurrentTeam;
+    use ValidatesInGerman;
 
     /**
      * Deckel für „alle gefilterten auswählen". Eine Auswahl über tausende Träger wäre weder im

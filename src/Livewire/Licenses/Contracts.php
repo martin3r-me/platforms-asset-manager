@@ -13,6 +13,7 @@ use Platform\AssetManager\Services\LicenseSeatAllocator;
 use Platform\AssetManager\Services\ControllingContext;
 use Platform\AssetManager\Support\LicenseContractInsights;
 use Platform\AssetManager\Support\LicensePriceBook;
+use Platform\AssetManager\Concerns\ValidatesInGerman;
 
 /**
  * Vertragszeilen eines Abrechnungsmonats: was bezahlt wird, wofür, und wo es landet.
@@ -30,6 +31,7 @@ class Contracts extends Component
 {
     use ResolvesCurrentTeam;
     use AuthorizesTeamRole;
+    use ValidatesInGerman;
 
     public string $period = '';
 

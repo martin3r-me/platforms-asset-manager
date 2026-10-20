@@ -16,6 +16,7 @@ use Platform\AssetManager\Models\AssetVendor;
 use Platform\AssetManager\Services\CostBootstrapService;
 use Platform\AssetManager\Services\MasterDataDeletionService;
 use Platform\AssetManager\Services\TenantContext;
+use Platform\AssetManager\Concerns\ValidatesInGerman;
 
 /**
  * Stammdaten-Sammelseite mit Master-Detail-Layout (wie Geräte/Asset-Träger):
@@ -33,6 +34,7 @@ use Platform\AssetManager\Services\TenantContext;
 class Index extends Component
 {
     use ResolvesCurrentTeam;
+    use ValidatesInGerman;
 
     /** Aktiver Bereich; per #[Url] deep-linkbar (?bereich=...). */
     #[Url(as: 'bereich')]

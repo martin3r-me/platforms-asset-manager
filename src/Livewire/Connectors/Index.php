@@ -15,6 +15,7 @@ use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetTenant;
 use Platform\AssetManager\Services\IntuneGraphService;
+use Platform\AssetManager\Concerns\ValidatesInGerman;
 
 /**
  * Konnektoren-Verwaltung (Multi-Tenant, M2 — siehe docs/adr/0003):
@@ -28,6 +29,7 @@ use Platform\AssetManager\Services\IntuneGraphService;
 class Index extends Component
 {
     use ResolvesCurrentTeam;
+    use ValidatesInGerman;
 
     public ?int $selectedTenantId = null;
 

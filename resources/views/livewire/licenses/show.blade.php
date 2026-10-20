@@ -96,7 +96,7 @@
                         <x-asset-manager-detail-row label="Part Number"><span class="block truncate">{{ $sku->sku_part_number }}</span></x-asset-manager-detail-row>
                         <x-asset-manager-detail-row label="SKU ID" mono><span class="block truncate text-[var(--am-text-muted)]">{{ $sku->sku_id }}</span></x-asset-manager-detail-row>
                         @if($sku->synced_at)
-                            <x-asset-manager-detail-row label="Letzter Sync"><span class="tabular-nums">{{ $sku->synced_at->diffForHumans() }}</span></x-asset-manager-detail-row>
+                            <x-asset-manager-detail-row label="Letzter Sync"><span class="tabular-nums">{{ $sku->synced_at->locale('de')->diffForHumans() }}</span></x-asset-manager-detail-row>
                         @endif
                     </x-asset-manager-detail-list>
                     {{-- Die vollständige Sync-Historie stand früher als rechte Sidebar hier; sie gehört

@@ -22,6 +22,7 @@ use Platform\AssetManager\Services\ControllingContext;
 use Platform\AssetManager\Services\InventoryService;
 use Platform\AssetManager\Support\InventoryRow;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Platform\AssetManager\Concerns\ValidatesInGerman;
 
 /**
  * Vereinte „Inventar"-Hauptliste über manuelle Assets (asset_items) UND Intune-Geräte
@@ -43,6 +44,7 @@ class Index extends Component
     use ClampsListState;
     use ResolvesCurrentTeam;
     use WithPagination;
+    use ValidatesInGerman;
 
     public string $search           = '';
     public string $filterType       = '';   // '' | 'manual' | 'intune'

@@ -12,7 +12,7 @@
                 @if($config && $config->isConfigured() && $config->last_sync_at)
                     <span class="text-xs text-[var(--am-text-secondary)]">
                         @svg('heroicon-o-clock', 'w-3 h-3 inline -mt-0.5')
-                        Letzter Sync {{ $config->last_sync_at->diffForHumans() }}
+                        Letzter Sync {{ $config->last_sync_at->locale('de')->diffForHumans() }}
                     </span>
                 @endif
                 @if($config && $config->isConfigured() && $stats['total'] > 0)
@@ -367,7 +367,7 @@
                                             @break
                                             @case('lastCheckIn')
                                                 <td class="px-4 py-3 text-sm text-[var(--am-text-muted)]">
-                                                    {{ $device->last_check_in_at ? $device->last_check_in_at->diffForHumans() : '—' }}
+                                                    {{ $device->last_check_in_at ? $device->last_check_in_at->locale('de')->diffForHumans() : '—' }}
                                                 </td>
                                             @break
                                             @case('cost')

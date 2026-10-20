@@ -57,6 +57,7 @@ php tests/local/team-role-memo.php            # Memoisierung von TeamRole::isOwn
 php tests/local/plausibility-foreign-source.php # Plausibilitätsregel: Position auf Kostenart mit fremder Quelle (#899)
 php tests/local/tenant-isolation.php          # Global Scope über ALLE TenantScopable-Models + bewusster Ausstieg (#901, ADR 0016)
 php tests/local/mcp-tools-smoke.php           # MCP-Tools im echten Aufruf: Rechte, tenant_id, fremder Tenant, Lese-Tools (#976)
+php tests/local/german-texts.php             # deutsche Validierungsmeldungen, Protokoll-Datum, relative Zeiten trotz locale=en (#983)
 php tests/local/live-test-fixes.php          # Befunde Live-Test 2026-10-20: Status-Ablehnung, Kosten ohne Controlling, gelöschte Ausgabe (#980–#982)
 
 # Geräte & Inventar

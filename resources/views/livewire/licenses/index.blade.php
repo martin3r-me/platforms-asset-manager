@@ -128,7 +128,7 @@
                             @else Läuft...
                             @endif
                         </div>
-                        <div class="text-xs text-[var(--am-text-muted)] mt-0.5 font-normal">{{ $lastLog->started_at->diffForHumans() }}</div>
+                        <div class="text-xs text-[var(--am-text-muted)] mt-0.5 font-normal">{{ $lastLog->started_at->locale('de')->diffForHumans() }}</div>
                         @if($lastLog->status === 'error' && $lastLog->error_message)
                             <div class="text-xs text-red-700 mt-1 truncate font-normal">{{ $lastLog->error_message }}</div>
                         @endif

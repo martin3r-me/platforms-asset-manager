@@ -23,11 +23,13 @@ use Platform\AssetManager\Services\CostPlausibilityService;
 use Platform\AssetManager\Services\MasterDataDeletionService;
 use Platform\AssetManager\Services\TenantContext;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Platform\AssetManager\Concerns\ValidatesInGerman;
 
 class Index extends Component
 {
     use ResolvesCurrentTeam;
     use WithPagination;
+    use ValidatesInGerman;
 
     /**
      * Gruppierungsachsen. Eine Stelle, an der eine weitere Achse dazukommt.

@@ -16,6 +16,7 @@ use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Models\AssetHandover;
 use Platform\AssetManager\Services\TenantContext;
 use Platform\AssetManager\Models\AssetHandoverLine;
+use Platform\AssetManager\Concerns\ValidatesInGerman;
 
 /**
  * Geräteausgaben — globale Liste + personen-first Mehrgeräte-Editor (eine Unterschrift je Protokoll).
@@ -26,6 +27,7 @@ class Index extends Component
 {
     use ResolvesCurrentTeam;
     use WithPagination;
+    use ValidatesInGerman;
 
     public string $search       = '';
     public string $filterStatus = ''; // ''|open|partially_returned|returned

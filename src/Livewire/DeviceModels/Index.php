@@ -14,6 +14,7 @@ use Platform\AssetManager\Models\AssetDeviceModelCost;
 use Platform\AssetManager\Models\AssetVendor;
 use Platform\AssetManager\Services\ControllingContext;
 use Platform\AssetManager\Services\TenantContext;
+use Platform\AssetManager\Concerns\ValidatesInGerman;
 
 /**
  * Hardware-Katalog + tenant-eigene Kosten.
@@ -30,6 +31,7 @@ class Index extends Component
 {
     use ResolvesCurrentTeam;
     use AuthorizesTeamRole;
+    use ValidatesInGerman;
 
     public ?int    $editId    = null;
     public ?string $eMonthly  = null;
