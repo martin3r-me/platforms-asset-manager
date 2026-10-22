@@ -495,8 +495,9 @@ class Import extends Component
             $this->addError('historyFiles', 'Bitte eine oder mehrere Rechnungsdateien wählen.');
             return;
         }
-        if (count($files) > 40) {
-            $this->addError('historyFiles', 'Höchstens 40 Dateien auf einmal.');
+        // PHP (max_file_uploads) liefert höchstens 20 Dateien je Upload — mehr kommt hier nie an.
+        if (count($files) > 20) {
+            $this->addError('historyFiles', 'Höchstens 20 Dateien je Durchgang.');
             return;
         }
 

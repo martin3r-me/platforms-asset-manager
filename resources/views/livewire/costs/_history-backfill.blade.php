@@ -15,8 +15,11 @@
             </div>
 
             <div>
-                <label class="block text-xs text-[var(--am-text-secondary)] mb-1.5">Rechnungsdateien (.csv / .xlsx, mehrere möglich)</label>
+                <label class="block text-xs text-[var(--am-text-secondary)] mb-1.5">Rechnungsdateien (.csv / .xlsx, höchstens 20 je Durchgang)</label>
+                {{-- PHP nimmt je Upload höchstens 20 Dateien an (max_file_uploads) und verwirft den Rest still —
+                     deshalb hier vorher abfangen. .capture läuft vor dem Upload-Listener von wire:model. --}}
                 <input type="file" wire:model="historyFiles" multiple accept=".xlsx,.csv"
+                       x-on:change.capture="if ($event.target.files.length > 20) { $event.stopImmediatePropagation(); alert('Höchstens 20 Dateien je Durchgang — bitte in mehreren Runden hochladen.'); $event.target.value = ''; }"
                        class="block w-full text-sm text-[var(--am-text-secondary)] file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[var(--am-primary)] file:text-[var(--am-on-primary)] hover:file:opacity-90 file:cursor-pointer cursor-pointer">
                 @error('historyFiles')<span class="text-[11px] text-red-700">{{ $message }}</span>@enderror
                 <div wire:loading wire:target="historyFiles" class="text-[11px] text-[var(--am-text-secondary)] mt-1">Lade hoch …</div>
@@ -28,7 +31,7 @@
             </div>
 
             <div class="flex items-center gap-2">
-                <x-asset-manager-button variant="primary" size="md" wire:click="runHistoryBackfill" wire:loading.attr="disabled" wire:target="runHistoryBackfill,historyFiles"
+                <x-asset-manager-button variant="primary" size="md" wire:click="runHistoryBackfill" wire:loading.attr="disabled" wire:target="runHistoryBackfill"
                         :disabled="count((array) $historyFiles) === 0">
                     @svg('heroicon-o-clock', 'w-3.5 h-3.5')
                     In die Historie übernehmen
