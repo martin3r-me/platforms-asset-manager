@@ -70,3 +70,19 @@ Entscheidung:
 - **Folge für die Weiterberechnung** ([ADR 0021](0021-weiterberechnung-als-zaehlregel.md)):
   Ausgeschiedene fallen künftig aus der Zählung, weil die Zählregel nur aktive Träger sieht. Bis zu
   diesem Schritt zählten sie mit, solange sie eine Lizenz trugen.
+
+## Nachtrag 2026-10-22: Umbenennung im AD (#986)
+
+Eine korrigierte UPN (Tippfehler O.PARADZE → O.PERADZE, ebenso Namensänderungen) war für uns eine
+neue Person: der Geräte- oder Lizenz-Sync legte für die neue UPN einen zweiten Träger an, und der
+Abgleich legte den alten still — zwei Träger, beide zeitweise in der Weiterberechnung.
+
+- Der Verzeichnis-Abgleich sucht vor dem UPN-Abgleich über die **Entra-Objekt-ID** (`graph_id`,
+  bleibt bei einer Umbenennung gleich). Weicht die UPN ab, wird der **bestehende Träger umbenannt**;
+  Geräte und Lizenzen ziehen über die UPN mit (`HolderMergeService::followRename()`).
+- Träger mit der neuen UPN und ohne oder mit derselben Entra-ID werden hineingeführt — auch ein
+  schon gespaltener Fall (zwei Träger mit derselben ID) heilt beim nächsten Abgleich. Ziel ist der
+  älteste Träger der ID; er trägt Verlauf und gepflegte Felder.
+- Gehört die neue UPN einem Träger mit **anderer** Entra-ID, bleibt alles, wie es ist: das sind
+  zwei Personen (UPN eines gelöschten Kontos neu vergeben).
+- `HolderMergeService::REFERENCES` umfasst seitdem auch Telefonie-Plätze und die Preis-Historie.

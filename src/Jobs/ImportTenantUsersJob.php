@@ -7,6 +7,7 @@ use Platform\AssetManager\Models\AssetImportRun;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Platform\AssetManager\Models\AssetConnectorConfig;
 use Platform\AssetManager\Services\HolderClassifier;
+use Platform\AssetManager\Services\HolderMergeService;
 use Platform\AssetManager\Services\HolderService;
 use Platform\AssetManager\Services\IntuneGraphService;
 use Platform\AssetManager\Services\TenantContext;
@@ -96,9 +97,21 @@ class ImportTenantUsersJob implements ShouldQueue, ShouldBeUnique
 
         $count    = 0;
         $seenUpns = [];
+        $renamed  = 0;
+        $merged   = 0;
+        $merger   = app(HolderMergeService::class);
 
         foreach ($users as $u) {
             if (empty($u['userPrincipalName'])) continue;
+
+            // Umbenennung im AD (#986): erst über die Entra-Objekt-ID den bestehenden Träger finden und
+            // umbenennen — sonst entstünde für die neue UPN ein zweiter Träger, und der alte würde stillgelegt.
+            if (! empty($u['id'])) {
+                $follow   = $merger->followRename($teamId, $tenantId, (string) $u['id'], (string) $u['userPrincipalName']);
+                $renamed += $follow['renamed'] ? 1 : 0;
+                $merged  += $follow['merged'];
+            }
+
             $holder = $holders->findOrCreateByUpn(
                 $teamId,
                 $tenantId,
@@ -132,7 +145,7 @@ class ImportTenantUsersJob implements ShouldQueue, ShouldBeUnique
         // Nachweis, dass der Abgleich lief — die Weiterberechnung zählt `is_active`, und ein still
         // ausgefallener Abgleich rechnete Ausgeschiedene weiter ab (#954).
         app(ImportRunRecorder::class)->record(AssetImportRun::SOURCE_DIRECTORY, $teamId, $tenantId,
-            ['count' => $count, 'deactivated' => $deactivated], null, false, null, $startedAt);
+            ['count' => $count, 'deactivated' => $deactivated, 'renamed' => $renamed, 'merged' => $merged], null, false, null, $startedAt);
 
         Log::info('AssetManager: Tenant-User-Import abgeschlossen', [
             'connector_id' => $this->connectorId,

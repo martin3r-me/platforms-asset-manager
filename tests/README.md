@@ -72,6 +72,7 @@ php tests/local/handover-coverage.php         # Abdeckung der Übergabeprotokoll
 # Asset-Träger & Verzeichnis
 php tests/local/holder-backfill.php           # Träger-Backfill nach den Syncs: keine Dubletten, klassifiziert, idempotent (#939)
 php tests/local/holder-lifecycle.php          # Papierkorb-UPNs, Dubletten zusammenführen, Stilllegen (ADR 0023)
+php tests/local/holder-upn-rename.php         # Umbenennung im AD über die Entra-ID, Dubletten zusammenführen (#986)
 php tests/local/holder-type-bulk.php          # Trägertyp-Sammelaktion auf Service-Ebene (HolderTypeService)
 php tests/local/holders-bulk-type.php         # Trägerliste: filteredQuery(), Mehrfachauswahl, Gates
 php tests/local/import-users-schedule.php     # Verzeichnis-Abgleich: Kommando registriert, im Zeitplan, VOR dem Lizenz-Sync

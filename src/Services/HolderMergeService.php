@@ -46,6 +46,10 @@ class HolderMergeService
         'asset_handovers'   => ['holder_id', 'employee_id'],
         // Verlauf (#897): die Spur der Dublette gehört nach dem Zusammenführen zum Ziel.
         'asset_holder_events' => ['holder_id'],
+        // Telefonie-Platz (#931) und Preis-Historie (ADR 0029) — fehlten bis #986, ein zusammengeführter
+        // Träger verlor sonst seinen RingCentral-Platz bzw. den Verlauf seiner Rechnungsposten.
+        'asset_telephony_seats'   => ['holder_id'],
+        'asset_cost_line_history' => ['assignee_id'],
     ];
 
     /**
@@ -167,6 +171,88 @@ class HolderMergeService
             'skipped' => $skipped,
             'results' => $results,
         ];
+    }
+
+    /**
+     * UPN-Umbenennung im Verzeichnis nachziehen (#986) — vor dem UPN-Abgleich aufrufen.
+     *
+     * Die UPN ist unser Anker (ADR 0017), eine Umbenennung im AD (Tippfehler, Namensänderung) war deshalb
+     * eine neue Person: der Geräte- oder Lizenz-Sync legte für die neue UPN einen zweiten Träger an, der
+     * Abgleich legte den alten still, und beide liefen getrennt weiter (O.PARADZE → O.PERADZE). Die
+     * Entra-Objekt-ID (`graph_id`) bleibt bei einer Umbenennung gleich — über sie wird der bestehende Träger
+     * gefunden und **umbenannt**; Geräte und Lizenzen ziehen über die UPN mit.
+     *
+     * Dubletten mit der neuen UPN werden hineingeführt, wenn sie keine oder dieselbe Entra-ID tragen — auch
+     * ein bereits gespaltener Fall (zwei Träger mit derselben ID) heilt so beim nächsten Abgleich. Gehört die
+     * neue UPN einem Träger mit **anderer** Entra-ID (UPN eines gelöschten Kontos neu vergeben), wird nichts
+     * angefasst: das sind zwei Personen.
+     *
+     * @return array{renamed: bool, merged: int}
+     */
+    public function followRename(int $teamId, int $tenantId, string $graphId, string $upn): array
+    {
+        $none  = ['renamed' => false, 'merged' => 0];
+        $upn   = HolderService::normalizeUpn($upn);
+        $key   = mb_strtolower($upn);
+        if ($graphId === '' || $upn === '') {
+            return $none;
+        }
+
+        $candidates = AssetHolder::withoutTenantScope()
+            ->forTenant($tenantId)
+            ->where('team_id', $teamId)
+            ->where(fn ($q) => $q->where('graph_id', $graphId)->orWhereRaw('LOWER(user_principal_name) = ?', [$key]))
+            ->orderBy('id')
+            ->get();
+
+        // Ältester Träger dieser Entra-ID ist das Ziel — er trägt Verlauf und gepflegte Felder am längsten.
+        $target = $candidates->firstWhere('graph_id', $graphId);
+        if ($target === null) {
+            return $none; // neue Person oder nur ein UPN-Treffer: der normale Weg genügt
+        }
+
+        if ($candidates->contains(fn (AssetHolder $h) => $h->graph_id !== null && $h->graph_id !== '' && $h->graph_id !== $graphId)) {
+            \Illuminate\Support\Facades\Log::warning('AssetManager: UPN gehört einem anderen Entra-Konto — Umbenennung nicht nachgezogen', [
+                'team_id' => $teamId, 'tenant_id' => $tenantId, 'holder_id' => $target->id,
+            ]);
+
+            return $none;
+        }
+
+        $duplicates = $candidates->reject(fn (AssetHolder $h) => $h->id === $target->id);
+        $renaming   = mb_strtolower((string) $target->user_principal_name) !== $key;
+
+        if ($duplicates->isEmpty() && ! $renaming) {
+            return $none;
+        }
+
+        DB::transaction(function () use ($duplicates, $target, $upn, $teamId): void {
+            foreach ($duplicates as $duplicate) {
+                $this->mergeInto($duplicate, $target);
+                $target->refresh();
+            }
+
+            $old = (string) $target->user_principal_name;
+            if (mb_strtolower($old) === mb_strtolower($upn)) {
+                return;
+            }
+
+            // E-Mail mitziehen, wenn sie nur die alte UPN war — eine gepflegte Adresse bleibt.
+            if (blank($target->email) || mb_strtolower((string) $target->email) === mb_strtolower($old)) {
+                $target->email = $upn;
+            }
+            $target->user_principal_name = $upn;
+            $target->save();
+
+            $this->moveUpnReferences($old, $upn, $teamId);
+        });
+
+        \Illuminate\Support\Facades\Log::info('AssetManager: UPN-Umbenennung nachgezogen', [
+            'team_id' => $teamId, 'tenant_id' => $tenantId, 'holder_id' => $target->id,
+            'renamed' => $renaming, 'merged' => $duplicates->count(),
+        ]);
+
+        return ['renamed' => $renaming, 'merged' => $duplicates->count()];
     }
 
     /**

@@ -132,6 +132,11 @@ final class ImportRunRecorder
             'Benutzer im Verzeichnis' => $this->number($result['count'] ?? 0, 0),
             'Stillgelegt'             => $this->number($result['deactivated'] ?? 0, 0),
         ];
+        // Umbenennungen im AD (#986): nur nennen, wenn es welche gab — sonst ist es Rauschen.
+        if ((int) ($result['renamed'] ?? 0) > 0 || (int) ($result['merged'] ?? 0) > 0) {
+            $metrics['Umbenannt (Entra-ID)']  = $this->number($result['renamed'] ?? 0, 0);
+            $metrics['Dubletten zusammengeführt'] = $this->number($result['merged'] ?? 0, 0);
+        }
 
         $findings = [];
         if ((int) ($result['count'] ?? 0) === 0) {
