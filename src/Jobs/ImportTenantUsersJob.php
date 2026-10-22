@@ -107,7 +107,7 @@ class ImportTenantUsersJob implements ShouldQueue, ShouldBeUnique
             // Umbenennung im AD (#986): erst über die Entra-Objekt-ID den bestehenden Träger finden und
             // umbenennen — sonst entstünde für die neue UPN ein zweiter Träger, und der alte würde stillgelegt.
             if (! empty($u['id'])) {
-                $follow   = $merger->followRename($teamId, $tenantId, (string) $u['id'], (string) $u['userPrincipalName']);
+                $follow   = $merger->followRename($teamId, $tenantId, (string) $u['id'], (string) $u['userPrincipalName'], $u['displayName'] ?? null);
                 $renamed += $follow['renamed'] ? 1 : 0;
                 $merged  += $follow['merged'];
             }

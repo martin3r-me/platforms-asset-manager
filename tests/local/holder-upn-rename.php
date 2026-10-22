@@ -92,6 +92,7 @@ $h = $holders()->firstWhere('graph_id', GID);
 check('ein Träger für die Person (Dublette weg)', 1, $holders()->where('graph_id', GID)->count() + $holders()->where('id', $dup)->count());
 check('der ursprüngliche Träger überlebt und heißt jetzt O.PERADZE', [$old, NEW_], [(int) $h->id, $h->user_principal_name]);
 check('E-Mail zieht mit (war die alte UPN)', NEW_, $h->email);
+check('Anzeigename aus Entra übernommen (war der Tippfehler)', 'OLEKSANDR PERADZE', $h->display_name);
 check('nicht stillgelegt', true, (bool) $h->is_active);
 check('Abteilung/Position bleiben', ['LOGISTIK', 'HAUSTECHNIKER'], [$h->department, $h->job_title]);
 check('Lizenz auf die neue UPN gezogen', [NEW_], DB::table('asset_user_licenses')->pluck('user_principal_name')->all());

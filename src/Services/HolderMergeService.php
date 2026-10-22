@@ -189,7 +189,7 @@ class HolderMergeService
      *
      * @return array{renamed: bool, merged: int}
      */
-    public function followRename(int $teamId, int $tenantId, string $graphId, string $upn): array
+    public function followRename(int $teamId, int $tenantId, string $graphId, string $upn, ?string $displayName = null): array
     {
         $none  = ['renamed' => false, 'merged' => 0];
         $upn   = HolderService::normalizeUpn($upn);
@@ -226,7 +226,7 @@ class HolderMergeService
             return $none;
         }
 
-        DB::transaction(function () use ($duplicates, $target, $upn, $teamId): void {
+        DB::transaction(function () use ($duplicates, $target, $upn, $teamId, $displayName): void {
             foreach ($duplicates as $duplicate) {
                 $this->mergeInto($duplicate, $target);
                 $target->refresh();
@@ -242,6 +242,11 @@ class HolderMergeService
                 $target->email = $upn;
             }
             $target->user_principal_name = $upn;
+            // Mit der UPN ist meist auch der Name korrigiert (Tippfehler, Namensänderung). Sonst übernimmt der
+            // Abgleich Namen nur in leere Felder, damit gepflegte Namen bleiben — hier ist der alte Name falsch.
+            if (filled($displayName)) {
+                $target->display_name = trim((string) $displayName);
+            }
             $target->save();
 
             $this->moveUpnReferences($old, $upn, $teamId);
