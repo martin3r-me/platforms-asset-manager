@@ -1,13 +1,12 @@
 <?php
 
 /**
- * Die vier N+1-/Eager-Loading-Stellen aus dem Projekt-Audit — gegen den AKTUELLEN Code, nicht
- * gegen nachgebaute Muster.
+ * Eager-Loading der Geräte-Kosten am Model — Query-Budget und Zuordnungs-Regression.
  *
- * Die Query-Zahlen sind Obergrenzen: sie duerfen sinken, aber ein Anstieg heisst, dass ein
- * Eager-Load oder ein vorgeladener Resolver wieder verloren gegangen ist. Zusaetzlich wird
- * geprueft, dass AssetDevice::deviceModel() nach dem Umbau auf den DeviceCostResolver dieselbe
- * Zuordnung trifft wie vorher — die Kosten haengen daran.
+ * Die drei Listen-Fälle, die hier früher standen (Inventar-Detail, Gerätemodelle, holder.GET), bauten die
+ * Query im Test nach und blieben grün, wenn im echten Code ein `with()` wegfiel. Sie laufen jetzt als echte
+ * Aufrufe in `tests/local/query-budgets.php`. Hier bleibt, was direkt am Model hängt: Kosten + Modell eines
+ * Geräts teilen sich den DeviceCostResolver, und deviceModel() trifft dasselbe Modell wie vor dem Umbau.
  *
  * Aufruf: php tests/local/n-plus-1.php   (siehe tests/local/bootstrap.php)
  */
@@ -18,9 +17,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Platform\AssetManager\Models\AssetDevice;
 use Platform\AssetManager\Models\AssetDeviceModel;
-use Platform\AssetManager\Models\AssetHandoverLine;
 use Platform\AssetManager\Services\TenantContext;
-use Platform\AssetManager\Support\DeviceCostResolver;
 
 TenantContext::forceTenant(1);
 
@@ -144,57 +141,6 @@ function at_most(string $what, int $max, int $actual): void
         $GLOBALS['am_checks']['failed'][] = $what;
     }
 }
-
-// --- 1) Inventory/Show: handover.holder, NICHT handover.employee ---------
-// Die Relation heisst seit der Umbenennung „Mitarbeiter"→„Asset-Traeger" holder(). Der alte Name
-// warf eine RelationNotFoundException, sobald das Geraet ueberhaupt Protokoll-Zeilen hatte — bei
-// null Zeilen ueberspringt Laravel verschachteltes Eager-Loading und der Fehler blieb verdeckt.
-$err = null;
-$n = queries(function () use (&$err) {
-    try {
-        AssetHandoverLine::with('handover.holder')
-            ->whereHas('handover', fn ($q) => $q->where('team_id', 1))
-            ->get()
-            ->each(fn ($l) => $l->handover?->holder?->user_principal_name);
-    } catch (\Throwable $e) {
-        $err = get_class($e) . ': ' . $e->getMessage();
-    }
-});
-check('Inventory/Show: handover.holder laedt ohne Fehler', null, $err);
-at_most('Inventory/Show: Queries Protokoll-Zeilen + Traeger', 4, $n);
-
-// --- 2) DeviceModels/Index: cost.costType + cost.vendor mit vorladen ----
-// Die Liste ist bewusst unpaginiert und zeigt Kostenart und Kreditor je Zeile.
-$n = queries(function () {
-    $models = AssetDeviceModel::where('team_id', 1)
-        ->with(['cost.costType', 'cost.vendor'])
-        ->orderBy('manufacturer')->orderBy('model')->get();
-
-    foreach ($models as $m) {
-        $cost = $m->cost;
-        $cost?->costType?->name;
-        $cost?->vendor?->name;
-    }
-});
-at_most("DeviceModels/Index: {$N} Modelle mit Kostenart+Kreditor", 4, $n);
-
-// --- 3) GetHolderTool: ein Resolver je Tenant, nicht je Geraet ----------
-$n = queries(function () {
-    $rows      = AssetDevice::where('team_id', 1)->get();
-    $resolvers = [];
-
-    foreach ($rows as $d) {
-        $resolvers[(int) $d->tenant_id] ??= DeviceCostResolver::for(
-            1,
-            $d->tenant_id !== null ? (int) $d->tenant_id : null,
-        );
-    }
-
-    foreach ($rows as $d) {
-        $resolvers[(int) $d->tenant_id]->monthlyCost($d);
-    }
-});
-at_most("GetHolderTool: Monatskosten fuer {$N} Geraete", 3, $n);
 
 // --- 4) Detailseite: Kosten und Geraete-Modell teilen den Resolver ------
 // Vor dem Umbau von deviceModel() waren das vier Queries: Geraet + Resolver-Paar + ein eigener

@@ -63,12 +63,11 @@ class ListCostCentersTool implements ToolContract, ToolMetadataContract
                 return ToolResult::error('CONTROLLING_DISABLED', 'Die Controlling-/Kosten-Schicht ist für diesen Tenant deaktiviert (Modul-Einstellungen). Kosten, Kostenpositionen und Stammdaten sind daher nicht verfügbar.');
             }
 
-            $nodes = AssetCostCenter::treeFor($tenantId);
+            // Träger-Zahl in einer Query für den ganzen Baum, nicht je Knoten.
+            $nodes = AssetCostCenter::treeFor($tenantId)->loadCount('holders');
             $byId  = $nodes->keyBy('id');
 
             $rows = $nodes->map(function (AssetCostCenter $c) use ($byId) {
-                $c->loadCount('holders');
-
                 return [
                     'id'           => $c->id,
                     'code'         => $c->code,

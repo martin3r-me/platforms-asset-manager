@@ -97,47 +97,69 @@ class ImportTenantUsersJob implements ShouldQueue, ShouldBeUnique
 
         $count    = 0;
         $seenUpns = [];
+        $seenIds  = [];
         $renamed  = 0;
         $merged   = 0;
         $merger   = app(HolderMergeService::class);
 
-        foreach ($users as $u) {
-            if (empty($u['userPrincipalName'])) continue;
+        // Träger einmal vorladen statt je Entra-User zweimal nachzufragen (N+1). Die Umbenennungs-Prüfung
+        // läuft über einen Index und fragt die DB nur, wenn sich wirklich etwas zu tun abzeichnet.
+        $holders->preloadTenant($tenantId);
+        $renameIndex = $this->renameIndex($teamId, $tenantId);
 
-            // Umbenennung im AD (#986): erst über die Entra-Objekt-ID den bestehenden Träger finden und
-            // umbenennen — sonst entstünde für die neue UPN ein zweiter Träger, und der alte würde stillgelegt.
-            if (! empty($u['id'])) {
-                $follow   = $merger->followRename($teamId, $tenantId, (string) $u['id'], (string) $u['userPrincipalName'], $u['displayName'] ?? null);
-                $renamed += $follow['renamed'] ? 1 : 0;
-                $merged  += $follow['merged'];
+        try {
+            foreach ($users as $u) {
+                if (empty($u['userPrincipalName'])) continue;
+
+                // Umbenennung im AD (#986): erst über die Entra-Objekt-ID den bestehenden Träger finden und
+                // umbenennen — sonst entstünde für die neue UPN ein zweiter Träger, und der alte würde stillgelegt.
+                if (! empty($u['id']) && $this->mayNeedRename($renameIndex, (string) $u['id'], (string) $u['userPrincipalName'])) {
+                    $follow   = $merger->followRename($teamId, $tenantId, (string) $u['id'], (string) $u['userPrincipalName'], $u['displayName'] ?? null);
+                    $renamed += $follow['renamed'] ? 1 : 0;
+                    $merged  += $follow['merged'];
+
+                    if ($follow['renamed'] || $follow['merged'] > 0) {
+                        // Selten — dann lieber neu laden als vorgeladene Modelle von Hand nachführen.
+                        $holders->preloadTenant($tenantId);
+                        $renameIndex = $this->renameIndex($teamId, $tenantId);
+                    }
+                }
+
+                $holder = $holders->findOrCreateByUpn(
+                    $teamId,
+                    $tenantId,
+                    $u['userPrincipalName'],
+                    $u['displayName'] ?? null,
+                    'graph'
+                );
+                if ($holder->source === 'derived') {
+                    $holder->source = 'graph';
+                }
+
+                // Graph-Profil (department/jobTitle/Rufnummern) anreichern — gemeinsame Precedence-Logik (ADR 0014).
+                $holders->applyGraphProfile($holder, $u);
+
+                // Kontostatus übernehmen. Fehlt das Feld (alter Graph-Cache, eingeschränkte Berechtigung),
+                // bleibt der bisherige Wert stehen — lieber nichts wissen als fälschlich deaktivieren.
+                if (array_key_exists('accountEnabled', $u)) {
+                    $holder->is_active = (bool) $u['accountEnabled'];
+                }
+
+                $holder->graph_id = $u['id'] ?? $holder->graph_id;
+                // Nur echte Änderungen schreiben; save() ohne geänderte Felder fragt die DB nicht. `synced_at`
+                // ändert sich bei jedem Lauf und wird deshalb unten für alle gesehenen Träger gesammelt gesetzt.
+                $holder->save();
+
+                $seenUpns[] = mb_strtolower((string) $holder->user_principal_name);
+                $seenIds[]  = (int) $holder->id;
+                $count++;
             }
+        } finally {
+            $holders->forgetPreload();
+        }
 
-            $holder = $holders->findOrCreateByUpn(
-                $teamId,
-                $tenantId,
-                $u['userPrincipalName'],
-                $u['displayName'] ?? null,
-                'graph'
-            );
-            if ($holder->source === 'derived') {
-                $holder->source = 'graph';
-            }
-
-            // Graph-Profil (department/jobTitle/Rufnummern) anreichern — gemeinsame Precedence-Logik (ADR 0014).
-            $holders->applyGraphProfile($holder, $u);
-
-            // Kontostatus übernehmen. Fehlt das Feld (alter Graph-Cache, eingeschränkte Berechtigung),
-            // bleibt der bisherige Wert stehen — lieber nichts wissen als fälschlich deaktivieren.
-            if (array_key_exists('accountEnabled', $u)) {
-                $holder->is_active = (bool) $u['accountEnabled'];
-            }
-
-            $holder->graph_id  = $u['id'] ?? $holder->graph_id;
-            $holder->synced_at = now();
-            $holder->save();
-
-            $seenUpns[] = mb_strtolower((string) $holder->user_principal_name);
-            $count++;
+        foreach (array_chunk(array_values(array_unique($seenIds)), 500) as $chunk) {
+            \Platform\AssetManager\Models\AssetHolder::withoutTenantScope()->whereIn('id', $chunk)->update(['synced_at' => now()]);
         }
 
         $deactivated = $this->reconcileHolders($teamId, $tenantId, $seenUpns);
@@ -153,6 +175,48 @@ class ImportTenantUsersJob implements ShouldQueue, ShouldBeUnique
             'count'        => $count,
             'deactivated'  => $deactivated,
         ]);
+    }
+
+    /**
+     * Index für {@see mayNeedRename()}: welche Träger tragen welche Entra-ID, welche UPN (kleingeschrieben).
+     * Dieselbe Menge, die {@see HolderMergeService::followRename()} als Kandidaten liest.
+     *
+     * @return array{graph: array<string, array<int, string>>, upn: array<string, list<int>>}
+     */
+    protected function renameIndex(int $teamId, int $tenantId): array
+    {
+        $index = ['graph' => [], 'upn' => []];
+
+        foreach (\Platform\AssetManager\Models\AssetHolder::withoutTenantScope()
+            ->forTenant($tenantId)
+            ->where('team_id', $teamId)
+            ->get(['id', 'graph_id', 'user_principal_name']) as $h) {
+            $upn = mb_strtolower((string) $h->user_principal_name);
+            if (filled($h->graph_id)) {
+                $index['graph'][(string) $h->graph_id][(int) $h->id] = $upn;
+            }
+            $index['upn'][$upn][] = (int) $h->id;
+        }
+
+        return $index;
+    }
+
+    /**
+     * Hätte followRename() hier etwas zu tun? Nur dann, wenn ein Träger mit dieser Entra-ID existiert und
+     * entweder anders heißt oder neben ihm weitere Kandidaten (gleiche Entra-ID oder gleiche UPN) stehen —
+     * dieselbe Bedingung, unter der followRename() nicht sofort `none` zurückgibt.
+     */
+    protected function mayNeedRename(array $index, string $graphId, string $upn): bool
+    {
+        $byGraph = $index['graph'][$graphId] ?? [];
+        if ($byGraph === []) {
+            return false;
+        }
+
+        $key        = mb_strtolower(HolderService::normalizeUpn($upn));
+        $candidates = array_unique(array_merge(array_keys($byGraph), $index['upn'][$key] ?? []));
+
+        return count($candidates) > 1 || reset($byGraph) !== $key;
     }
 
     /**

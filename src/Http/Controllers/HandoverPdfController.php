@@ -24,7 +24,7 @@ class HandoverPdfController
 
         $this->assertTenantBoundary($handover);
 
-        $handover->load(['holder', 'lines']);
+        $handover->load(['holder', 'lines.device']);
 
         $html = view('asset-manager::pdf.handover', ['handover' => $handover])->render();
 

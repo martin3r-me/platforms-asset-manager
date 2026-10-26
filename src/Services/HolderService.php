@@ -29,6 +29,47 @@ class HolderService
      */
     public const DELETED_UPN_PREFIX = '/^[0-9a-f]{32}(?=[^@]+@)/i';
 
+    /**
+     * Vorgeladene Träger je Tenant für {@see findOrCreateByUpn()} — gesetzt von {@see preloadTenant()}.
+     *
+     * Die Sync-Jobs fragen sonst je Entra-User bzw. Gerät einzeln nach (N+1, ~290 Queries je Lauf). Zwei
+     * Schlüssel, damit die Reihenfolge der Einzel-Abfrage erhalten bleibt: erst exakte UPN, dann ohne
+     * Rücksicht auf Groß-/Kleinschreibung.
+     *
+     * @var array<int, array{exact: array<string, AssetHolder>, lower: array<string, AssetHolder>}>
+     */
+    private array $preloaded = [];
+
+    /**
+     * Alle Träger eines Tenants einmal laden; danach beantwortet {@see findOrCreateByUpn()} Treffer ohne
+     * Query. Nur für einen Lauf gedacht — der Aufrufer ruft danach {@see forgetPreload()}, sonst sieht die
+     * Instanz Änderungen anderer Schreibpfade nicht.
+     */
+    public function preloadTenant(int $tenantId): void
+    {
+        $this->preloaded[$tenantId] = ['exact' => [], 'lower' => []];
+
+        foreach (AssetHolder::withoutTenantScope()->where('tenant_id', $tenantId)->orderBy('id')->get() as $holder) {
+            $this->remember($tenantId, $holder);
+        }
+    }
+
+    public function forgetPreload(): void
+    {
+        $this->preloaded = [];
+    }
+
+    private function remember(int $tenantId, AssetHolder $holder): void
+    {
+        if (! isset($this->preloaded[$tenantId])) {
+            return;
+        }
+
+        $upn = (string) $holder->user_principal_name;
+        $this->preloaded[$tenantId]['exact'][$upn] ??= $holder;
+        $this->preloaded[$tenantId]['lower'][mb_strtolower($upn)] ??= $holder;
+    }
+
     /** Papierkorb-Präfix entfernen. Alles andere bleibt unverändert. */
     public static function normalizeUpn(string $upn): string
     {
@@ -59,23 +100,31 @@ class HolderService
         string $source = 'derived'
     ): AssetHolder {
         $upn = self::normalizeUpn($upn);
-        // withoutTenantScope() ist hier PFLICHT, nicht Kosmetik: der Tenant kommt als Parameter, und
-        // der Global Scope würde zusätzlich auf den *aktiven* Tenant filtern. Weichen beide ab (Job
-        // ohne gesetzten Kontext, Aufruf aus einer anderen Sicht), findet firstOrNew den bestehenden
-        // Träger nicht und legt einen zweiten an — direkt in den (tenant_id, upn)-Unique-Index.
-        $holder = AssetHolder::withoutTenantScope()->firstOrNew([
-            'tenant_id'           => $tenantId,
-            'user_principal_name' => $upn,
-        ]);
 
-        // Rückfall ohne Rücksicht auf Groß-/Kleinschreibung (#881): ein von Hand angelegter Träger
-        // („max.muster@firma.de") muss vom Sync gefunden werden, auch wenn Entra die UPN gemischt
-        // schreibt. MySQL vergleicht mit der Standard-Kollation ohnehin so, SQLite/Postgres nicht —
-        // ohne den Rückfall hinge das Verhalten an der Datenbank. Zweite Abfrage nur bei Fehltreffer.
-        if (! $holder->exists) {
-            $match = $this->findByUpnInsensitive($tenantId, $upn);
-            if ($match !== null) {
-                $holder = $match;
+        if (isset($this->preloaded[$tenantId])) {
+            // Vorgeladen (Sync-Lauf): dieselbe Reihenfolge wie unten, nur ohne Query.
+            $holder = $this->preloaded[$tenantId]['exact'][$upn]
+                ?? $this->preloaded[$tenantId]['lower'][mb_strtolower($upn)]
+                ?? new AssetHolder(['tenant_id' => $tenantId, 'user_principal_name' => $upn]);
+        } else {
+            // withoutTenantScope() ist hier PFLICHT, nicht Kosmetik: der Tenant kommt als Parameter, und
+            // der Global Scope würde zusätzlich auf den *aktiven* Tenant filtern. Weichen beide ab (Job
+            // ohne gesetzten Kontext, Aufruf aus einer anderen Sicht), findet firstOrNew den bestehenden
+            // Träger nicht und legt einen zweiten an — direkt in den (tenant_id, upn)-Unique-Index.
+            $holder = AssetHolder::withoutTenantScope()->firstOrNew([
+                'tenant_id'           => $tenantId,
+                'user_principal_name' => $upn,
+            ]);
+
+            // Rückfall ohne Rücksicht auf Groß-/Kleinschreibung (#881): ein von Hand angelegter Träger
+            // („max.muster@firma.de") muss vom Sync gefunden werden, auch wenn Entra die UPN gemischt
+            // schreibt. MySQL vergleicht mit der Standard-Kollation ohnehin so, SQLite/Postgres nicht —
+            // ohne den Rückfall hinge das Verhalten an der Datenbank. Zweite Abfrage nur bei Fehltreffer.
+            if (! $holder->exists) {
+                $match = $this->findByUpnInsensitive($tenantId, $upn);
+                if ($match !== null) {
+                    $holder = $match;
+                }
             }
         }
 
@@ -96,11 +145,12 @@ class HolderService
                 // Geräte- und Lizenz-Sync laufen parallel und können denselben neuen Träger im selben
                 // Moment anlegen. Der Verlierer liest den Gewinner, statt den ganzen Sync scheitern zu
                 // lassen (#964).
-                return AssetHolder::withoutTenantScope()
+                $holder = AssetHolder::withoutTenantScope()
                     ->where('tenant_id', $tenantId)
                     ->where('user_principal_name', $upn)
                     ->firstOrFail();
             }
+            $this->remember($tenantId, $holder);
         } else {
             $dirty = false;
             if ($displayName && empty($holder->display_name)) {

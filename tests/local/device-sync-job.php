@@ -44,6 +44,8 @@ foreach ($models as $class) {
         $t->softDeletes();
     });
 }
+// Upsert-Schlüssel der Quell-Zeilen wie in der Migration — der Sync schreibt sie gesammelt per upsert().
+Schema::table('asset_device_sources', fn (Blueprint $t) => $t->unique(['asset_device_id', 'provider']));
 
 const TEAM   = 7;
 const TENANT = 1;

@@ -178,6 +178,8 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                 ->groupBy('assignable_id')
                 ->all();
 
+            $sourceRows = [];
+
             foreach ($devices as $device) {
                 $intuneIds[] = $device['id'];
 
@@ -238,17 +240,17 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                 // Provider-Quelle pflegen (ADR 0009): genau eine 'intune'-Quell-Zeile je Gerät; external_id =
                 // aktuelle intune_id (rotiert bei Re-Enrollment automatisch mit). Legt den Seam, auf dem ABM
                 // (Eigentums-Quelle) später per Serial andockt + den Drift „besessen, aber nicht verwaltet" rechnet.
+                // Gesammelt und nach der Schleife in einem Upsert geschrieben, nicht je Gerät SELECT + UPDATE.
                 $persisted = $existing ?? $created;
-                AssetDeviceSource::updateOrCreate(
-                    ['asset_device_id' => $persisted->id, 'provider' => AssetDeviceSource::PROVIDER_INTUNE],
-                    [
-                        'team_id'       => $this->teamId,
-                        'tenant_id'     => $this->tenantId,
-                        'external_id'   => $device['id'],
-                        'serial_number' => $persisted->serial_number,
-                        'last_seen_at'  => now(),
-                    ]
-                );
+                $sourceRows[(int) $persisted->id] = [
+                    'asset_device_id' => $persisted->id,
+                    'provider'        => AssetDeviceSource::PROVIDER_INTUNE,
+                    'team_id'         => $this->teamId,
+                    'tenant_id'       => $this->tenantId,
+                    'external_id'     => $device['id'],
+                    'serial_number'   => $persisted->serial_number,
+                    'last_seen_at'    => now(),
+                ];
 
                 // Geräte-Modell-Katalog pflegen — team-weit (Teil des Kostenmodells, NICHT tenant-skopiert).
                 // Nur anlegen, wenn der (exakte) Schlüssel noch nicht bekannt ist → kein firstOrCreate-SELECT
@@ -284,6 +286,12 @@ class SyncIntuneDevicesJob implements ShouldQueue, ShouldBeUnique
                 // Geräte-Zuordnung aus dem aktuellen UPN ableiten (Frage 6 / 2b) — auf der stabilen
                 // Serial-Zeile (ADR 0006): Nutzerwechsel schließt die offene Zuordnung und öffnet eine neue.
                 $this->syncDeviceAssignment($persisted);
+            }
+
+            // Eindeutig über (asset_device_id, provider) — dieselbe Identität wie das frühere updateOrCreate().
+            foreach (array_chunk(array_values($sourceRows), 200) as $chunk) {
+                AssetDeviceSource::upsert($chunk, ['asset_device_id', 'provider'],
+                    ['team_id', 'tenant_id', 'external_id', 'serial_number', 'last_seen_at']);
             }
 
             $durationMs = (int) ($startedAt->diffInMilliseconds(now()));

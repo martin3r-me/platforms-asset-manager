@@ -388,10 +388,15 @@ class Index extends Component
     {
         $node->recomputeDepth();
 
+        // treeFor() rechnet `depth` beim Aufbau ohnehin in PHP aus — die Nachfahren nehmen den Wert von
+        // dort, statt je Knoten die Elternkette Zeile für Zeile nachzufragen. Gespeichert wird nur, was sich ändert.
         $nodes = AssetCostCenter::treeFor((int) $node->tenant_id);
+        $ids   = array_flip(AssetCostCenter::descendantIds((int) $node->id, $nodes));
 
-        foreach (AssetCostCenter::descendantIds((int) $node->id, $nodes) as $descendantId) {
-            AssetCostCenter::where('id', $descendantId)->first()?->recomputeDepth();
+        foreach ($nodes as $descendant) {
+            if (isset($ids[(int) $descendant->id]) && $descendant->isDirty('depth')) {
+                $descendant->saveQuietly();
+            }
         }
     }
 
@@ -463,9 +468,16 @@ class Index extends Component
         $class  = $this->active === 'cost-centers' ? AssetCostCenter::class : AssetCostType::class;
         $pos    = 0;
 
+        // Aktuelle Reihenfolge einmal lesen und nur geänderte Zeilen schreiben — ein Drag verschiebt meist
+        // wenige Einträge, vorher ging trotzdem ein UPDATE je Zeile raus.
+        $current = $class::where('team_id', $teamId)->pluck('sort_order', 'id')->all();
+
         foreach ($this->flattenOrder($order) as $id) {
-            $class::where('team_id', $teamId)->where('id', (int) $id)
-                ->update(['sort_order' => (++$pos) * 10]);
+            $sort = (++$pos) * 10;
+            if (! array_key_exists((int) $id, $current) || (int) $current[(int) $id] === $sort) {
+                continue;
+            }
+            $class::where('team_id', $teamId)->where('id', (int) $id)->update(['sort_order' => $sort]);
         }
 
         $this->flash = 'Reihenfolge aktualisiert.';
@@ -528,8 +540,8 @@ class Index extends Component
         $filtered = $this->search !== '' || $this->filterParent !== null || $this->onlyActive;
 
         if (! $filtered && $tenantId !== null) {
-            return AssetCostCenter::treeFor($tenantId)
-                ->each(fn (AssetCostCenter $node) => $node->loadCount('holders'));
+            // Eine Zähl-Query für den ganzen Baum, nicht eine je Knoten (Livewire rendert bei jeder Interaktion).
+            return AssetCostCenter::treeFor($tenantId)->loadCount('holders');
         }
 
         $subtreeIds = null;

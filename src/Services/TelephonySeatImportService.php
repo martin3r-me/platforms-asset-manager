@@ -48,10 +48,13 @@ class TelephonySeatImportService
 
         [$byMail, $byName] = $this->holderIndex($teamId);
 
-        $previous = AssetTelephonySeat::where('team_id', $teamId)
+        // Bestehende Plätze einmal laden — der Abgleich unten fragt sonst je Platz einzeln nach (N+1).
+        $existing = AssetTelephonySeat::where('team_id', $teamId)
+            ->where('tenant_id', $tenantId)
             ->where('provider', AssetTelephonySeat::PROVIDER_RINGCENTRAL)
-            ->pluck('holder_id', 'external_id')
-            ->all();
+            ->get()
+            ->keyBy('external_id');
+        $previous = $existing->map(fn (AssetTelephonySeat $seat) => $seat->holder_id)->all();
 
         $stats = [
             'seats'        => count($users),
@@ -98,26 +101,25 @@ class TelephonySeatImportService
                     $stats['added'][] = $user['name'];
                 }
 
-                AssetTelephonySeat::updateOrCreate(
-                    [
-                        'team_id'     => $teamId,
-                        'tenant_id'   => $tenantId,
-                        'provider'    => AssetTelephonySeat::PROVIDER_RINGCENTRAL,
-                        'external_id' => $user['external_id'],
-                    ],
-                    [
-                        'email'         => $user['email'] ?: null,
-                        'display_name'  => $user['name'],
-                        'extension'     => $user['extension'] ?: null,
-                        'direct_number' => $user['direct_number'] ?: null,
-                        'device'        => $user['device'] ?: null,
-                        'status'        => $user['status'] ?: null,
-                        'holder_id'     => $holder?->id,
-                        'match'         => $match,
-                        'imported_at'   => $now,
-                        'raw_data'      => $user['raw'],
-                    ],
-                );
+                $seat = $existing->get($user['external_id']) ?? new AssetTelephonySeat([
+                    'team_id'     => $teamId,
+                    'tenant_id'   => $tenantId,
+                    'provider'    => AssetTelephonySeat::PROVIDER_RINGCENTRAL,
+                    'external_id' => $user['external_id'],
+                ]);
+                $seat->fill([
+                    'email'         => $user['email'] ?: null,
+                    'display_name'  => $user['name'],
+                    'extension'     => $user['extension'] ?: null,
+                    'direct_number' => $user['direct_number'] ?: null,
+                    'device'        => $user['device'] ?: null,
+                    'status'        => $user['status'] ?: null,
+                    'holder_id'     => $holder?->id,
+                    'match'         => $match,
+                    'imported_at'   => $now,
+                    'raw_data'      => $user['raw'],
+                ])->save();
+                $existing->put($user['external_id'], $seat);
 
                 $kept[] = $user['external_id'];
             }

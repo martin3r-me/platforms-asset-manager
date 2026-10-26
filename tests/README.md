@@ -52,7 +52,8 @@ php tests/local/table-view-state.php          # anpassbare Tabellen-Ansicht: Zus
 php tests/local/table-view-service.php        # deren Speicherpfad (Scoping, Pruefen beim Schreiben)
 node tests/local/pivot-grid.mjs               # deren Browser-Logik (CSS-Regel, Zaehler, Drop-Ziel)
 php tests/local/list-state-clamp.php          # Listen-Zustand aus URL/Client geklemmt (Concerns\ClampsListState, #957)
-php tests/local/n-plus-1.php                  # Query-Budgets der Listen + Geraete-Modell-Zuordnung
+php tests/local/n-plus-1.php                  # Geraete-Kosten/-Modell am Model (Resolver, Zuordnung)
+php tests/local/query-budgets.php             # N+1: echte Aufrufe (Listen, Tools, Sync-Jobs, Importe) mit 5 vs 40 Zeilen
 php tests/local/team-role-memo.php            # Memoisierung von TeamRole::isOwnerOrAdmin() (Gate pro Zeile)
 php tests/local/plausibility-foreign-source.php # Plausibilitätsregel: Position auf Kostenart mit fremder Quelle (#899)
 php tests/local/tenant-isolation.php          # Global Scope über ALLE TenantScopable-Models + bewusster Ausstieg (#901, ADR 0016)

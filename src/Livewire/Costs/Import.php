@@ -671,6 +671,7 @@ class Import extends Component
             // Import-Historie: die letzten Läufe aller drei Quellen. 25 reichen — der Log ist zum
             // Nachvollziehen der jüngsten Arbeit da, nicht als Archiv.
             'runs'      => AssetImportRun::where('team_id', $this->teamId())
+                ->with('user:id,name')
                 ->orderByDesc('id')
                 ->limit(25)
                 ->get(),

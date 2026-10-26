@@ -427,7 +427,7 @@ class Show extends Component
             ->get();
 
         // Geräteausgaben dieses Asset-Trägers (Übergabeprotokolle, read-only; Anlegen von der Geräteseite).
-        $handovers = AssetHandover::with('lines')
+        $handovers = AssetHandover::with('lines.device')
             ->where('team_id', $teamId)
             ->where('holder_id', $this->holder->id)
             ->orderByDesc('issued_at')

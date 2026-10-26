@@ -87,15 +87,20 @@ class CostLineHistoryService
                 ->all()
             : [];
 
+        $values = [];
         foreach ($rows as $row) {
             if ($resolveLineIds) {
                 $row['cost_line_id'] = $lineIds[$row['import_hash']] ?? null;
             }
+            // Schlüssel im Array: eine doppelte Identität im selben Lauf schreibt wie vorher der letzte Stand.
+            $values[$row['import_hash'] . '|' . $row['invoice']] = $row + ['team_id' => $teamId, 'tenant_id' => $tenantId];
+        }
 
-            AssetCostLineHistory::withoutTenantScope()->updateOrCreate(
-                ['tenant_id' => $tenantId, 'import_hash' => $row['import_hash'], 'invoice' => $row['invoice']],
-                $row + ['team_id' => $teamId],
-            );
+        // Ein Upsert je 200 Zeilen statt SELECT + INSERT/UPDATE je Position — beim Nachtragen von 20 Rechnungen
+        // sonst mehrere tausend Queries. Identität wie der Unique-Index (tenant_id, import_hash, invoice).
+        $update = array_values(array_diff(array_keys(reset($values)), ['tenant_id', 'import_hash', 'invoice']));
+        foreach (array_chunk(array_values($values), 200) as $chunk) {
+            AssetCostLineHistory::withoutTenantScope()->upsert($chunk, ['tenant_id', 'import_hash', 'invoice'], $update);
         }
 
         return count($rows);

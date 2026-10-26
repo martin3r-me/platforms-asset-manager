@@ -137,7 +137,7 @@ class Index extends Component
         }
 
         $teamId   = $this->teamId();
-        $handover = AssetHandover::where('team_id', $teamId)->with('lines')->findOrFail($id);
+        $handover = AssetHandover::where('team_id', $teamId)->with('lines.device')->findOrFail($id);
 
         $this->resetEditor();
         $this->editId         = $handover->id;
@@ -453,7 +453,7 @@ class Index extends Component
         $teamId = $this->teamId();
 
         $handovers = AssetHandover::where('team_id', $teamId)
-            ->with(['holder', 'lines'])
+            ->with(['holder', 'lines.device'])
             ->when($this->filterStatus, fn ($q) => $q->where('status', $this->filterStatus))
             ->when($this->search, function ($q) {
                 $term = '%' . $this->search . '%';

@@ -73,6 +73,12 @@ class VodafoneInvoiceImportService
     /** @var ?array<string, AssetHolder> Rufnummern-Index der Träger, je Lauf neu aufgebaut. */
     protected ?array $holderIndex = null;
 
+    /** @var ?array<string, int> Kostenstellen-ID je Code, je Lauf einmal geladen (statt je Rufnummer zu fragen). */
+    protected ?array $costCenterIds = null;
+
+    /** @var ?array<string, AssetCostLine> bestehende Zeilen je import_hash (inkl. gelöschter), je Lauf einmal geladen. */
+    protected ?array $linesByHash = null;
+
     /** @var array<string, int> wie oft eine Posten-Bezeichnung in diesem Lauf schon vorkam (#967). */
     protected array $postenSeen = [];
 
@@ -103,6 +109,8 @@ class VodafoneInvoiceImportService
         $this->writtenHashes = [];
         $this->written       = [];
         $this->holderIndex   = null;
+        $this->costCenterIds = null;
+        $this->linesByHash   = null;
         $this->postenSeen    = [];
         $this->account       = '';
 
@@ -374,16 +382,10 @@ class VodafoneInvoiceImportService
             ],
         ];
 
-        $existing = AssetCostLine::withTrashed()
-            ->where('team_id', $this->teamId)
-            ->where('import_hash', $hash)
-            ->first();
+        $existing = $this->lineByHash($hash);
 
         if ($existing === null) {
-            $existing = AssetCostLine::withTrashed()
-                ->where('team_id', $this->teamId)
-                ->where('import_hash', $legacy)
-                ->first();
+            $existing = $this->lineByHash($legacy);
 
             // Nur übernehmen, wenn die Altzeile zu DIESEM Konto gehört (oder noch keins trägt).
             $legacyAccount = (string) ($existing?->raw_data['rechnungskonto'] ?? '');
@@ -391,7 +393,11 @@ class VodafoneInvoiceImportService
                 $existing = null;
             }
             // Im Probelauf nimmt der Rollback die Umstellung wieder mit.
-            $existing?->forceFill(['import_hash' => $hash])->saveQuietly();
+            if ($existing !== null) {
+                $existing->forceFill(['import_hash' => $hash])->saveQuietly();
+                unset($this->linesByHash[$legacy]);
+                $this->linesByHash[$hash] = $existing;
+            }
         }
 
         if ($existing) {
@@ -408,7 +414,7 @@ class VodafoneInvoiceImportService
             $existing->update($values);
             $this->written[$key] = $existing;
         } else {
-            $this->written[$key] = AssetCostLine::create($values + [
+            $this->written[$key] = $this->linesByHash[$hash] = AssetCostLine::create($values + [
                 'team_id'     => $this->teamId,
                 'tenant_id'   => $this->tenantId,
                 'import_hash' => $hash,
@@ -516,6 +522,7 @@ class VodafoneInvoiceImportService
         $index = [];
         AssetHolder::where('team_id', $this->teamId)
             ->where(fn ($q) => $q->whereNotNull('mobile_phone')->orWhereNotNull('business_phone'))
+            ->with('costCenter:id,code') // für die Abweichungsmeldung je Rufnummer, sonst eine Query je Treffer
             ->get()
             ->each(function (AssetHolder $holder) use (&$index) {
                 foreach ([$holder->mobile_phone, $holder->business_phone] as $raw) {
@@ -544,9 +551,36 @@ class VodafoneInvoiceImportService
 
     protected function findCostCenterId(string $code): ?int
     {
-        return \Platform\AssetManager\Models\AssetCostCenter::where('team_id', $this->teamId)
-            ->where('code', $code)
-            ->value('id');
+        // Einmal je Lauf laden. Absteigend, damit bei doppeltem Code (pluck: letzter gewinnt) die älteste
+        // Kostenstelle zählt — wie vorher value('id').
+        $this->costCenterIds ??= \Platform\AssetManager\Models\AssetCostCenter::where('team_id', $this->teamId)
+            ->orderByDesc('id')
+            ->pluck('id', 'code')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        return $this->costCenterIds[$code] ?? null;
+    }
+
+    /**
+     * Bestehende Zeile (auch gelöschte) zu einem import_hash — aus einem je Lauf einmal geladenen Index
+     * statt bis zu zwei Queries je Rufnummer. Läuft innerhalb der Import-Transaktion, sieht also den Stand,
+     * den auch die Einzel-Abfrage gesehen hätte; Neuanlagen und Hash-Umstellungen führt upsertLine() nach.
+     */
+    protected function lineByHash(string $hash): ?AssetCostLine
+    {
+        if ($this->linesByHash === null) {
+            $this->linesByHash = [];
+            foreach (AssetCostLine::withTrashed()
+                ->where('team_id', $this->teamId)
+                ->whereNotNull('import_hash')
+                ->orderByDesc('id')
+                ->get() as $line) {
+                $this->linesByHash[$line->import_hash] = $line;
+            }
+        }
+
+        return $this->linesByHash[$hash] ?? null;
     }
 
     protected function costType(): AssetCostType

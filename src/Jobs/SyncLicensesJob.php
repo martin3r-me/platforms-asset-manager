@@ -133,9 +133,11 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
                 }
                 $partNum   = $sku['skuPartNumber'] ?? '';
 
-                $existing = AssetLicenseSku::where('tenant_id', $this->tenantId)
-                    ->where('sku_id', $sku['skuId'])
-                    ->first();
+                $existing = ($knownSkus ??= AssetLicenseSku::where('tenant_id', $this->tenantId)
+                    ->orderBy('id')
+                    ->get()
+                    ->unique('sku_id')
+                    ->keyBy('sku_id'))->get($sku['skuId']);
 
                 $data = [
                     'sku_part_number' => $partNum,
@@ -183,60 +185,79 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
 
             $added   = 0;
             $keptIds = [];
+            $seenIds = [];
 
-            foreach ($users as $user) {
-                $upn         = $user['userPrincipalName'] ?? null;
-                $displayName = $user['displayName']       ?? null;
+            // Träger und bestehende Zuweisungen EINMAL laden statt je User/Lizenz nachzufragen (N+1).
+            $holderService->preloadTenant($this->tenantId);
+            $knownLicenses = AssetUserLicense::where('tenant_id', $this->tenantId)
+                ->orderBy('id')
+                ->get()
+                ->unique(fn (AssetUserLicense $l) => self::licenseKey((string) $l->user_principal_name, (string) $l->sku_id))
+                ->keyBy(fn (AssetUserLicense $l) => self::licenseKey((string) $l->user_principal_name, (string) $l->sku_id));
 
-                if (!$upn) continue;
+            try {
+                foreach ($users as $user) {
+                    $upn         = $user['userPrincipalName'] ?? null;
+                    $displayName = $user['displayName']       ?? null;
 
-                // Asset-Träger aus Graph-User-Daten anlegen/aktualisieren (tenant-skopiert)
-                $holder = $holderService->findOrCreateByUpn(
-                    $this->teamId,
-                    $this->tenantId,
-                    $upn,
-                    $displayName,
-                    'graph'
-                );
-                // Wenn Sync von Graph kommt, source nachträglich auf 'graph' upgrade
-                if ($holder->source === 'derived') {
-                    $holder->source = 'graph';
-                }
-                $holder->synced_at = now();
-                // Graph-Profil (department/jobTitle/Rufnummern) beim REGULÄREN Sync mitziehen — gemeinsame
-                // Precedence-Logik (ADR 0014), damit die Anreicherung nicht nur am manuellen User-Import hängt.
-                $holderService->applyGraphProfile($holder, $user);
-                $holder->save();
+                    if (!$upn) continue;
 
-                foreach (($user['assignedLicenses'] ?? []) as $license) {
-                    $skuId = $license['skuId'] ?? null;
-                    if (!$skuId) continue;
-
-                    $record = AssetUserLicense::firstOrNew([
-                        'tenant_id'           => $this->tenantId,
-                        'user_principal_name' => $upn,
-                        'sku_id'              => $skuId,
-                    ]);
-                    $record->fill([
-                        'team_id'         => $this->teamId,
-                        'sku_part_number' => $skuPartMap[$skuId] ?? null,
-                        'display_name'    => $displayName,
-                        'raw_data'        => $license,
-                    ]);
-                    // assigned_at gleich beim Anlegen statt per zweitem UPDATE (#978); unveränderte
-                    // Zuweisungen schreibt save() gar nicht erst.
-                    $isNew = ! $record->exists;
-                    if ($isNew) {
-                        $record->assigned_at = now();
+                    // Asset-Träger aus Graph-User-Daten anlegen/aktualisieren (tenant-skopiert)
+                    $holder = $holderService->findOrCreateByUpn(
+                        $this->teamId,
+                        $this->tenantId,
+                        $upn,
+                        $displayName,
+                        'graph'
+                    );
+                    // Wenn Sync von Graph kommt, source nachträglich auf 'graph' upgrade
+                    if ($holder->source === 'derived') {
+                        $holder->source = 'graph';
                     }
-                    $record->save();
+                    // Graph-Profil (department/jobTitle/Rufnummern) beim REGULÄREN Sync mitziehen — gemeinsame
+                    // Precedence-Logik (ADR 0014), damit die Anreicherung nicht nur am manuellen User-Import hängt.
+                    $holderService->applyGraphProfile($holder, $user);
+                    // Nur echte Änderungen schreiben; `synced_at` setzt der Lauf unten gesammelt für alle Träger.
+                    $holder->save();
+                    $seenIds[] = (int) $holder->id;
 
-                    if ($isNew) {
-                        $added++;
+                    foreach (($user['assignedLicenses'] ?? []) as $license) {
+                        $skuId = $license['skuId'] ?? null;
+                        if (!$skuId) continue;
+
+                        $record = $knownLicenses->get(self::licenseKey($upn, $skuId)) ?? new AssetUserLicense([
+                            'tenant_id'           => $this->tenantId,
+                            'user_principal_name' => $upn,
+                            'sku_id'              => $skuId,
+                        ]);
+                        $record->fill([
+                            'team_id'         => $this->teamId,
+                            'sku_part_number' => $skuPartMap[$skuId] ?? null,
+                            'display_name'    => $displayName,
+                            'raw_data'        => $license,
+                        ]);
+                        // assigned_at gleich beim Anlegen statt per zweitem UPDATE (#978); unveränderte
+                        // Zuweisungen schreibt save() gar nicht erst.
+                        $isNew = ! $record->exists;
+                        if ($isNew) {
+                            $record->assigned_at = now();
+                        }
+                        $record->save();
+
+                        if ($isNew) {
+                            $added++;
+                            $knownLicenses->put(self::licenseKey($upn, $skuId), $record);
+                        }
+
+                        $keptIds[] = $record->id;
                     }
-
-                    $keptIds[] = $record->id;
                 }
+            } finally {
+                $holderService->forgetPreload();
+            }
+
+            foreach (array_chunk(array_values(array_unique($seenIds)), 500) as $chunk) {
+                \Platform\AssetManager\Models\AssetHolder::withoutTenantScope()->whereIn('id', $chunk)->update(['synced_at' => now()]);
             }
 
             $durationMs       = (int) ($startedAt->diffInMilliseconds(now()));
@@ -304,6 +325,16 @@ class SyncLicensesJob implements ShouldQueue, ShouldBeUnique
                 'error'        => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Schlüssel einer Zuweisung im vorgeladenen Bestand — ohne Rücksicht auf Groß-/Kleinschreibung der UPN,
+     * wie MySQL sie beim früheren firstOrNew() verglichen hat (sonst landete eine anders geschriebene UPN
+     * als zweite Zeile im Unique-Index).
+     */
+    private static function licenseKey(string $upn, string $skuId): string
+    {
+        return mb_strtolower($upn) . '|' . $skuId;
     }
 
     protected function markFailed(AssetLicenseSyncLog $log, \Carbon\Carbon $startedAt, string $message): void
