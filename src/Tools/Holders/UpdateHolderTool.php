@@ -45,7 +45,10 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
             . 'billing_exclusion_reason, ADR 0024). Unbekannter Kostenstellen-Code wird nur mit '
             . 'create_missing=true angelegt, sonst Fehler. Hinweis: is_active kommt aus Entra und '
             . 'wird beim nächsten Sync überschrieben — wer jemanden dauerhaft von der Rechnung '
-            . 'nehmen will, nutzt billing_excluded.';
+            . 'nehmen will, nutzt billing_excluded. Stammdaten: display_name (bleibt, der Sync füllt nur leere '
+            . 'Namen), email. Mobilfunk (wie der Block auf der Detailseite): mobile_phone, business_phone — gesetzte '
+            . 'Nummern sind vor dem Entra-Abgleich geschützt, phone_from_entra=true gibt sie wieder frei —, '
+            . 'sim_number, contract_number, data_volume. "" leert jeweils.';
     }
 
     public function getSchema(): array
@@ -65,6 +68,14 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
                 'billing_exclusion_reason' => ['type' => 'string', 'description' => 'Grund der Ausnahme. Pflicht bei billing_excluded=true.'],
                 'account_type'        => ['type' => 'string', 'description' => 'DEPRECATED - Alias von holder_type.'],
                 'create_missing'      => ['type' => 'boolean', 'description' => 'Wenn true: fehlende Kostenstelle anlegen (Default false).'],
+                'display_name'        => ['type' => 'string', 'description' => 'Anzeigename (z. B. Tippfehler korrigieren). "" leert.'],
+                'email'               => ['type' => 'string', 'description' => 'E-Mail-Adresse. "" leert.'],
+                'mobile_phone'        => ['type' => 'string', 'description' => 'Mobilnummer. Gesetzt = vor dem Entra-Abgleich geschützt.'],
+                'business_phone'      => ['type' => 'string', 'description' => 'Festnetz/Durchwahl. Gesetzt = vor dem Entra-Abgleich geschützt.'],
+                'phone_from_entra'    => ['type' => 'boolean', 'description' => 'true = Rufnummern wieder aus Entra übernehmen (Schutz aufheben); false = schützen.'],
+                'sim_number'          => ['type' => 'string', 'description' => 'SIM-Kartennummer.'],
+                'contract_number'     => ['type' => 'string', 'description' => 'Mobilfunk-Vertragsnummer.'],
+                'data_volume'         => ['type' => 'string', 'description' => 'Datenvolumen/Tarif, z. B. "20 GB".'],
             ], $this->tenantSchemaProperty()),
             'required' => [],
         ];
@@ -142,6 +153,35 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
             if (array_key_exists('holder_type_pinned', $arguments) && ! (bool) $arguments['holder_type_pinned']
                 && ! empty($arguments['holder_type'])) {
                 return ToolResult::error('VALIDATION_ERROR', 'holder_type und holder_type_pinned=false widersprechen sich: ein gesetzter Typ wird immer festgehalten.');
+            }
+
+            // Stammdaten + Mobilfunk mit denselben Regeln wie Detailseite und Mobilfunk-Dialog (Holders/Show).
+            $validator = \Illuminate\Support\Facades\Validator::make($arguments, [
+                'display_name'     => ['nullable', 'string', 'max:255'],
+                'email'            => ['nullable', 'email', 'max:255'],
+                'mobile_phone'     => ['nullable', 'string', 'max:64'],
+                'business_phone'   => ['nullable', 'string', 'max:64'],
+                'sim_number'       => ['nullable', 'string', 'max:64'],
+                'contract_number'  => ['nullable', 'string', 'max:64'],
+                'data_volume'      => ['nullable', 'string', 'max:64'],
+                'phone_from_entra' => ['sometimes', 'boolean'],
+            ], \Platform\AssetManager\Support\GermanValidation::messages());
+            if ($validator->fails()) {
+                return ToolResult::error('VALIDATION_ERROR', implode(' ', $validator->errors()->all()));
+            }
+
+            foreach (['display_name', 'email', 'mobile_phone', 'business_phone', 'sim_number', 'contract_number', 'data_volume'] as $field) {
+                if (array_key_exists($field, $arguments)) {
+                    $value = trim((string) ($arguments[$field] ?? ''));
+                    $emp->{$field} = $value !== '' ? $value : null;
+                }
+            }
+            // Eine von Hand gesetzte Nummer überschriebe der nächste Entra-Abgleich — wie im Mobilfunk-Dialog
+            // ist sie deshalb geschützt, solange phone_from_entra nicht ausdrücklich true sagt (ADR 0014).
+            if (array_key_exists('phone_from_entra', $arguments)) {
+                $emp->phone_overridden = ! (bool) $arguments['phone_from_entra'];
+            } elseif (array_key_exists('mobile_phone', $arguments) || array_key_exists('business_phone', $arguments)) {
+                $emp->phone_overridden = true;
             }
 
             foreach (['department', 'job_title'] as $field) {
@@ -246,6 +286,14 @@ class UpdateHolderTool implements ToolContract, ToolMetadataContract
                 'holder_type'       => $emp->holder_type,
                 'holder_type_pinned' => (bool) $emp->holder_type_pinned,
                 'account_type'      => $emp->holder_type, // DEPRECATED - Alias
+                'display_name'      => $emp->display_name,
+                'email'             => $emp->email,
+                'mobile_phone'      => $emp->mobile_phone,
+                'business_phone'    => $emp->business_phone,
+                'phone_from_entra'  => ! $emp->phone_overridden,
+                'sim_number'        => $emp->sim_number,
+                'contract_number'   => $emp->contract_number,
+                'data_volume'       => $emp->data_volume,
                 'message'           => "Asset-Träger '{$emp->name}' aktualisiert.",
             ]);
         } catch (\Throwable $e) {

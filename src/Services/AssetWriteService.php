@@ -33,8 +33,10 @@ class AssetWriteService
      * @param array{
      *     categoryId:int, name:string, manufacturer?:?string, model?:?string,
      *     serialNumber?:?string, assigneeId?:?int, status?:string, purchaseDate?:?string,
-     *     purchasePrice?:?string, depreciationMonths?:?int, notes?:?string
-     * } $data
+     *     purchasePrice?:?string, depreciationMonths?:?int, notes?:?string, tenantId?:?int
+     * } $data  `tenantId`: vom Aufrufer bereits aufgelöster Tenant (MCP-Tool). Ohne ihn gilt die
+     *          gespeicherte Auswahl des Users — die passt im UI, aber nicht zu einem Tool-Aufruf,
+     *          der einen anderen Tenant ausdrücklich nennt.
      */
     public function createItem(array $data, int $teamId, int $userId): AssetItem
     {
@@ -46,7 +48,7 @@ class AssetWriteService
 
         $item = AssetItem::create([
             'team_id'             => $teamId,
-            'tenant_id'           => TenantContext::resolveForWrite($teamId, $userId),
+            'tenant_id'           => $data['tenantId'] ?? TenantContext::resolveForWrite($teamId, $userId),
             'category_id'         => $data['categoryId'],
             'source'              => 'manual',
             'name'                => $data['name'],

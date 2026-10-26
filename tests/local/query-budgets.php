@@ -264,6 +264,26 @@ budget('MCP holder.GET: Träger mit Geräten', function (int $n) use ($tables, $
     });
 });
 
+// ---- 7b. MCP inventory.GET (manuelle Assets mit Träger + Geräte) --------------------------------
+Illuminate\Support\Facades\Route::get('/inventory/{type}/{id}', fn () => '')->name('asset-manager.inventory.show');
+app('router')->getRoutes()->refreshNameLookups();
+budget('MCP inventory.GET: Assets mit Träger und Geräte', function (int $n) use ($tables, $ctx) {
+    reset_all($tables);
+    DB::table('asset_categories')->insert(['id' => 1, 'name' => 'Monitor']);
+    for ($i = 1; $i <= $n; $i++) {
+        $holder = DB::table('asset_holders')->insertGetId(['team_id' => TEAM, 'tenant_id' => TENANT, 'user_principal_name' => "u{$i}@x.de", 'display_name' => "U {$i}"]);
+        DB::table('asset_items')->insert(['team_id' => TEAM, 'tenant_id' => TENANT, 'category_id' => 1, 'name' => "Monitor {$i}", 'assignee_id' => $holder, 'status' => 'assigned', 'purchase_price' => 300, 'depreciation_months' => 36]);
+        DB::table('asset_devices')->insert(['team_id' => TEAM, 'tenant_id' => TENANT, 'device_name' => "NB-{$i}", 'user_principal_name' => "u{$i}@x.de"]);
+    }
+
+    return count_queries(function () use ($ctx) {
+        $r = (new \Platform\AssetManager\Tools\Inventory\ListInventoryTool())->execute(['tenant_id' => TENANT, 'limit' => 200], $ctx);
+        if (! $r->success) {
+            throw new RuntimeException(json_encode($r->toArray()));
+        }
+    });
+});
+
 // ---- 8. Übergabeprotokolle: Gerät je Zeile (Snapshot ohne Name) ---------------------------------
 budget('Übergabeprotokolle: Liste, Gerät je Position', function (int $n) use ($tables) {
     reset_all($tables);

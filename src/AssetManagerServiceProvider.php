@@ -189,6 +189,12 @@ class AssetManagerServiceProvider extends ServiceProvider
             // Geräteausgaben
             $registry->register(new \Platform\AssetManager\Tools\Handovers\ListHandoversTool());
 
+            // Inventar (ADR 0012): manuelle Assets + Geräte in einer Liste, manuelle Assets lesen/anlegen/ändern.
+            $registry->register(new \Platform\AssetManager\Tools\Inventory\ListInventoryTool());
+            $registry->register(new \Platform\AssetManager\Tools\Inventory\GetItemTool());
+            $registry->register(new \Platform\AssetManager\Tools\Inventory\CreateItemTool());
+            $registry->register(new \Platform\AssetManager\Tools\Inventory\UpdateItemTool());
+
             // Weiterberechnung + DATEV (read-only)
             $registry->register(new \Platform\AssetManager\Tools\Billing\BillingPreviewTool());
             $registry->register(new \Platform\AssetManager\Tools\Costs\DatevStatusTool());
@@ -229,6 +235,7 @@ class AssetManagerServiceProvider extends ServiceProvider
             // Sync
             $registry->register(new \Platform\AssetManager\Tools\Sync\SyncStatusTool());
             $registry->register(new \Platform\AssetManager\Tools\Sync\TriggerSyncTool());
+            $registry->register(new \Platform\AssetManager\Tools\Sync\ListImportRunsTool());
         } catch (\Throwable $e) {
             \Log::warning('AssetManager: Tool-Registrierung fehlgeschlagen', ['error' => $e->getMessage()]);
         }
