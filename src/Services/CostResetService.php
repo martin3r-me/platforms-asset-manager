@@ -29,7 +29,7 @@ use Platform\AssetManager\Models\AssetItem;
 class CostResetService
 {
     /** Kategorien, die der Import als asset_items anlegt. */
-    private const IMPORT_ITEM_CATEGORIES = ['laptop', 'internet', 'drucker'];
+    private const IMPORT_ITEM_CATEGORIES = ['laptop', 'internet', 'printer'];
 
     /**
      * @return array{cost_lines:int, assets:int, holders:int, cleared_cost_centers:int}

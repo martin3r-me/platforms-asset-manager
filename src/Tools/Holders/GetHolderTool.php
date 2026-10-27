@@ -2,8 +2,6 @@
 
 namespace Platform\AssetManager\Tools\Holders;
 
-use Platform\AssetManager\Models\AssetCostLine;
-use Platform\AssetManager\Models\AssetCostType;
 use Platform\AssetManager\Models\AssetHolder;
 use Platform\AssetManager\Services\CostAggregationService;
 use Platform\AssetManager\Services\TenantContext;
@@ -165,14 +163,11 @@ class GetHolderTool implements ToolContract, ToolMetadataContract
             // Hardware-/Geräte-/Lizenz-Kosten aus der zentralen Quelle der Wahrheit (holderCost) statt
             // inline neu zu rechnen — verhindert stilles Divergieren bei Kostenmodell-Änderungen (M8).
             // holderCost trennt Items (hardware) und Geräte (device); hier wie bisher zu „hardware"
-            // zusammengefasst. Die costline-Sicht ist NICHT Teil von holderCost und wird ergänzt.
+            // zusammengefasst. Die Kostenpositionen rechnet holderCost seit Discussion #27 mit.
             $cost     = $agg->holderCost($teamId, $emp);
             $hardware = round($cost['hardware'] + $cost['device'], 2);
             $licCost  = $cost['license'];
-            $clCost   = (float) AssetCostLine::active()->validOn(now())->where('team_id', $teamId)
-                ->where('assignee_id', $emp->id)
-                ->whereHas('costType', fn ($q) => $q->where('aggregation_source', AssetCostType::SOURCE_COST_LINE))
-                ->sum('monthly_amount');
+            $clCost   = $cost['costlines'];
 
             // Verlauf (#897) — vor der Migration gibt es die Tabelle noch nicht; dann leer statt Fehler.
             $history = \Illuminate\Support\Facades\Schema::hasTable('asset_holder_events')

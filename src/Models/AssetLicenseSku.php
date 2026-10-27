@@ -45,6 +45,28 @@ class AssetLicenseSku extends Model
      */
     public const PRICE_SOURCE_CONTRACT = 'contract';
 
+    /**
+     * Kostenlose Microsoft-SKUs (Self-Service, Testversionen, Entwicklerpläne). Sie kosten nichts und brauchen
+     * deshalb keinen Preis — ohne diese Liste meldete jede davon „Preis fehlt" (Discussion #27). Bewusst eine
+     * feste Liste von Microsoft-Part-Numbers statt „Preis 0 pflegen": die SKUs sind in jedem Tenant dieselben.
+     */
+    public const FREE_PART_NUMBERS = [
+        'FLOW_FREE',
+        'POWER_BI_STANDARD',
+        'POWERAPPS_DEV',
+        'POWERAPPS_VIRAL',
+        'TEAMS_EXPLORATORY',
+        'RIGHTSMANAGEMENT_ADHOC',
+        'CCIBOTS_PRIVPREV_VIRAL',
+        'WINDOWS_STORE',
+    ];
+
+    /** Kostenlose SKU laut {@see FREE_PART_NUMBERS}? */
+    public function isFree(): bool
+    {
+        return in_array(strtoupper((string) $this->sku_part_number), self::FREE_PART_NUMBERS, true);
+    }
+
     public function team(): BelongsTo
     {
         return $this->belongsTo(\Platform\Core\Models\Team::class);

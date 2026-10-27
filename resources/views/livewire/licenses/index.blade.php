@@ -265,17 +265,17 @@
                                                     type="text"
                                                     value="{{ $sku->unit_price !== null ? number_format((float)$sku->unit_price, 2, ',', '') : '' }}"
                                                     wire:blur="updatePrice({{ $sku->id }}, $event.target.value)"
-                                                    placeholder="—"
+                                                    placeholder="{{ $sku->isFree() ? 'kostenlos' : '—' }}"
                                                     class="w-20 px-2 py-1 text-sm rounded-md bg-[var(--am-bg)] border border-[color:var(--am-border-strong)] text-[var(--am-text)] placeholder:text-[var(--am-text-muted)] focus:outline-none focus:border-[color:var(--am-accent)] focus:shadow-[var(--am-focus)]"
                                                 />
                                             </div>
                                         @else
                                             <span class="text-sm text-[var(--am-text-secondary)]">
-                                                {{ $sku->unit_price !== null ? '€ ' . number_format((float)$sku->unit_price, 2, ',', '.') : '—' }}
+                                                {{ $sku->unit_price !== null ? '€ ' . number_format((float)$sku->unit_price, 2, ',', '.') : ($sku->isFree() ? 'kostenlos' : '—') }}
                                             </span>
                                         @endif
 
-                                        @if($range === null && $sku->unit_price === null && $sku->consumed_units > 0)
+                                        @if($range === null && $sku->unit_price === null && ! $sku->isFree() && $sku->consumed_units > 0)
                                             <div class="text-[10px] text-amber-600 mt-1 whitespace-nowrap">
                                                 @svg('heroicon-o-exclamation-triangle', 'w-3 h-3 inline -mt-0.5')
                                                 Preis fehlt

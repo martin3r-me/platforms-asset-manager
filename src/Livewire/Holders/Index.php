@@ -723,7 +723,7 @@ class Index extends Component
             ['ID', 'Name', 'Träger-Typ', 'Typ festgehalten', 'Nicht berechnet', 'Grund der Ausnahme', 'UPN',
              'Abteilung', 'Kostenstelle', 'Geräte', 'Assets', 'Lizenzen', 'Quelle', 'Aktiv'],
             $offboarding ? ['Offene Zuordnungen', 'Offene Protokolle'] : [],
-            $controlling ? ['Hardware EUR/Monat', 'Geräte EUR/Monat', 'Lizenzen EUR/Monat', 'Gesamt EUR/Monat'] : [],
+            $controlling ? ['Hardware EUR/Monat', 'Geräte EUR/Monat', 'Lizenzen EUR/Monat', 'Kostenpositionen EUR/Monat', 'Gesamt EUR/Monat'] : [],
         );
 
         // `id` als Zweitschlüssel: ohne ihn wäre das Blättern über eine nicht eindeutige Sortierspalte
@@ -774,6 +774,7 @@ class Index extends Component
                         number_format((float) ($cost['hardware'] ?? 0), 2, ',', ''),
                         number_format((float) ($cost['device'] ?? 0), 2, ',', ''),
                         number_format((float) ($cost['license'] ?? 0), 2, ',', ''),
+                        number_format((float) ($cost['costlines'] ?? 0), 2, ',', ''),
                         number_format((float) ($cost['total'] ?? 0), 2, ',', ''),
                     ] : [],
                 );

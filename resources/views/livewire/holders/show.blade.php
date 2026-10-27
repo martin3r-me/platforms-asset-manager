@@ -196,7 +196,7 @@
                  Herkunft erst nach einem Klick sichtbar wurde. --}}
             @if($controllingEnabled && $totalCost > 0)
                 <x-asset-manager-panel title="Kosten pro Monat">
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
                         <div>
                             <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">Hardware (AfA)</div>
                             <div class="mt-1 text-lg font-semibold text-[var(--am-text)] tabular-nums">{{ number_format($hardwareCost, 2, ',', '.') }} €</div>
@@ -208,6 +208,11 @@
                         <div>
                             <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">Lizenzen</div>
                             <div class="mt-1 text-lg font-semibold text-[var(--am-text)] tabular-nums">{{ number_format($licenseCost, 2, ',', '.') }} €</div>
+                        </div>
+                        {{-- Zugeordnete Kostenpositionen (Mobilfunk, Backup, Telefonie …) — wie in der Auswertung je Person. --}}
+                        <div>
+                            <div class="text-[10px] uppercase tracking-wider text-[var(--am-text-muted)]">Kostenpositionen</div>
+                            <div class="mt-1 text-lg font-semibold text-[var(--am-text)] tabular-nums">{{ number_format($costLineCost, 2, ',', '.') }} €</div>
                         </div>
                     </div>
                 </x-asset-manager-panel>

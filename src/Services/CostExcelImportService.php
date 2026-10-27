@@ -216,7 +216,8 @@ class CostExcelImportService
     {
         if (!$rows) return;
         $this->sheetLabel = 'Drucker';
-        $cat  = $this->category('drucker', 'Drucker', 'heroicon-o-printer');
+        // Schlüssel der Grunddaten (`printer`) — mit `drucker` entstand eine zweite Kategorie „Drucker" (Discussion #27).
+        $cat  = $this->category('printer', 'Drucker', 'heroicon-o-printer');
 
         $count = 0;
         foreach ($rows as $i => $row) {

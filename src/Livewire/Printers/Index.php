@@ -25,7 +25,7 @@ class Index extends Component
     public function render()
     {
         $teamId = $this->teamId();
-        $catId  = AssetCategory::where('key', 'drucker')->value('id');
+        $catId  = AssetCategory::where('key', 'printer')->value('id');
 
         $all = $catId
             ? AssetItem::where('team_id', $teamId)->where('category_id', $catId)->orderBy('name')->get()

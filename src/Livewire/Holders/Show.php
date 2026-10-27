@@ -454,7 +454,7 @@ class Show extends Component
         // $deviceRows wird durchgereicht, damit deviceCostRows() nicht ein zweites Mal läuft.
         $cost = $controllingEnabled
             ? app(CostAggregationService::class)->holderCost($teamId, $this->holder, $deviceRows)
-            : ['hardware' => 0.0, 'device' => 0.0, 'license' => 0.0, 'total' => 0.0];
+            : ['hardware' => 0.0, 'device' => 0.0, 'license' => 0.0, 'costlines' => 0.0, 'total' => 0.0];
 
         // Mobilfunk-Kosten dieses Asset-Trägers (ADR 0014): Summe der aktiven Mobilfunk-Kostenpositionen
         // (cost_line, cost_type.key='mobilfunk'). Nur wenn Controlling aktiv — sonst kein Preis im Block.
@@ -510,6 +510,7 @@ class Show extends Component
             'hardwareCost'       => $cost['hardware'],
             'deviceCost'         => $cost['device'],
             'licenseCost'        => $cost['license'],
+            'costLineCost'       => $cost['costlines'],
             'totalCost'          => $cost['total'],
             'controllingEnabled' => $controllingEnabled,
             'mobileCost'         => $mobileCost,

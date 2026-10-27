@@ -236,9 +236,11 @@ class Index extends Component
         $pricedSkuIds = null;
 
         if ($this->filterPrice !== '') {
+            // Kostenlose SKUs gelten als „mit Preis" (0 €) — sie fehlen nicht in der Kostenrechnung.
             $pricedSkuIds = AssetLicenseSku::where('team_id', $team->id)
-                ->get(['sku_id', 'unit_price'])
+                ->get(['sku_id', 'sku_part_number', 'unit_price'])
                 ->filter(fn ($s) => $s->unit_price !== null
+                    || $s->isFree()
                     || $book->priceRangeForSku((string) $s->sku_id) !== null)
                 ->pluck('sku_id')
                 ->all();
@@ -277,8 +279,10 @@ class Index extends Component
         // Handpreis haben. Vorher zaehlte hier jede Lizenz mit leerem `unit_price` — seit dem
         // Rechnungsimport ist das Feld bei gedeckten Lizenzen absichtlich leer, und der Zaehler
         // meldete 14 fehlende Preise, obwohl alle Betraege belegt waren.
+        // Kostenlose SKUs (FLOW_FREE, POWER_BI_STANDARD …) zählen nicht: ihnen fehlt kein Preis.
         $unpricedCount    = $allSkus->filter(
             fn($s) => $s->unit_price === null
+                && ! $s->isFree()
                 && $book->priceRangeForSku((string) $s->sku_id) === null
                 && (int) $s->consumed_units > 0
         )->count();

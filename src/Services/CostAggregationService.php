@@ -537,13 +537,16 @@ class CostAggregationService
      *
      * Einzige Quelle der Wahrheit für die Asset-Träger-Sicht: Asset-Träger/Show (Kosten-Sidebar) UND das
      * Zusammenfassungs-Panel der Liste (Asset-Träger/Index) rufen diese Methode → garantiert identische Zahl.
-     * Buckets bewusst wie die Profil-Seite: Hardware-AfA (manuelle Items über assignee_id) + Intune-Geräte
-     * (über UPN, gated via deviceCostRows) + MS-Lizenzen (Seat-Preis via LicensePriceBook). Assignee-gebundene cost_line-Posten
-     * sind hier — wie im Profil — NICHT enthalten.
+     * Buckets: Hardware-AfA (manuelle Items über assignee_id) + Intune-Geräte (über UPN, gated via
+     * deviceCostRows) + MS-Lizenzen (Seat-Preis via LicensePriceBook) + Kostenpositionen, die dem Träger
+     * zugeordnet sind (Mobilfunk, Backup, RingCentral …). Für die Kostenpositionen gilt dieselbe Regel wie in
+     * {@see topHolders()}: nur Kostenarten mit Quelle `cost_line` — eine Position auf einer Kostenart, die aus
+     * Geräten oder Lizenzen rechnet, zählt nicht (sie stünde sonst doppelt neben dem Gerät, #899). Vorher
+     * fehlte dieser Bucket, und die Detailseite nannte einen Bruchteil der Auswertung (Discussion #27).
      *
      * @param  Collection|null  $deviceRows  optional vorgeladen (keyBy device_id), sonst intern berechnet —
      *                                        damit Aufrufer mit eigener Geräte-Map keine Doppelberechnung auslösen.
-     * @return array{hardware:float, device:float, license:float, total:float}
+     * @return array{hardware:float, device:float, license:float, costlines:float, total:float}
      */
     public function holderCost(int $teamId, AssetHolder $emp, ?Collection $deviceRows = null): array
     {
@@ -579,12 +582,30 @@ class CostAggregationService
                 ->sum(fn ($lic) => $book->seatPrice($lic));
         }
 
+        $costlines = (float) $this->holderCostLineQuery($teamId)
+            ->where('assignee_id', $emp->id)
+            ->sum('monthly_amount');
+
         return [
-            'hardware' => round($hardware, 2),
-            'device'   => round($device, 2),
-            'license'  => round($license, 2),
-            'total'    => round($hardware + $device + $license, 2),
+            'hardware'  => round($hardware, 2),
+            'device'    => round($device, 2),
+            'license'   => round($license, 2),
+            'costlines' => round($costlines, 2),
+            'total'     => round($hardware + $device + $license + $costlines, 2),
         ];
+    }
+
+    /**
+     * Kostenpositionen, die einem Träger zuzurechnen sind: aktiv, heute gültig, auf einer Kostenart mit
+     * Quelle `cost_line` — dieselbe Regel wie {@see topHolders()}.
+     */
+    protected function holderCostLineQuery(int $teamId): \Illuminate\Database\Eloquent\Builder
+    {
+        return AssetCostLine::active()
+            ->validOn(now())
+            ->where('team_id', $teamId)
+            ->whereNotNull('assignee_id')
+            ->whereHas('costType', fn ($q) => $q->where('aggregation_source', AssetCostType::SOURCE_COST_LINE));
     }
 
     /**
@@ -596,7 +617,7 @@ class CostAggregationService
      * Nullen, damit der Aufrufer nicht zwischen „0 €" und „fehlt" unterscheiden muss.
      *
      * @param  iterable<AssetHolder>  $holders
-     * @return array<int, array{hardware: float, device: float, license: float, total: float}>  je Träger-ID
+     * @return array<int, array{hardware: float, device: float, license: float, costlines: float, total: float}>  je Träger-ID
      */
     public function holderCostsFor(int $teamId, iterable $holders): array
     {
@@ -631,18 +652,26 @@ class CostAggregationService
                 ->map(fn ($group) => (float) $group->sum(fn ($lic) => $book->seatPrice($lic)));
         }
 
+        $costlines = $this->holderCostLineQuery($teamId)
+            ->whereIn('assignee_id', $ids)
+            ->get(['assignee_id', 'monthly_amount'])
+            ->groupBy('assignee_id')
+            ->map(fn ($group) => (float) $group->sum('monthly_amount'));
+
         $result = [];
         foreach ($holders as $holder) {
             $upn = $holder->user_principal_name;
             $h   = (float) ($hardware[$holder->id] ?? 0);
             $d   = $upn ? (float) ($device[$upn] ?? 0) : 0.0;
             $l   = $upn ? (float) ($license[$upn] ?? 0) : 0.0;
+            $c   = (float) ($costlines[$holder->id] ?? 0);
 
             $result[(int) $holder->id] = [
-                'hardware' => round($h, 2),
-                'device'   => round($d, 2),
-                'license'  => round($l, 2),
-                'total'    => round($h + $d + $l, 2),
+                'hardware'  => round($h, 2),
+                'device'    => round($d, 2),
+                'license'   => round($l, 2),
+                'costlines' => round($c, 2),
+                'total'     => round($h + $d + $l + $c, 2),
             ];
         }
 
