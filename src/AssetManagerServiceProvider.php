@@ -54,6 +54,7 @@ class AssetManagerServiceProvider extends ServiceProvider
             PlatformCore::registerModule([
                 'key'        => 'asset-manager',
                 'title'      => 'Asset Manager',
+                'group'      => 'tools',
                 'routing'    => config('asset-manager.routing'),
                 'guard'      => config('asset-manager.guard'),
                 'navigation' => config('asset-manager.navigation'),
